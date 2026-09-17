@@ -6,7 +6,108 @@ Jev is not a chatbot. It is a System One evaluation model: you send `state` plus
 
 Questions in one request run in parallel. That is the cheap swarm: many atomic judgments, then policy in code.
 
+## Documentation
+
+| Doc | Contents |
+| --- | --- |
+| [Architecture](docs/architecture.md) | Process model, source map, confidence, limits |
+| [Tools](docs/tools.md) | Arguments, outputs, and when to call each tool |
+| [Install](docs/install.md) | Cursor, Codex, GitHub publish, Windows `D:\` checkout |
+| [Configuration](docs/configuration.md) | Env vars, thresholds, tests |
+| [Agent skill](skills/jev-mcp/SKILL.md) | Instructions the host agent should follow |
+| [AGENTS.md](AGENTS.md) | Short pointer for Cursor / Codex |
+
 ## Tools
+
+| Tool | Use when |
+| --- | --- |
+| `jev_coding_loop` | Before a frontier retry/stop/model-tier decision |
+| `jev_review` | Before declaring a patch done |
+| `jev_verify` | Claims vs evidence (PR text, diffs, docs) |
+| `jev_screen` | Untrusted paste/fetch, before the agent reads it |
+| `jev_rank` | Rank files, symbols, errors, or skills (you pass candidates) |
+| `jev_evaluate` | Escape hatch: raw System One questions |
+
+Every tool returns typed answers, token `usage`, and `action`: `auto` | `review` | `escalate`. Thresholds are named constants in code, overridable per call.
+
+Question packs are also MCP resources at `jev://packs/{coding-loop,review,verify,screen,rank}`.
+
+## Quick start
+
+Node 20+.
+
+```bash
+npm install
+npm run build
+node dist/index.js doctor
+```
+
+Get a TypeSafe key from [console.typesafe.ai/settings/keys](https://console.typesafe.ai/settings/keys). Without a key, set `JEV_MCP_MOCK=1` for a deterministic local judge (tests and demos only).
+
+**Cursor** — copy [examples/cursor.mcp.json](examples/cursor.mcp.json) into `.cursor/mcp.json` and point `args` at this repo’s `dist/index.js` (absolute path). Pass the key in `env`. Copy [skills/jev-mcp/SKILL.md](skills/jev-mcp/SKILL.md) into the project.
+
+**Codex**
+
+```bash
+codex mcp add jev --env TYPESAFE_API_KEY=ts_... -- node /absolute/path/to/jev-mcp/dist/index.js
+```
+
+Windows `D:\` checkout (after the GitHub remote exists):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\checkout-d-drive.ps1 -RepoUrl git@github.com:<you>/jev-mcp.git
+```
+
+Full host-specific steps: [docs/install.md](docs/install.md).
+
+## CLI
+
+```bash
+node dist/index.js
+node dist/index.js doctor
+JEV_MCP_MOCK=1 node dist/index.js eval --json '{
+  "state": "Help, payouts have been failing for 3 days. ASAP.",
+  "questions": {
+    "urgent": { "type": "noul", "instructions": "Is this urgent?" }
+  }
+}'
+```
+
+## Environment
+
+| Variable | Role |
+| --- | --- |
+| `TYPESAFE_API_KEY` | Live TypeSafe API |
+| `JEV_MCP_MODEL` | Default `jev-latest` |
+| `TYPESAFE_BASE_URL` | Optional API root |
+| `JEV_MCP_MOCK` | `1` = local deterministic judge |
+| `JEV_MCP_AUTO_ACCEPT` | Default `0.8` |
+| `JEV_MCP_REVIEW_AT` | Default `0.5` |
+| `JEV_MCP_BLOCK_AT` | Default `0.75` (screen) |
+
+No key and no mock: tools return a clear error. They do not hang.
+
+## Limits (from TypeSafe, enforced here)
+
+- 64k tokens for all `state` + `questions`; 32k for `state` + the longest question. Oversized state is truncated.
+- Rank: 250 candidates per Jev call (texts capped at 2,000 characters). Larger lists are chunked, then winners are re-ranked.
+- Arithmetic, counts, and date math stay in TypeScript. Jev is not a calculator and does not generate text.
+
+## Develop
+
+```bash
+npm test
+npm run typecheck
+```
+
+Live API tests: `TYPESAFE_API_KEY=ts_... npm test`
+
+## What this is not
+
+- Not a filesystem or shell MCP (the host already has those)
+- Not a swarm of chat models
+- Not a repo indexer (`jev_rank` only ranks candidates you pass in)
+
 
 | Tool | Use when |
 | --- | --- |
