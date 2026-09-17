@@ -1,0 +1,52 @@
+{
+  "name": "jev-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that brings TypeSafe Jev cheap typed decisions to Cursor, Codex, and any MCP client",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "jev-mcp": "./dist/index.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "examples",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "jev",
+    "typesafe",
+    "cursor",
+    "codex"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://origin.cursor.com/git/acidburn/tmp-58194044fbdb4219.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@typesafe-ai/sdk": "^0.6.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.3",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.2"
+  }
+}

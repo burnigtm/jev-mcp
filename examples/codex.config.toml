@@ -1,0 +1,13 @@
+# Copy into ~/.codex/config.toml or a trusted project's .codex/config.toml
+# After `npm run build` in this repo, point command at the compiled binary.
+
+[mcp_servers.jev]
+command = "node"
+args = ["dist/index.js"]
+
+[mcp_servers.jev.env]
+TYPESAFE_API_KEY = "ts_..."
+
+# Equivalent CLI:
+#   npm run build
+#   codex mcp add jev --env TYPESAFE_API_KEY=ts_... -- node dist/index.js

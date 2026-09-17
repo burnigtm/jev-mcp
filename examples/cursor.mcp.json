@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "jev": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "TYPESAFE_API_KEY": "ts_..."
+      }
+    }
+  }
+}
