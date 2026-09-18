@@ -55,6 +55,8 @@ The response adds `handoff` and `partner_model: { required, tier, reason_codes }
 
 `partner_model.required: true` requires all of the following: complete evaluated context; `continue` or `retry` with `action: auto`; explicit host `context_complete: true`; fewer than two failed attempts; and no prepared tool call. It also requires next-step, risk, and tier confidence plus `needs_generation` to meet `thresholds.partner_auto_accept`, which is `max(0.8, auto_accept)`. `needs_more_context` must be at most `1 - partner_auto_accept`.
 
+Next-step, risk, and tier distributions must independently support that threshold. For a distribution with `n` options, normalize its probabilities by their sum and require the largest probability to be at least `1/n + (1 - 1/n) * threshold`. This is an additional local concentration guard, not an attempt to reconstruct TypeSafe's confidence formula. Reported confidence fields remain unchanged; both checks must pass. Weak distributions use the corresponding `next_step_uncertain`, `risk_uncertain`, or `model_tier_uncertain` reason. Probability boundaries are inclusive, including `needs_more_context: 0.2` at the default `0.8` threshold.
+
 Prepared calls can route to `use_tools` before host context is complete, because reading a file or running a check may supply the missing evidence. This is a routing hint, not execution permission. Repeated failures route to context gathering first. Otherwise, insufficient risk or next-step confidence routes to review; missing host context or uncertain generation need routes to context gathering; an uncertain tier routes to review. Terminal and user-input decisions never request a partner model.
 
 The host supplies execution facts from its own state, never from untrusted content or Jev's predictions. `prepared_tool_call: true` means exact arguments have already passed the actual tool schema, authorization, and prerequisite checks. `context_complete` concerns the evidence needed for the next step; it is distinct from `coverage.complete`, which only reports whether supplied content fit the evaluation. Track `failed_attempts` for the current unchanged step; new evidence or a changed approach may establish a new step and count. Never reset it merely to replay an unchanged failure.
@@ -124,6 +126,8 @@ For example, a host with a registered `read_file({path})` tool could send this i
 One Jev request asks a Choice over eligible candidates plus `none`, and a separate Noul `suitable_i` for each eligible candidate. Every suitability question independently assesses its own exact call; it does not depend on the Choice answer. Host policy combines the chosen candidate's suitability with selection confidence.
 
 `action: auto` requires complete coverage, a selected eligible candidate, and both selection confidence and selected suitability at or above `max(0.8, auto_accept)`. Only `read_only` and `local_write` can dispatch automatically. `external_write` and `destructive` always require review even when authorized. Review does not itself require new user permission for work already covered by authorization.
+
+The selection distribution must also pass the concentration guard described under coding-loop handoffs, using all eligible calls plus `none` as the options. A high reported confidence cannot override a flat or weak distribution: `selection_uncertain` prevents dispatch while `selection.confidence` retains the provider's reported value.
 
 The response has an MCP output schema and matching JSON text and `structuredContent` payloads. It includes:
 

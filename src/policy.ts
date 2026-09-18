@@ -34,6 +34,20 @@ export function confidenceFromProbabilities(
   return (max - uniform) / (1 - uniform);
 }
 
+/** Additional routing guard, not a reconstruction of the provider's confidence statistic. */
+export function distributionSupportsConfidence(probabilities: Record<string, number>, threshold: number): boolean {
+  const values = Object.values(probabilities);
+  if (values.length < 2) return false;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return false;
+  const uniform = 1 / values.length;
+  // Normalize the small rounding error allowed by response validation. Compare
+  // peaks directly so an exact threshold is not lost to subtract/divide noise.
+  const requiredPeak = uniform + (1 - uniform) * threshold;
+  const roundingTolerance = Number.EPSILON * (values.length + 2);
+  return Math.max(...values) / total + roundingTolerance >= requiredPeak;
+}
+
 export function actionFromConfidence(
   confidence: number,
   autoAccept = DEFAULT_AUTO_ACCEPT,

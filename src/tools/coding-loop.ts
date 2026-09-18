@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { codingLoopQuestions } from "../packs/coding-loop.js";
-import { codingLoopAction, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
+import { codingLoopAction, distributionSupportsConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
 import { asChoice, asNoul, asScore } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 
@@ -73,9 +73,12 @@ export async function runCodingLoop(input: CodingLoopInput, context?: ToolContex
     action,
     next: next.choice,
     nextConfidence: next.confidence,
+    nextProbabilities: next.probabilities,
     tier: modelTier.choice as Exclude<PartnerTier, "none">,
     tierConfidence: modelTier.confidence,
+    tierProbabilities: modelTier.probabilities,
     riskConfidence: risk.confidence,
+    riskProbabilities: risk.probabilities,
     needsGeneration: needsGeneration.noul,
     needsMoreContext: needsMore.noul,
     incomplete: result.truncated || !result.coverage.complete,
@@ -123,9 +126,12 @@ function partnerRouting(input: {
   action: "auto" | "review" | "escalate";
   next: string;
   nextConfidence: number;
+  nextProbabilities: Record<string, number>;
   tier: Exclude<PartnerTier, "none">;
   tierConfidence: number;
+  tierProbabilities: Record<string, number>;
   riskConfidence: number;
+  riskProbabilities: Record<string, number>;
   needsGeneration: number;
   needsMoreContext: number;
   incomplete: boolean;
@@ -151,14 +157,14 @@ function partnerRouting(input: {
   // execution permission; the host still validates and authorizes the call.
   if (input.execution.prepared_tool_call) return defer("use_tools", "prepared_tool_call");
   const partnerAutoAccept = Math.max(0.8, input.autoAccept);
-  if (input.riskConfidence < partnerAutoAccept) return defer("review", "risk_uncertain");
-  if (input.nextConfidence < partnerAutoAccept) return defer("review", "next_step_uncertain");
+  if (input.riskConfidence < partnerAutoAccept || !distributionSupportsConfidence(input.riskProbabilities, partnerAutoAccept)) return defer("review", "risk_uncertain");
+  if (input.nextConfidence < partnerAutoAccept || !distributionSupportsConfidence(input.nextProbabilities, partnerAutoAccept)) return defer("review", "next_step_uncertain");
   if (!input.execution.context_complete) return defer("gather_context", "host_context_incomplete");
-  if (input.needsMoreContext > 1 - partnerAutoAccept) return defer("gather_context", "context_needed_or_uncertain");
+  if (1 - input.needsMoreContext < partnerAutoAccept) return defer("gather_context", "context_needed_or_uncertain");
   if (input.needsGeneration < partnerAutoAccept) {
-    return defer("gather_context", input.needsGeneration <= 1 - partnerAutoAccept ? "generation_not_required" : "generation_need_uncertain");
+    return defer("gather_context", 1 - input.needsGeneration >= partnerAutoAccept ? "generation_not_required" : "generation_need_uncertain");
   }
-  if (input.tierConfidence < partnerAutoAccept) return defer("review", "model_tier_uncertain");
+  if (input.tierConfidence < partnerAutoAccept || !distributionSupportsConfidence(input.tierProbabilities, partnerAutoAccept)) return defer("review", "model_tier_uncertain");
   // The closed next-step options leave only continue/retry here.
   return {
     handoff: "partner_model",
