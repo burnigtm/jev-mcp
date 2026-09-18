@@ -1,5 +1,6 @@
 # GitHub event delivery for the Jev_MCP Cloud Agent (replaces polling).
-# Add repository secret CURSOR_API_KEY (Cursor Dashboard → API Keys).
+# Secret CURSOR_API_KEY: create a User API Key at https://cursor.com/dashboard/api
+# and paste the full secret from the create dialog (not the masked table).
 # Optional repository variable CURSOR_JEV_MCP_AGENT_ID overrides the default agent.
 name: Notify Jev_MCP
 

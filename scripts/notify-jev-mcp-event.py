@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -15,11 +16,37 @@ def env(name: str, default: str = "") -> str:
     return os.environ.get(name) or default
 
 
+def normalize_key(raw: str) -> str:
+    return raw.strip().strip("\"'")
+
+
+def key_looks_masked(key: str) -> bool:
+    return any(marker in key for marker in ("…", "...", "*", "•"))
+
+
+def basic_authorization(key: str) -> str:
+    token = base64.b64encode(f"{key}:".encode("utf-8")).decode("ascii")
+    return f"Basic {token}"
+
+
+def describe_key(key: str) -> str:
+    prefix = key[:5] if len(key) >= 5 else "(short)"
+    return f"{len(key)} chars, prefix {prefix!r}"
+
+
 def main() -> int:
-    api_key = env("CURSOR_API_KEY")
+    api_key = normalize_key(env("CURSOR_API_KEY"))
     if not api_key:
         print("CURSOR_API_KEY secret is not set; skip notify (workflow stays green).")
         return 0
+    if key_looks_masked(api_key):
+        print(
+            "CURSOR_API_KEY looks masked or truncated (ellipsis/stars). "
+            "Copy the full secret from the New API Key dialog, not the dashboard table, "
+            "then update GitHub secret CURSOR_API_KEY.",
+            file=sys.stderr,
+        )
+        return 1
 
     agent_id = env("AGENT_ID") or env("DEFAULT_AGENT_ID")
     if not agent_id:
@@ -45,23 +72,19 @@ def main() -> int:
         ]
     )
     body = json.dumps({"prompt": {"text": prompt}}).encode()
-    url = f"https://api.cursor.com/v1/agents/{agent_id}/runs"
-    req = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={"Content-Type": "application/json"},
-    )
-    password_mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
-    password_mgr.add_password(None, "https://api.cursor.com", api_key, "")
-    opener = urllib.request.build_opener(
-        urllib.request.HTTPBasicAuthHandler(password_mgr)
-    )
+    api_base = env("CURSOR_API_BASE", "https://api.cursor.com").rstrip("/")
+    url = f"{api_base}/v1/agents/{agent_id}/runs"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": basic_authorization(api_key),
+    }
+    print(f"Notifying {agent_id} with Cursor API key ({describe_key(api_key)}).")
 
     last_error = ""
     for attempt in range(1, 7):
+        req = urllib.request.Request(url, data=body, method="POST", headers=headers)
         try:
-            with opener.open(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:
                 print(f"Notified Jev_MCP agent {agent_id} (HTTP {resp.status}).")
                 return 0
         except urllib.error.HTTPError as err:
@@ -72,6 +95,13 @@ def main() -> int:
                 continue
             print(f"Notify failed HTTP {err.code}:")
             print(last_error)
+            if err.code == 401:
+                print(
+                    "Cursor rejected the key. Create a new User API Key at "
+                    "https://cursor.com/dashboard/api, copy the full secret from the "
+                    "create dialog (not the masked table), and replace GitHub secret CURSOR_API_KEY.",
+                    file=sys.stderr,
+                )
             return 1
         except urllib.error.URLError as err:
             print(f"Notify failed: {err}", file=sys.stderr)
