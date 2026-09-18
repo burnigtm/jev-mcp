@@ -22,7 +22,7 @@ const unchangedJson = z.unknown().superRefine((value, context) => {
     for (const child of Object.values(item)) pending.push(child);
   }
 });
-const argumentsSchema = z.intersection(unchangedJson, z.record(z.string(), z.json()));
+export const argumentsSchema = z.intersection(unchangedJson, z.record(z.string(), z.json()));
 export const toolCandidateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).refine(name => name.trim().length > 0, "Tool name must not be blank").describe("Exact tool name from the host's available tool registry"),
@@ -51,23 +51,26 @@ export const toolRouteInputSchema = z.object({
 });
 
 export type ToolRouteInput = z.infer<typeof toolRouteInputSchema>;
-type Candidate = z.infer<typeof toolCandidateSchema>;
-const probability = z.number().min(0).max(1);
-const reasonSchema = z.enum([
+export type ToolCandidate = z.infer<typeof toolCandidateSchema>;
+type Candidate = ToolCandidate;
+export const probability = z.number().min(0).max(1);
+export const reasonSchema = z.enum([
   "accepted", "no_candidates", "no_eligible_candidates", "not_authorized", "arguments_not_validated",
   "preconditions_not_met", "retry_budget_exhausted", "unknown_effect", "no_suitable_call",
   "selection_uncertain", "suitability_uncertain", "incomplete_context", "effect_requires_review",
 ]);
-type Reason = z.infer<typeof reasonSchema>;
+export type Reason = z.infer<typeof reasonSchema>;
+export const usageSchema = z.object({ input_tokens: z.number().nonnegative(), output_tokens: z.number().nonnegative() });
+export const coverageSchema = z.object({
+  complete: z.boolean(), original_chars: z.number().int().nonnegative(), evaluated_chars: z.number().int().nonnegative(),
+  estimated_tokens: z.object({ state: z.number().int().nonnegative(), questions: z.number().int().nonnegative(), longest_question: z.number().int().nonnegative() }),
+  estimator: z.literal("chars/4"),
+});
 export const toolRouteOutputSchema = z.object({
   model: z.string(),
-  usage: z.object({ input_tokens: z.number().nonnegative(), output_tokens: z.number().nonnegative() }),
+  usage: usageSchema,
   truncated: z.boolean(),
-  coverage: z.object({
-    complete: z.boolean(), original_chars: z.number().int().nonnegative(), evaluated_chars: z.number().int().nonnegative(),
-    estimated_tokens: z.object({ state: z.number().int().nonnegative(), questions: z.number().int().nonnegative(), longest_question: z.number().int().nonnegative() }),
-    estimator: z.literal("chars/4"),
-  }),
+  coverage: coverageSchema,
   action: z.enum(["auto", "review", "escalate"]),
   handoff: z.enum(["execute_tool", "gather_context", "review"]),
   partner_model: z.object({ required: z.literal(false), tier: z.literal("none") }),
@@ -78,7 +81,8 @@ export const toolRouteOutputSchema = z.object({
   thresholds: z.object({ auto_accept: probability, review_at: probability }),
 });
 
-function ineligibility(candidate: Candidate): Reason[] {
+/** Local eligibility from trusted host facts; shared with the fused step router. */
+export function ineligibility(candidate: Candidate): Reason[] {
   const reasons: Reason[] = [];
   if (candidate.authorized !== true) reasons.push("not_authorized");
   if (candidate.schema_valid !== true) reasons.push("arguments_not_validated");
