@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { codingLoopQuestions } from "../packs/coding-loop.js";
-import { codingLoopAction } from "../policy.js";
+import { codingLoopAction, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
 import { asChoice, asNoul, asScore } from "../result.js";
-import { systemOne } from "../typesafe.js";
+import { systemOne, type ToolContext } from "../typesafe.js";
 
 export const codingLoopInputSchema = z.object({
   task: z.string().describe("What the coding agent is trying to do"),
@@ -21,10 +21,11 @@ export const codingLoopInputSchema = z.object({
 
 export type CodingLoopInput = z.infer<typeof codingLoopInputSchema>;
 
-export async function runCodingLoop(input: CodingLoopInput) {
+export async function runCodingLoop(input: CodingLoopInput, context?: ToolContext) {
   const config = getConfig();
   const autoAccept = input.auto_accept ?? config.autoAccept;
   const reviewAt = input.review_at ?? config.reviewAt;
+  validatePolicyThresholds(autoAccept, reviewAt);
   const result = await systemOne({
     state: {
       task: input.task,
@@ -33,7 +34,7 @@ export async function runCodingLoop(input: CodingLoopInput) {
     },
     questions: codingLoopQuestions(),
     model: input.model,
-  });
+  }, context);
   const next = asChoice(result.answers.next);
   const modelTier = asChoice(result.answers.model_tier);
   const risk = asScore(result.answers.risk);
@@ -53,7 +54,8 @@ export async function runCodingLoop(input: CodingLoopInput) {
     model: result.model,
     usage: result.usage,
     truncated: result.truncated,
-    action,
+    coverage: result.coverage,
+    action: requireCompleteContext(action, result.truncated),
     next: {
       choice: next.choice,
       confidence: next.confidence,

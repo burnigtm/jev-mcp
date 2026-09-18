@@ -59,6 +59,14 @@ test("coding loop never auto-applies destructive risk", () => {
   );
 });
 
+test("stop cannot bypass risk or completion requirements", () => {
+  assert.equal(codingLoopAction({ nextChoice: "stop", nextConfidence: 0.95, riskScore: 2, doneEnough: 0.95 }), "review");
+  assert.equal(codingLoopAction({ nextChoice: "stop", nextConfidence: 0.95, riskScore: 0, doneEnough: 0.1 }), "review");
+  assert.equal(codingLoopAction({ nextChoice: "stop", nextConfidence: 0.95, riskScore: 0, doneEnough: 0.7 }), "auto");
+  assert.equal(codingLoopAction({ nextChoice: "stop", nextConfidence: 0.3, riskScore: 0, doneEnough: 0.99 }), "escalate");
+  assert.throws(() => actionFromConfidence(0.9, 0.4, 0.8), /Thresholds/);
+});
+
 test("review composite weights correctness highest", () => {
   const good = reviewComposite({ correctness: 2, specMatch: 2, testGap: 0, blastRadius: 0 });
   const bad = reviewComposite({ correctness: 0, specMatch: 2, testGap: 0, blastRadius: 0 });

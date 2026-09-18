@@ -1,55 +1,73 @@
 import { readFileSync } from "node:fs";
 import { getConfig } from "./config.js";
-import { errorMessage } from "./errors.js";
-import { listModels, systemOne } from "./typesafe.js";
+import { errorDetails, JevConfigError, JevValidationError } from "./errors.js";
+import { listModels, systemOne, withToolContext } from "./typesafe.js";
 import { parseQuestions, type QuestionInput } from "./questions.js";
 import { VERSION } from "./version.js";
+import { validatePolicyThresholds } from "./policy.js";
+import { evaluateInputSchema } from "./tools/evaluate.js";
 
-export async function runDoctor(): Promise<void> {
-  const config = getConfig();
-  const lines = [
-    `jev-mcp ${VERSION}`,
-    `node ${process.version}`,
-    `model ${config.model}`,
-    `mock ${config.mock ? "on" : "off"}`,
-    `TYPESAFE_API_KEY ${config.apiKey ? "set" : "missing"}`,
-    `TYPESAFE_BASE_URL ${config.baseURL ?? "(default)"}`,
-    `auto_accept ${config.autoAccept}`,
-    `review_at ${config.reviewAt}`,
-    `block_at ${config.blockAt}`,
-  ];
-  console.error(lines.join("\n"));
-
-  if (!config.mock && !config.apiKey) {
-    console.error("Not ready: set TYPESAFE_API_KEY or JEV_MCP_MOCK=1.");
-    process.exitCode = 1;
-    return;
-  }
-
+export async function runDoctor(options: { json?: boolean } = {}): Promise<void> {
+  const report: Record<string, unknown> = { version: VERSION, node: process.version, ready: false };
   try {
-    const models = await listModels();
-    console.error(`models ${models.join(", ") || "(none)"}`);
-    const ping = await systemOne({
-      state: "Doctor ping.",
-      questions: {
-        ok: {
-          type: "noul",
-          instructions: "Is this a short status string?",
-        },
-      },
+    const config = getConfig();
+    Object.assign(report, {
+      model: config.model,
+      mock: config.mock,
+      api_key_set: Boolean(config.apiKey),
+      base_url: safeBaseUrl(config.baseURL),
+      timeout_ms: config.timeoutMs,
+      thresholds: { auto_accept: config.autoAccept, review_at: config.reviewAt, block_at: config.blockAt },
     });
-    const ok = ping.answers.ok;
-    const noul = ok && ok.type === "noul" ? ok.noul : NaN;
-    console.error(`ping ok noul=${noul.toFixed(3)} tokens=${ping.usage.input_tokens}`);
-    console.error("ready");
+    validatePolicyThresholds(config.autoAccept, config.reviewAt);
+    if (!config.mock && !config.apiKey) {
+      throw new JevConfigError("Not ready: set TYPESAFE_API_KEY or JEV_MCP_MOCK=1.");
+    }
+    await withToolContext(undefined, async context => {
+      report.models = await listModels(context);
+      const ping = await systemOne({
+        state: "Doctor ping.",
+        questions: {
+          ok: { type: "noul", instructions: "Is this a short status string?" },
+        },
+      }, context);
+      report.ping = { noul: ping.answers.ok.noul, input_tokens: ping.usage.input_tokens };
+    });
+    report.ready = true;
   } catch (err) {
-    console.error(`live check failed: ${errorMessage(err)}`);
+    report.error = errorDetails(err);
     process.exitCode = 1;
+  }
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  } else {
+    console.error(`jev-mcp ${VERSION}\nnode ${process.version}`);
+    for (const [key, value] of Object.entries(report)) {
+      if (key !== "version" && key !== "node" && key !== "ready") console.error(`${key} ${typeof value === "object" ? JSON.stringify(value) : String(value)}`);
+    }
+    console.error(report.ready ? "ready" : "not ready");
+  }
+}
+
+function safeBaseUrl(baseURL: string | undefined): string {
+  if (!baseURL) return "(default)";
+  try {
+    const url = new URL(baseURL);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    throw new JevConfigError("TYPESAFE_BASE_URL must be a valid API root URL.");
   }
 }
 
 export async function runEval(argv: string[]): Promise<void> {
-  const parsed = parseEvalArgs(argv);
+  let parsed: EvalArgs;
+  try {
+    parsed = parseEvalArgs(argv);
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new JevValidationError("Evaluation input must be valid JSON.");
+    throw error;
+  }
+  if (!evaluateInputSchema.safeParse(parsed).success) throw new JevValidationError("Evaluation requires state (text or JSON object/array) and a valid questions map.");
   const questions = parseQuestions(parsed.questions);
   const result = await systemOne({
     state: parsed.state,

@@ -1,10 +1,11 @@
 import { codingLoopQuestions } from "./coding-loop.js";
+import { gateQuestions } from "./gate.js";
 import { rankQuestions } from "./rank.js";
 import { reviewQuestions } from "./review.js";
 import { screenQuestions } from "./screen.js";
 import { VERIFY_CRITERIA, verifyQuestions } from "./verify.js";
 
-export const PACK_IDS = ["coding-loop", "review", "verify", "screen", "rank"] as const;
+export const PACK_IDS = ["coding-loop", "review", "verify", "screen", "rank", "gate"] as const;
 export type PackId = (typeof PACK_IDS)[number];
 
 export function packBody(id: PackId): unknown {
@@ -18,6 +19,11 @@ export function packBody(id: PackId): unknown {
         note: "One Choice per claim. IDs are claim_0, claim_1, …",
         criteria: VERIFY_CRITERIA,
         example: verifyQuestions(1),
+      };
+    case "gate":
+      return {
+        note: "One request combines patch review and one Choice per claim. Only the evidence field supports claims; request and claims are assertions. Automatic approval requires complete context, an accepted review, and every claim verified confidently.",
+        example: gateQuestions(1),
       };
     case "screen":
       return screenQuestions(true);

@@ -1,5 +1,6 @@
 import type { ChoiceResponse, NoulResponse, ScoreResponse, SystemOneResult } from "@typesafe-ai/sdk";
 import type { PolicyAction } from "./policy.js";
+import { errorDetails } from "./errors.js";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -11,13 +12,19 @@ export function jsonResult(payload: unknown): {
   };
 }
 
-export function jsonError(message: string): {
+export function jsonError(err: unknown, structured = true): {
   isError: true;
   content: Array<{ type: "text"; text: string }>;
+  structuredContent?: { error: ReturnType<typeof errorDetails> };
 } {
+  const error = errorDetails(err);
+  // Clients may validate structuredContent against a tool's success schema
+  // even when isError is true. Such tools return typed errors as JSON text.
+  if (!structured) return { isError: true, content: [{ type: "text", text: JSON.stringify({ error }) }] };
   return {
     isError: true,
-    content: [{ type: "text", text: message }],
+    content: [{ type: "text", text: error.message }],
+    structuredContent: { error },
   };
 }
 

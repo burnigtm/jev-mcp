@@ -3,14 +3,16 @@
 Node 20+ on the machine that **runs the MCP process** (your PC for Cursor/Codex).
 
 ```bash
-git clone <this-repo-url> jev-mcp
+git clone https://github.com/burnigtm/jev-mcp.git jev-mcp
 cd jev-mcp
-npm install
+npm ci
 npm run build
 node dist/index.js doctor
 ```
 
-`doctor` prints mock/live status. It must print `ready` before you attach the server.
+Set `TYPESAFE_API_KEY` in the shell before `doctor` (`export TYPESAFE_API_KEY=ts_...` in Bash or `$env:TYPESAFE_API_KEY = 'ts_...'` in PowerShell). For a demo, set `JEV_MCP_MOCK=1` instead. The CLI does not automatically load `.env`.
+
+`doctor` prints mock/live status. It must print `ready` before you attach the server. `doctor --json` emits structured status on stdout and exits nonzero when the check fails.
 
 Get a TypeSafe key: [console.typesafe.ai/settings/keys](https://console.typesafe.ai/settings/keys). Without a key, set `JEV_MCP_MOCK=1` (demos only).
 
@@ -43,30 +45,25 @@ Windows example:
 
 ## Codex
 
-```bash
-codex mcp add jev --env TYPESAFE_API_KEY=ts_... -- node D:\jev-mcp\dist\index.js
+```powershell
+codex mcp add jev --env TYPESAFE_API_KEY=ts_... -- node 'D:\jev-mcp\dist\index.js'
 ```
 
 Or merge [`examples/codex.config.toml`](../examples/codex.config.toml) into `~/.codex/config.toml` (or a trusted project `.codex/config.toml`). Then `codex mcp list`.
 
 The same binary works with Claude Code, Amp, and other stdio MCP clients.
 
-## Publish to GitHub
+## Contribute on GitHub
 
-This project currently lives on Cursor’s git remote until you add GitHub.
-
-On a machine where `gh` is logged in:
+The repository is [burnigtm/jev-mcp](https://github.com/burnigtm/jev-mcp). Push a feature branch and open a pull request against `main`. Contributors without push access can use a fork.
 
 ```bash
-cd jev-mcp
-gh repo create jev-mcp --public --source=. --remote=github --push
-```
-
-Private instead: `--private`. If the repo already exists:
-
-```bash
-git remote add github git@github.com:<you>/jev-mcp.git
-git push -u github main
+git switch -c my-change
+# Make changes and run the checks listed in README.md.
+git add <changed-files>
+git commit -m "Describe the change"
+git push -u origin my-change
+gh pr create --base main
 ```
 
 ## Check out on Windows D:
@@ -74,17 +71,17 @@ git push -u github main
 PowerShell (run as yourself, Git and Node 20+ installed):
 
 ```powershell
-# default path D:\jev-mcp — change the URL after you create the GitHub repo
-powershell -ExecutionPolicy Bypass -File scripts\checkout-d-drive.ps1 -RepoUrl git@github.com:<you>/jev-mcp.git
+# Default checkout path: D:\jev-mcp
+powershell -ExecutionPolicy Bypass -File scripts\checkout-d-drive.ps1 -RepoUrl https://github.com/burnigtm/jev-mcp.git -Mock
 ```
 
 Manual:
 
 ```powershell
 New-Item -ItemType Directory -Force -Path D:\jev-mcp | Out-Null
-git clone git@github.com:<you>/jev-mcp.git D:\jev-mcp
+git clone https://github.com/burnigtm/jev-mcp.git D:\jev-mcp
 Set-Location D:\jev-mcp
-npm install
+npm ci
 npm run build
 $env:JEV_MCP_MOCK = "1"
 node dist\index.js doctor
@@ -92,14 +89,21 @@ node dist\index.js doctor
 
 Then point Cursor/Codex at `D:\jev-mcp\dist\index.js` as above.
 
+Omit `-Mock` when you have exported a real key. The helper checks every Git, npm, and doctor exit code, stops at the first failure, and prints readiness only after doctor succeeds. It restores the original working directory and mock environment setting on success or failure.
+
+## Package distribution
+
+`npm pack` runs the build automatically. The package includes the compiled CLI, examples, skills, documentation, `AGENTS.md`, and checkout script. Run `npm run test:package` after `npm ci` to verify an offline install of the tarball and its mock diagnostics before publishing.
+
 ## CLI (debugging without an IDE)
 
 ```bash
 node dist/index.js                  # stdio MCP
 node dist/index.js doctor
+node dist/index.js doctor --json
 node dist/index.js eval --json "{...}"
 node dist/index.js eval --state "..." --questions "{...}"
 node dist/index.js eval --stdin < request.json
 ```
 
-`eval` writes JSON to stdout. `doctor` writes to stderr. Never log Jev traffic on stdout while MCP is running.
+`eval` and `doctor --json` write JSON to stdout. Human-readable `doctor` writes to stderr. MCP reserves stdout for JSON-RPC. Request content and API keys are not logged.

@@ -1,15 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { errorMessage } from "./errors.js";
 import { PACK_IDS, packBody, packUri } from "./packs/index.js";
 import { jsonError, jsonResult } from "./result.js";
 import { runCodingLoop, codingLoopInputSchema } from "./tools/coding-loop.js";
 import { runEvaluate, evaluateInputSchema } from "./tools/evaluate.js";
+import { runGate, gateInputSchema, gateOutputSchema } from "./tools/gate.js";
 import { runRank, rankInputSchema } from "./tools/rank.js";
 import { runReview, reviewInputSchema } from "./tools/review.js";
 import { runScreen, screenInputSchema } from "./tools/screen.js";
 import { runVerify, verifyInputSchema } from "./tools/verify.js";
 import { SERVER_NAME, VERSION } from "./version.js";
+import { withToolContext } from "./typesafe.js";
 
 export function createJevServer(): McpServer {
   const server = new McpServer(
@@ -31,11 +32,11 @@ export function createJevServer(): McpServer {
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        return jsonResult(await runEvaluate(args));
+        return jsonResult(await withToolContext({ signal: extra.signal }, context => runEvaluate(args, context)));
       } catch (err) {
-        return jsonError(errorMessage(err));
+        return jsonError(err);
       }
     },
   );
@@ -54,11 +55,11 @@ export function createJevServer(): McpServer {
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        return jsonResult(await runCodingLoop(args));
+        return jsonResult(await withToolContext({ signal: extra.signal }, context => runCodingLoop(args, context)));
       } catch (err) {
-        return jsonError(errorMessage(err));
+        return jsonError(err);
       }
     },
   );
@@ -77,11 +78,11 @@ export function createJevServer(): McpServer {
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        return jsonResult(await runReview(args));
+        return jsonResult(await withToolContext({ signal: extra.signal }, context => runReview(args, context)));
       } catch (err) {
-        return jsonError(errorMessage(err));
+        return jsonError(err);
       }
     },
   );
@@ -100,11 +101,11 @@ export function createJevServer(): McpServer {
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        return jsonResult(await runVerify(args));
+        return jsonResult(await withToolContext({ signal: extra.signal }, context => runVerify(args, context)));
       } catch (err) {
-        return jsonError(errorMessage(err));
+        return jsonError(err);
       }
     },
   );
@@ -123,11 +124,11 @@ export function createJevServer(): McpServer {
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        return jsonResult(await runScreen(args));
+        return jsonResult(await withToolContext({ signal: extra.signal }, context => runScreen(args, context)));
       } catch (err) {
-        return jsonError(errorMessage(err));
+        return jsonError(err);
       }
     },
   );
@@ -146,11 +147,30 @@ export function createJevServer(): McpServer {
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (args, extra) => {
       try {
-        return jsonResult(await runRank(args));
+        return jsonResult(await withToolContext({ signal: extra.signal }, context => runRank(args, context)));
       } catch (err) {
-        return jsonError(errorMessage(err));
+        return jsonError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "jev_gate",
+    {
+      title: "Jev combined review gate",
+      description: "Review a proposed patch and verify completion claims against supplied evidence in one Jev request. Returns review and verification reports, coverage, deterministic reason codes, and one overall auto|review|escalate action. Does not apply changes or execute tests.",
+      inputSchema: gateInputSchema,
+      outputSchema: gateOutputSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async (args, extra) => {
+      try {
+        const payload = await withToolContext({ signal: extra.signal }, context => runGate(args, context));
+        return { ...jsonResult(payload), structuredContent: payload };
+      } catch (err) {
+        return jsonError(err, false);
       }
     },
   );

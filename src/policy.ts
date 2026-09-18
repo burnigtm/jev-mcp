@@ -1,3 +1,5 @@
+import { JevValidationError } from "./errors.js";
+
 export type PolicyAction = "auto" | "review" | "escalate";
 export type ScreenRecommendation = "pass" | "review" | "block" | "skip";
 
@@ -5,6 +7,16 @@ export const DEFAULT_AUTO_ACCEPT = 0.8;
 export const DEFAULT_REVIEW_AT = 0.5;
 export const DEFAULT_BLOCK_AT = 0.75;
 export const DEFAULT_SKIP_BELOW = 0.35;
+
+export function validatePolicyThresholds(autoAccept: number, reviewAt: number): void {
+  if (!Number.isFinite(autoAccept) || !Number.isFinite(reviewAt) || reviewAt < 0 || autoAccept > 1 || reviewAt > autoAccept) {
+    throw new JevValidationError("Thresholds must satisfy 0 <= review_at <= auto_accept <= 1.");
+  }
+}
+
+export function requireCompleteContext(action: PolicyAction, truncated: boolean): PolicyAction {
+  return truncated && action === "auto" ? "review" : action;
+}
 
 export function confidenceFromProbabilities(
   probabilities: Record<string, number>,
@@ -27,6 +39,7 @@ export function actionFromConfidence(
   autoAccept = DEFAULT_AUTO_ACCEPT,
   reviewAt = DEFAULT_REVIEW_AT,
 ): PolicyAction {
+  validatePolicyThresholds(autoAccept, reviewAt);
   if (confidence >= autoAccept) {
     return "auto";
   }
@@ -54,17 +67,18 @@ export function codingLoopAction(input: {
 }): PolicyAction {
   const autoAccept = input.autoAccept ?? DEFAULT_AUTO_ACCEPT;
   const reviewAt = input.reviewAt ?? DEFAULT_REVIEW_AT;
+  validatePolicyThresholds(autoAccept, reviewAt);
   if (input.nextConfidence < reviewAt) {
     return "escalate";
   }
   if (input.nextChoice === "ask_user") {
     return "review";
   }
-  if (input.nextChoice === "stop" && input.doneEnough >= 0.7 && input.nextConfidence >= autoAccept) {
-    return "auto";
-  }
   if (input.riskScore >= 1.5) {
     return input.nextConfidence >= autoAccept ? "review" : "escalate";
+  }
+  if (input.nextChoice === "stop" && input.doneEnough < 0.7) {
+    return "review";
   }
   if (input.nextConfidence >= autoAccept && input.riskScore < 1.2) {
     return "auto";
@@ -81,6 +95,7 @@ export function reviewAction(input: {
 }): PolicyAction {
   const autoAccept = input.autoAccept ?? DEFAULT_AUTO_ACCEPT;
   const reviewAt = input.reviewAt ?? DEFAULT_REVIEW_AT;
+  validatePolicyThresholds(autoAccept, reviewAt);
   if (input.minConfidence < reviewAt || input.safeToApply < 0.4) {
     return "escalate";
   }

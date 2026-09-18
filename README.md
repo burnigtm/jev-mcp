@@ -1,220 +1,108 @@
 # jev-mcp
 
-MCP server that puts [TypeSafe Jev](https://docs.typesafe.ai/introduction.md) on the coding loop in **Cursor**, **Codex**, and any other MCP client.
-
-Jev is not a chatbot. It is a System One evaluation model: you send `state` plus typed **Choice / Score / Noul** questions, and it returns probabilities and confidence in a few hundred milliseconds. It cannot write code. Cursor and Codex still generate and edit; this server is the cheap decision layer you can call on every turn.
-
-Questions in one request run in parallel. That is the cheap swarm: many atomic judgments, then policy in code.
-
-## Documentation
-
-| Doc | Contents |
-| --- | --- |
-| [Architecture](docs/architecture.md) | Process model, source map, confidence, limits |
-| [Tools](docs/tools.md) | Arguments, outputs, and when to call each tool |
-| [Install](docs/install.md) | Cursor, Codex, GitHub publish, Windows `D:\` checkout |
-| [Configuration](docs/configuration.md) | Env vars, thresholds, tests |
-| [Agent skill](skills/jev-mcp/SKILL.md) | Instructions the host agent should follow |
-| [AGENTS.md](AGENTS.md) | Short pointer for Cursor / Codex |
+A local stdio MCP server that gives Cursor, Codex, and other MCP clients typed [TypeSafe Jev](https://docs.typesafe.ai/introduction.md) judgments. Jev returns Choice, Score, and Noul answers; the host agent still edits files and runs commands.
 
 ## Tools
 
-| Tool | Use when |
+| Tool | Purpose |
 | --- | --- |
-| `jev_coding_loop` | Before a frontier retry/stop/model-tier decision |
-| `jev_review` | Before declaring a patch done |
-| `jev_verify` | Claims vs evidence (PR text, diffs, docs) |
-| `jev_screen` | Untrusted paste/fetch, before the agent reads it |
-| `jev_rank` | Rank files, symbols, errors, or skills (you pass candidates) |
-| `jev_evaluate` | Escape hatch: raw System One questions |
+| `jev_coding_loop` | Choose the next step and model tier |
+| `jev_review` | Assess a proposed patch |
+| `jev_verify` | Check claims against supplied evidence |
+| `jev_gate` | Combine patch review and claim verification in one upstream call |
+| `jev_screen` | Screen untrusted content before the host reads it |
+| `jev_rank` | Rank candidates supplied by the host |
+| `jev_evaluate` | Ask custom, atomic typed questions |
 
-Every tool returns typed answers, token `usage`, and `action`: `auto` | `review` | `escalate`. Thresholds are named constants in code, overridable per call.
+Results include typed answers, token usage, and an `action`: `auto`, `review`, or `escalate`. Confidence measures model certainty, not factual truth. Incomplete context never permits `auto`; reduce the input and submit it again for a complete judgment.
 
-Question packs are also MCP resources at `jev://packs/{coding-loop,review,verify,screen,rank}`.
+Question packs are MCP resources at `jev://packs/{coding-loop,review,verify,screen,rank,gate}`.
 
 ## Quick start
 
-Node 20+.
+Install Node 20+ and run from a checkout:
 
 ```bash
-npm install
+npm ci
 npm run build
-node dist/index.js doctor
 ```
 
-Get a TypeSafe key from [console.typesafe.ai/settings/keys](https://console.typesafe.ai/settings/keys). Without a key, set `JEV_MCP_MOCK=1` for a deterministic local judge (tests and demos only).
+Set a [TypeSafe API key](https://console.typesafe.ai/settings/keys) in your shell, then run diagnostics:
 
-**Cursor** — copy [examples/cursor.mcp.json](examples/cursor.mcp.json) into `.cursor/mcp.json` and point `args` at this repo’s `dist/index.js` (absolute path). Pass the key in `env`. Copy [skills/jev-mcp/SKILL.md](skills/jev-mcp/SKILL.md) into the project.
+```bash
+export TYPESAFE_API_KEY=ts_...
+node dist/index.js doctor
+node dist/index.js doctor --json
+```
 
-**Codex**
+PowerShell:
+
+```powershell
+$env:TYPESAFE_API_KEY = 'ts_...'
+node dist/index.js doctor --json
+```
+
+For a deterministic local demo, set `JEV_MCP_MOCK=1` instead. Mock mode is for tests and demos, not production decisions. Neither the CLI nor MCP automatically reads `.env`; see [configuration](docs/configuration.md) for explicit environment-file use.
+
+**Cursor:** copy [the MCP example](examples/cursor.mcp.json) into `.cursor/mcp.json`, replace its argument with the absolute path to this checkout's `dist/index.js`, and set the key in `env`.
+
+**Codex:** register the absolute path:
 
 ```bash
 codex mcp add jev --env TYPESAFE_API_KEY=ts_... -- node /absolute/path/to/jev-mcp/dist/index.js
 ```
 
-Windows `D:\` checkout (after the GitHub remote exists):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\checkout-d-drive.ps1 -RepoUrl git@github.com:<you>/jev-mcp.git
-```
-
-Full host-specific steps: [docs/install.md](docs/install.md).
+Copy [the agent skill](skills/jev-mcp/SKILL.md) into the project so the host knows when to call these tools. Detailed setup and the Windows checkout helper are in [installation](docs/install.md).
 
 ## CLI
 
 ```bash
-node dist/index.js
-node dist/index.js doctor
-JEV_MCP_MOCK=1 node dist/index.js eval --json '{
-  "state": "Help, payouts have been failing for 3 days. ASAP.",
-  "questions": {
-    "urgent": { "type": "noul", "instructions": "Is this urgent?" }
-  }
-}'
+node dist/index.js                       # stdio MCP
+node dist/index.js doctor                # human-readable diagnostics on stderr
+node dist/index.js doctor --json         # structured diagnostics on stdout
+node dist/index.js eval --stdin < request.json
 ```
 
-## Environment
-
-| Variable | Role |
-| --- | --- |
-| `TYPESAFE_API_KEY` | Live TypeSafe API |
-| `JEV_MCP_MODEL` | Default `jev-latest` |
-| `TYPESAFE_BASE_URL` | Optional API root |
-| `JEV_MCP_MOCK` | `1` = local deterministic judge |
-| `JEV_MCP_AUTO_ACCEPT` | Default `0.8` |
-| `JEV_MCP_REVIEW_AT` | Default `0.5` |
-| `JEV_MCP_BLOCK_AT` | Default `0.75` (screen) |
-
-No key and no mock: tools return a clear error. They do not hang.
-
-## Limits (from TypeSafe, enforced here)
-
-- 64k tokens for all `state` + `questions`; 32k for `state` + the longest question. Oversized state is truncated.
-- Rank: 250 candidates per Jev call (texts capped at 2,000 characters). Larger lists are chunked, then winners are re-ranked.
-- Arithmetic, counts, and date math stay in TypeScript. Jev is not a calculator and does not generate text.
-
-## Develop
-
-```bash
-npm test
-npm run typecheck
-```
-
-Live API tests: `TYPESAFE_API_KEY=ts_... npm test`
-
-## What this is not
-
-- Not a filesystem or shell MCP (the host already has those)
-- Not a swarm of chat models
-- Not a repo indexer (`jev_rank` only ranks candidates you pass in)
-
-
-| Tool | Use when |
-| --- | --- |
-| `jev_coding_loop` | Before a frontier retry/stop/model-tier decision |
-| `jev_review` | Before declaring a patch done |
-| `jev_verify` | Claims vs evidence (PR text, diffs, docs) |
-| `jev_screen` | Untrusted paste/fetch, before the agent reads it |
-| `jev_rank` | Rank files, symbols, errors, or skills (you pass candidates) |
-| `jev_evaluate` | Escape hatch: raw System One questions |
-
-Every tool returns typed answers, token `usage`, and `action`: `auto` | `review` | `escalate`. Thresholds are named constants in code, overridable per call.
-
-Question packs are also MCP resources at `jev://packs/{coding-loop,review,verify,screen,rank}`.
-
-## Install
-
-Node 20+. Build this repo:
-
-```bash
-npm install
-npm run build
-```
-
-Get a TypeSafe key from [console.typesafe.ai/settings/keys](https://console.typesafe.ai/settings/keys). Without a key, set `JEV_MCP_MOCK=1` for a deterministic local judge (tests and demos only).
-
-### Cursor
-
-Copy [examples/cursor.mcp.json](examples/cursor.mcp.json) into `.cursor/mcp.json` and point `args` at this repo’s `dist/index.js` (absolute path). Pass the key in `env`; some hosts drop inherited environment variables.
+An evaluation request contains `state` and a `questions` map:
 
 ```json
 {
-  "mcpServers": {
-    "jev": {
-      "command": "node",
-      "args": ["/absolute/path/to/jev-mcp/dist/index.js"],
-      "env": {
-        "TYPESAFE_API_KEY": "ts_..."
-      }
-    }
+  "state": "Production payouts are failing. Urgent.",
+  "questions": {
+    "urgent": { "type": "noul", "instructions": "Is this urgent?" }
   }
 }
 ```
 
-Copy [skills/jev-mcp/SKILL.md](skills/jev-mcp/SKILL.md) into the project so the agent actually calls the tools.
+Diagnostics do not log request content or API keys. Calls have a 30-second total deadline by default, configurable with `JEV_MCP_TIMEOUT_MS`. API failures and invalid responses return typed errors rather than fabricated judgments.
 
-### Codex
+## Limits and policy
 
-```bash
-npm run build
-codex mcp add jev --env TYPESAFE_API_KEY=ts_... -- node /absolute/path/to/jev-mcp/dist/index.js
-```
+State plus questions must fit the estimated 64,000-token total budget and the 32,000-token state-plus-longest-question budget. State may be shortened; results expose incomplete coverage and cannot automatically accept a judgment based on omitted context. Questions alone that exceed the budget are rejected.
 
-See [examples/codex.config.toml](examples/codex.config.toml). The same binary works with Claude Code, Amp, and other stdio MCP clients.
+Rank accepts unique candidate IDs and at most 250 options per upstream call. Larger lists use repeated reduction rounds; each candidate text is capped at 2,000 characters. It ranks supplied candidates and does not index your repository. Arithmetic and date calculations belong in host code.
 
-## CLI
+## Development
 
 ```bash
-# stdio MCP (default)
-node dist/index.js
-
-# env / key / tiny ping
-node dist/index.js doctor
-
-# one-shot evaluate
-JEV_MCP_MOCK=1 node dist/index.js eval --json '{
-  "state": "Help, payouts have been failing for 3 days. ASAP.",
-  "questions": {
-    "urgent": { "type": "noul", "instructions": "Is this urgent?" }
-  }
-}'
-```
-
-## Environment
-
-| Variable | Role |
-| --- | --- |
-| `TYPESAFE_API_KEY` | Live TypeSafe API |
-| `JEV_MCP_MODEL` | Default `jev-latest` |
-| `TYPESAFE_BASE_URL` | Optional API root |
-| `JEV_MCP_MOCK` | `1` = local deterministic judge |
-| `JEV_MCP_AUTO_ACCEPT` | Default `0.8` |
-| `JEV_MCP_REVIEW_AT` | Default `0.5` |
-| `JEV_MCP_BLOCK_AT` | Default `0.75` (screen) |
-
-No key and no mock: tools return a clear error. They do not hang.
-
-## Limits (from TypeSafe, enforced here)
-
-- 64k tokens for all `state` + `questions`; 32k for `state` + the longest question. Oversized state is truncated.
-- Rank: 250 candidates per Jev call (texts capped at 2,000 characters). Larger lists are chunked, then winners are re-ranked.
-- Arithmetic, counts, and date math stay in TypeScript. Jev is not a calculator and does not generate text.
-
-## Develop
-
-```bash
-npm test          # mock tests; live e2e skipped without TYPESAFE_API_KEY
+npm test
 npm run typecheck
+npm run build
+npm run test:package
 ```
 
-Live API tests:
+The regular suite runs without a key; the live test is skipped unless a key is present and mock mode is disabled. Package smoke testing builds and packs the project, installs the tarball into an isolated directory with `npm --offline`, then runs its shipped CLI. Run `npm ci` first to populate the dependency cache. No test publishes the package.
 
-```bash
-TYPESAFE_API_KEY=ts_... npm test
-```
+`npm pack` and `npm publish` build automatically through `prepack`. CI checks Node 20 and 22 on Windows and Linux, including the offline packed-install smoke test.
 
-## What this is not
+## Documentation
 
-- Not a filesystem or shell MCP (the host already has those)
-- Not a swarm of chat models
-- Not a repo indexer (`jev_rank` only ranks candidates you pass in)
+| Document | Contents |
+| --- | --- |
+| [Changelog](docs/changelog.md) | Unreleased changes, compatibility notes, and validation |
+| [Architecture](docs/architecture.md) | Request path, policy, limits, and errors |
+| [Tools](docs/tools.md) | Arguments and outputs for all seven tools |
+| [Install](docs/install.md) | Host configuration and Windows checkout |
+| [Configuration](docs/configuration.md) | Environment, thresholds, diagnostics, tests |
+| [Agent skill](skills/jev-mcp/SKILL.md) | Calling guidance for the host |
+| [AGENTS.md](AGENTS.md) | Short project guidance |
