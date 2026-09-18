@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { parseQuestions, type QuestionInput } from "../questions.js";
-import { actionFromConfidence, minConfidence } from "../policy.js";
+import { actionFromConfidence, minConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
 import { getConfig } from "../config.js";
-import { systemOne } from "../typesafe.js";
+import { systemOne, type ToolContext } from "../typesafe.js";
 import { asChoice, asNoul, asScore } from "../result.js";
 
 export const questionInputSchema = z.object({
@@ -33,13 +33,15 @@ export const evaluateInputSchema = z.object({
 
 export type EvaluateInput = z.infer<typeof evaluateInputSchema>;
 
-export async function runEvaluate(input: EvaluateInput) {
+export async function runEvaluate(input: EvaluateInput, context?: ToolContext) {
+  const config = getConfig();
+  validatePolicyThresholds(config.autoAccept, config.reviewAt);
   const questions = parseQuestions(input.questions as Record<string, QuestionInput>);
   const result = await systemOne({
     state: input.state,
     questions,
     model: input.model,
-  });
+  }, context);
   const confidences: number[] = [];
   for (const answer of Object.values(result.answers)) {
     if (answer.type === "choice") {
@@ -51,12 +53,12 @@ export async function runEvaluate(input: EvaluateInput) {
       confidences.push(Math.abs(noul - 0.5) * 2);
     }
   }
-  const config = getConfig();
   return {
     model: result.model,
     answers: result.answers,
     usage: result.usage,
     truncated: result.truncated,
-    action: actionFromConfidence(minConfidence(confidences), config.autoAccept, config.reviewAt),
+    coverage: result.coverage,
+    action: requireCompleteContext(actionFromConfidence(minConfidence(confidences), config.autoAccept, config.reviewAt), result.truncated),
   };
 }

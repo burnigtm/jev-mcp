@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { reviewQuestions } from "../packs/review.js";
-import { minConfidence, reviewAction, reviewComposite } from "../policy.js";
+import { minConfidence, requireCompleteContext, reviewAction, reviewComposite, validatePolicyThresholds } from "../policy.js";
 import { asNoul, asScore } from "../result.js";
-import { systemOne } from "../typesafe.js";
+import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 
 export const reviewInputSchema = z.object({
   request: z.string().describe("What the user asked for"),
@@ -16,10 +16,11 @@ export const reviewInputSchema = z.object({
 
 export type ReviewInput = z.infer<typeof reviewInputSchema>;
 
-export async function runReview(input: ReviewInput) {
+export async function runReview(input: ReviewInput, context?: ToolContext) {
   const config = getConfig();
   const autoAccept = input.auto_accept ?? config.autoAccept;
   const reviewAt = input.review_at ?? config.reviewAt;
+  validatePolicyThresholds(autoAccept, reviewAt);
   const result = await systemOne({
     state: {
       request: input.request,
@@ -28,7 +29,18 @@ export async function runReview(input: ReviewInput) {
     },
     questions: reviewQuestions(),
     model: input.model,
-  });
+  }, context);
+  return {
+    model: result.model,
+    usage: result.usage,
+    truncated: result.truncated,
+    coverage: result.coverage,
+    ...projectReview(result, autoAccept, reviewAt),
+  };
+}
+
+/** Shared scoring policy for the standalone review and combined gate. */
+export function projectReview(result: EvaluateResponse, autoAccept: number, reviewAt: number) {
   const correctness = asScore(result.answers.correctness);
   const specMatch = asScore(result.answers.spec_match);
   const testGap = asScore(result.answers.test_gap);
@@ -40,7 +52,7 @@ export async function runReview(input: ReviewInput) {
     testGap: testGap.score,
     blastRadius: blastRadius.score,
   });
-  const action = reviewAction({
+  const action = requireCompleteContext(reviewAction({
     composite,
     safeToApply: safeToApply.noul,
     minConfidence: minConfidence([
@@ -51,11 +63,8 @@ export async function runReview(input: ReviewInput) {
     ]),
     autoAccept,
     reviewAt,
-  });
+  }), result.truncated || !result.coverage.complete);
   return {
-    model: result.model,
-    usage: result.usage,
-    truncated: result.truncated,
     action,
     composite,
     safe_to_apply: safeToApply.noul,

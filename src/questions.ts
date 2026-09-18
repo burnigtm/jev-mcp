@@ -8,7 +8,8 @@ export type QuestionInput = {
 };
 
 export function parseQuestions(raw: Record<string, QuestionInput>): Questions {
-  const questions: Questions = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new JevValidationError("questions must be a map");
+  const questions: Questions = Object.create(null) as Questions;
   const ids = Object.keys(raw);
   if (ids.length === 0) {
     throw new JevValidationError("questions must contain at least one entry");
@@ -23,6 +24,7 @@ export function parseQuestion(id: string, value: QuestionInput): Question {
   if (!value || typeof value !== "object") {
     throw new JevValidationError(`Question ${id} must be an object`);
   }
+  if (typeof value.instructions !== "string") throw new JevValidationError(`Question ${id}: instructions must be text`);
   if (value.type === "noul") {
     const question: NoulQuestion = {
       type: "noul",
@@ -46,6 +48,8 @@ export function parseQuestion(id: string, value: QuestionInput): Question {
     if (keys.length < 2) {
       throw new JevValidationError(`Question ${id}: choice needs at least two options`);
     }
+    if (keys.length > 250) throw new JevValidationError(`Question ${id}: choice supports at most 250 options`);
+    if (Object.values(criteria).some(item => item !== null && typeof item !== "string")) throw new JevValidationError(`Question ${id}: choice descriptions must be text or null`);
     const question: ChoiceQuestion = {
       type: "choice",
       instructions: value.instructions,
@@ -58,6 +62,7 @@ export function parseQuestion(id: string, value: QuestionInput): Question {
       throw new JevValidationError(`Question ${id}: score criteria must be an array of at least two level descriptions`);
     }
     const criteria = value.criteria as [string, string, ...string[]];
+    if (criteria.some(item => typeof item !== "string")) throw new JevValidationError(`Question ${id}: score descriptions must be text`);
     const question: ScoreQuestion = {
       type: "score",
       instructions: value.instructions,

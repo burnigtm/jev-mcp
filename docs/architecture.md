@@ -39,6 +39,7 @@ Official API: `POST https://api.typesafe.ai/v1/systemone` with `Authorization: B
 | [`src/index.ts`](../src/index.ts) | CLI: default stdio, `doctor`, `eval` |
 | [`src/server.ts`](../src/server.ts) | MCP tools + `jev://packs/*` resources |
 | [`src/typesafe.ts`](../src/typesafe.ts) | Live client or mock; truncates oversized state |
+| [`src/responses.ts`](../src/responses.ts) | Validates provider answer types, ranges, options, and distributions before policy |
 | [`src/mock.ts`](../src/mock.ts) | Deterministic judge for tests and demos |
 | [`src/policy.ts`](../src/policy.ts) | `auto` / `review` / `escalate` (and screen pass/block/skip) |
 | [`src/packs/`](../src/packs) | Frozen question JSON for each recipe |
@@ -50,10 +51,10 @@ Official API: `POST https://api.typesafe.ai/v1/systemone` with `Authorization: B
 
 1. The host calls a tool with JSON arguments.
 2. The tool builds a TypeSafe `questions` map (or accepts one for `jev_evaluate`).
-3. [`fitState`](../src/limits.ts) enforces TypeSafe budgets: 64k tokens for state+questions, 32k for state + the longest question. Oversized state is truncated and `truncated: true` is returned.
+3. [`fitState`](../src/limits.ts) enforces estimated budgets: 64k tokens for state+questions, 32k for state + the longest question. Oversized questions are rejected. State truncation includes its marker within the allowance and reports incomplete coverage. Counts use `ceil(chars / 4)`, not a provider tokenizer.
 4. If `JEV_MCP_MOCK=1`, [`mockSystemOne`](../src/mock.ts) answers locally. Else a missing `TYPESAFE_API_KEY` becomes a clear error (the host does not hang).
-5. Live calls use the SDK retry policy (429 / 5xx). Logs go to **stderr** so stdout stays MCP JSON-RPC.
-6. Policy reads confidence, noul values, and scores, then sets `action`.
+5. Live calls use the SDK retry policy (429 / 5xx), bounded by a shared total tool deadline (default 30 seconds). MCP cancellation aborts active calls and pending retries. Request content is not logged; stdout stays MCP JSON-RPC.
+6. Provider results are validated before policy reads confidence, noul values, and scores. Policy sets `action`; incomplete coverage cannot produce `auto`.
 7. The MCP result is JSON text the host model can branch on.
 
 ## Confidence vs probability
@@ -70,6 +71,8 @@ Default bands (overridable per call or with env vars):
 
 Destructive coding-loop risk (`risk` score ≥ 1.5) never returns `auto`.
 
+Automatic stopping also requires `done_enough >= 0.7`. The combined `jev_gate` packs patch review and evidence-only claim verification into one request. It accepts completion only when the review and every claim pass with complete coverage; deterministic reason codes identify failures without asking Jev to generate prose.
+
 ## Limits we encode, not guess
 
 From TypeSafe’s own docs, including [Jev 1.13 jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13.md):
@@ -78,7 +81,7 @@ From TypeSafe’s own docs, including [Jev 1.13 jaggedness](https://docs.typesaf
 - Do not hide several judgments in one question. Split, then combine.
 - Filter state first. Unrelated bulk context hurts accuracy.
 - Choice options are a closed set. Jev cannot invent a new id.
-- `jev_rank` caps a Choice at 250 options. Larger lists are chunked, then winners are re-ranked.
+- `jev_rank` caps a Choice at 250 options and fits batches to estimated context budgets. It preserves original IDs through private labels, carries singleton batches forward, and repeats reduction rounds until finalists fit. A non-reducing tournament returns a budget error rather than looping.
 
 ## Mock mode
 

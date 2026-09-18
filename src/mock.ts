@@ -236,7 +236,11 @@ function rankBoost(label: string, description: string, state: unknown): number {
     return 0;
   }
   const query = stringifyState((state as { query?: unknown }).query ?? "");
-  return overlap(query, `${label} ${description}`) * 10;
+  const candidates = (state as { candidates?: Array<{ id?: string; original_id?: string }> }).candidates;
+  const originalId = Array.isArray(candidates)
+    ? candidates.find(candidate => candidate?.id === label)?.original_id ?? ""
+    : "";
+  return overlap(query, `${label} ${originalId} ${description}`) * 10;
 }
 
 function existsFromCandidates(state: unknown): number {
@@ -244,8 +248,8 @@ function existsFromCandidates(state: unknown): number {
     return 0.14;
   }
   const query = stringifyState((state as { query?: unknown }).query ?? "");
-  const candidates = (state as { candidates?: Array<{ text?: string }> }).candidates ?? [];
-  const max = Math.max(0, ...candidates.map((candidate) => overlap(candidate.text ?? "", query)));
+  const candidates = (state as { candidates?: Array<{ text?: string; original_id?: string }> }).candidates ?? [];
+  const max = Math.max(0, ...candidates.map((candidate) => overlap(`${candidate.original_id ?? ""} ${candidate.text ?? ""}`, query)));
   if (max > 0.25) {
     return Math.min(0.99, 0.5 + max);
   }

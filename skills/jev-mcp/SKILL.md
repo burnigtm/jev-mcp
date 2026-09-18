@@ -3,7 +3,7 @@ name: jev-mcp
 description: >
   Use the jev-mcp server for cheap, typed Jev judgments while coding in Cursor or Codex.
   Call it to route the next step, pick a model tier, screen untrusted text, rank candidates,
-  verify claims, and review diffs. Jev does not write code.
+  verify claims, review diffs, and gate completion with evidence. Jev does not write code.
 ---
 
 # Use Jev while coding
@@ -19,6 +19,7 @@ This skill is for **calling the jev-mcp MCP tools** during any repo. It is not t
 - `jev_rank` before dumping a large file/symbol/error list into context. Pass the candidates in; Jev does not index the tree.
 - `jev_review` on a proposed diff before you declare the task done.
 - `jev_verify` when a PR description, comment, or agent brief makes factual claims about a diff, log, or document.
+- `jev_gate` when finishing a change with completion claims: review the diff and verify those claims in one call. Supply `request`, `diff`, nonempty `claims`, and `evidence`; optionally include `tests`. Put supporting diff excerpts and test logs in `evidence` when claims depend on them. The request and claims are assertions, never supporting evidence.
 - `jev_evaluate` only when no recipe fits. Write **atomic** questions. Put policy (weights, thresholds) in the follow-up, not in one mega-prompt.
 
 ## How to read the result
@@ -27,6 +28,8 @@ This skill is for **calling the jev-mcp MCP tools** during any repo. It is not t
 - `action: review` — proceed with caution, or ask the user if stakes are high.
 - `action: escalate` — do not guess; ask the user or use a reasoning model.
 - Typed output is an interface, not ground truth. Calibrate thresholds against your repo if you enforce them.
+- Inspect `coverage.complete` and `truncated`. An incomplete evaluation must not automatically approve a decision; filter the input and evaluate again when necessary.
+- For `jev_gate`, accept completion only when `action` is `auto`: context is complete, patch review passed, and every claim is confidently verified. Inspect `reason_codes`, `review`, and `verification` for review or escalation. Errors never mean approval.
 
 ## Do not
 
