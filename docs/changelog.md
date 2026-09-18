@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Routing follow-up to PR #2
+
+- Automatic tool dispatch and partner generation now require independently concentrated probability distributions as well as the reported confidence threshold. Flat or weak selection, next-step, risk, or tier distributions cannot pass on overstated confidence alone. The additional local guard preserves reported provider fields and normalizes permitted probability rounding error.
+- Fixed floating-point boundary comparisons in coding-loop routing: context uncertainty exactly at `0.2` passes the default `0.8` threshold, and generation probability exactly at `0.2` receives `generation_not_required`.
+- Added regression coverage for inconsistent confidence, strict and inclusive thresholds, candidate counts up to 32, and probability-mass rounding.
+
 ### Coding and prepared tool-call routing
 
 - Added `jev_tool_route` as the eighth MCP tool and `jev://packs/tool-route` as the seventh question pack. It selects among at most 32 exact host-prepared calls, with an independent suitability judgment for each eligible candidate.

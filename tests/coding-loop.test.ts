@@ -215,6 +215,55 @@ test("permissive thresholds cannot lower the confidence floor for paid generatio
   }
 });
 
+test("overstated confidence cannot buy a partner turn with a weak distribution", async t => {
+  for (const field of ["next", "model_tier", "risk"] as const) {
+    for (const confidence of [0, 0.79]) {
+      const fetch = t.mock.method(globalThis, "fetch", async () => {
+        const response = fixture({ nextConfidence: field === "next" ? confidence : undefined, tierConfidence: field === "model_tier" ? confidence : undefined });
+        if (field === "risk") {
+          const peak = (1 + 2 * confidence) / 3;
+          const rest = (1 - peak) / 2;
+          response.answers.risk.probabilities = { "0": peak, "1": rest, "2": rest };
+          response.answers.risk.score = 3 * rest;
+        }
+        response.answers[field].confidence = 0.99;
+        return Response.json(response);
+      });
+      const result = await runCodingLoop({ ...input, auto_accept: 0, review_at: 0 });
+      assert.equal(result.handoff, "review");
+      assert.equal(result.partner_model.required, false);
+      fetch.mock.restore();
+    }
+  }
+});
+
+test("partner routing accepts the exact context uncertainty boundary", async t => {
+  for (const [auto_accept, moreContext] of [[0.8, 0.2], [0.9, 0.1], [1, 0]]) {
+    const fetch = reply(t, { nextConfidence: 1, tierConfidence: 1, generation: 1, moreContext });
+    const result = await runCodingLoop({ ...input, auto_accept });
+    assert.equal(result.handoff, "partner_model");
+    assert.equal(result.partner_model.required, true);
+    fetch.mock.restore();
+  }
+});
+
+test("context uncertainty above the boundary still prevents a partner turn", async t => {
+  reply(t, { moreContext: 0.200001 });
+  const result = await runCodingLoop(input);
+  assert.equal(result.handoff, "gather_context");
+  assert.deepEqual(result.partner_model.reason_codes, ["context_needed_or_uncertain"]);
+});
+
+test("partner routing retains inclusive confidence and negative-generation boundaries", async t => {
+  const atFloor = reply(t, { nextConfidence: 0.8, tierConfidence: 0.8, generation: 0.8, moreContext: 0.2 });
+  assert.equal((await runCodingLoop(input)).partner_model.required, true);
+  atFloor.mock.restore();
+  reply(t, { generation: 0.2 });
+  const result = await runCodingLoop(input);
+  assert.equal(result.handoff, "gather_context");
+  assert.deepEqual(result.partner_model.reason_codes, ["generation_not_required"]);
+});
+
 test("missing API keys and malformed provider answers fail instead of routing", async t => {
   const fetch = reply(t);
   const key = process.env.TYPESAFE_API_KEY;

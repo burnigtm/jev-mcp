@@ -220,6 +220,42 @@ test("stricter dispatch thresholds and low confidence never expose an executable
   });
 });
 
+test("reported confidence cannot dispatch a flat or weak selection distribution", async () => {
+  await withApi((payload, response, attempt) => {
+    const body = judgment(payload, "call_0", attempt === 1 ? 0 : 0.79);
+    body.answers.selected.confidence = 0.99;
+    send(response, body);
+  }, async calls => {
+    for (const _ of [0, 1]) {
+      const result = await runToolRoute(input(undefined, { auto_accept: 0, review_at: 0 }));
+      assert.equal(result.call, null);
+      assert.notEqual(result.action, "auto");
+      assert.ok(result.reason_codes.includes("selection_uncertain"));
+    }
+    assert.equal(calls(), 2);
+  });
+});
+
+test("distribution guard honors inclusive and stricter thresholds across candidate counts", async () => {
+  const fixtures = [1, 32].flatMap(count => [0.8, 0.9, 1].flatMap(threshold => [true, false].map(accepted => ({ count, threshold, accepted }))));
+  await withApi((payload, response, attempt) => {
+    const { threshold, accepted } = fixtures[attempt - 1];
+    const body = judgment(payload, "call_0", accepted ? threshold : threshold - 0.01, [1]);
+    body.answers.selected.confidence = 1;
+    // Valid responses may have rounding error in the total probability mass.
+    for (const key of Object.keys(body.answers.selected.probabilities)) body.answers.selected.probabilities[key] *= 0.995;
+    send(response, body);
+  }, async calls => {
+    for (const { count, threshold, accepted } of fixtures) {
+      const candidates = Array.from({ length: count }, (_, index) => candidate({ id: `candidate-${index}` }));
+      const result = await runToolRoute(input(candidates, { auto_accept: threshold }));
+      assert.equal(result.handoff, accepted ? "execute_tool" : "gather_context");
+      assert.equal(result.call !== null, accepted);
+    }
+    assert.equal(calls(), fixtures.length);
+  });
+});
+
 test("none and an unsuitable selected call cannot be rescued by another suitable candidate", async () => {
   await withApi((payload, response, attempt) => send(response, judgment(payload, attempt === 1 ? "none" : "call_0", 0.99, [0.05, 0.99])), async calls => {
     const request = input([candidate(), candidate({ id: "other" })]);

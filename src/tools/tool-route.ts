@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getConfig } from "../config.js";
 import { JevValidationError } from "../errors.js";
 import { toolRouteQuestions } from "../packs/tool-route.js";
-import { validatePolicyThresholds, type PolicyAction } from "../policy.js";
+import { distributionSupportsConfidence, validatePolicyThresholds, type PolicyAction } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, withToolContext, type ToolContext } from "../typesafe.js";
 
@@ -133,7 +133,7 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
     const reasons: Reason[] = [];
     const incomplete = result.truncated || !result.coverage.complete;
     if (incomplete) reasons.push("incomplete_context");
-    if (selected.confidence < dispatchAt) reasons.push("selection_uncertain");
+    if (selected.confidence < dispatchAt || !distributionSupportsConfidence(selected.probabilities, dispatchAt)) reasons.push("selection_uncertain");
     if (!candidate) reasons.push("no_suitable_call");
     if (suitability !== null && suitability < dispatchAt) reasons.push("suitability_uncertain");
     const needsReview = candidate?.effect === "external_write" || candidate?.effect === "destructive";
