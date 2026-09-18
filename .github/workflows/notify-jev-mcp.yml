@@ -46,6 +46,7 @@ jobs:
       - name: Update GitHub watch dashboard
         if: always()
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENT_ID: ${{ vars.CURSOR_JEV_MCP_AGENT_ID }}
           DEFAULT_AGENT_ID: bc-c78e565c-bc13-4d27-ada8-cc5e7e04eb9e
           EVENT_NAME: ${{ github.event_name }}
