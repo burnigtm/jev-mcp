@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fused step router
+
+- Added `jev_step` as the ninth MCP tool and `jev://packs/step` as the eighth question pack. One Jev request answers the coding-loop and prepared-call recipes together, so a loop iteration costs one MCP round-trip, and therefore one host-model turn, instead of two.
+- Selection reuses the `jev_tool_route` eligibility filter and dispatch floors; routing reuses the `jev_coding_loop` partner policy unchanged. Incomplete context, `stop`, `ask_user`, an uncertain next step, destructive risk, a non-auto action, and two failed attempts all outrank a dispatchable call, and a returned call never accompanies a partner request.
+- Ineligible candidates are filtered locally and receive no question; with no eligible candidate the request carries the coding-loop pack alone. Fusing the packs lowers the state budget by the added question size, and an oversized request truncates into incomplete coverage rather than dispatching.
+- Prepared candidates that Jev declines without confidence route to context gathering with `prepared_candidates_declined` instead of buying a generative turn. A confident `none` still allows the partner turn the coding loop asked for.
+- `jev_coding_loop` and `jev_tool_route` are unchanged and still available.
+
 ### Cloud Agent GitHub event delivery
 
 - Added `.github/workflows/notify-jev-mcp.yml` so GitHub PR/merge events POST into the Jev_MCP Cloud Agent instead of a polling timer. Requires repository secret `CURSOR_API_KEY`.

@@ -18,6 +18,13 @@ export function requireCompleteContext(action: PolicyAction, truncated: boolean)
   return truncated && action === "auto" ? "review" : action;
 }
 
+/** Combining independent judgments never softens the strictest one. */
+export function worstAction(actions: PolicyAction[]): PolicyAction {
+  if (actions.includes("escalate")) return "escalate";
+  if (actions.includes("review")) return "review";
+  return "auto";
+}
+
 export function confidenceFromProbabilities(
   probabilities: Record<string, number>,
 ): number {

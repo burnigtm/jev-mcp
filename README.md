@@ -6,6 +6,7 @@ A local stdio MCP server that gives Cursor, Codex, and other MCP clients typed [
 
 | Tool | Purpose |
 | --- | --- |
+| `jev_step` | Route the next step and select a prepared call in one request |
 | `jev_coding_loop` | Route the next step and decide whether a partner model is needed |
 | `jev_tool_route` | Select an exact host-prepared tool call without generating arguments |
 | `jev_review` | Assess a proposed patch |
@@ -17,11 +18,13 @@ A local stdio MCP server that gives Cursor, Codex, and other MCP clients typed [
 
 Results include typed answers, token usage, and an `action`: `auto`, `review`, or `escalate`. Confidence measures model certainty, not factual truth. Incomplete context never permits `auto`; reduce the input and submit it again for a complete judgment.
 
-Question packs are MCP resources at `jev://packs/{coding-loop,tool-route,review,verify,screen,rank,gate}`.
+Question packs are MCP resources at `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate}`.
 
 ## Coding with fewer partner-model turns
 
-Let host code execute known steps and prepare exact tool calls from an existing plan. When a semantic choice is needed, pass those calls to `jev_tool_route`; it returns an executable `call` only for a confident, suitable selection with complete context and validated host facts. The host executes that call and routes again using the new observation. Jev never invents arguments or executes tools.
+`jev_step` answers the whole loop turn in one request: it routes the step and, when the host supplies prepared calls, selects among them. A host that would otherwise call `jev_coding_loop` and then `jev_tool_route` spends one MCP round-trip instead of two, so it spends one host-model turn instead of two. Both original tools remain available.
+
+Let host code execute known steps and prepare exact tool calls from an existing plan. When a semantic choice is needed, pass those calls to `jev_step` or `jev_tool_route`; either returns an executable `call` only for a confident, suitable selection with complete context and validated host facts. The host executes that call and routes again using the new observation. Jev never invents arguments or executes tools.
 
 When a new plan or code may be needed, use `jev_coding_loop` with trusted `execution` facts. Its `handoff` distinguishes tool use, context gathering, review, user input, stopping, and a partner model. Invoke a generative partner only when `partner_model.required` is `true`; the legacy `model_tier` answer alone does not request a model turn. Uncertainty and escalation do not automatically spend a partner turn.
 
@@ -110,7 +113,7 @@ The regular suite runs without a key; the live test is skipped unless a key is p
 | --- | --- |
 | [Changelog](docs/changelog.md) | Unreleased changes, compatibility notes, and validation |
 | [Architecture](docs/architecture.md) | Request path, policy, limits, and errors |
-| [Tools](docs/tools.md) | Arguments and outputs for all eight tools |
+| [Tools](docs/tools.md) | Arguments and outputs for all nine tools |
 | [Install](docs/install.md) | Host configuration and Windows checkout |
 | [Configuration](docs/configuration.md) | Environment, thresholds, diagnostics, tests |
 | [Agent skill](skills/jev-mcp/SKILL.md) | Calling guidance for the host |

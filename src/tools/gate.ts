@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { gateQuestions } from "../packs/gate.js";
-import { requireCompleteContext, validatePolicyThresholds, type PolicyAction } from "../policy.js";
+import { requireCompleteContext, validatePolicyThresholds, worstAction, type PolicyAction } from "../policy.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { projectReview } from "./review.js";
 import { evidenceSchema, projectClaims, summarizeClaims } from "./verify.js";
@@ -149,10 +149,4 @@ export function projectGate(result: EvaluateResponse, claims: string[], autoAcce
     review,
     verification,
   };
-}
-
-function worstAction(actions: PolicyAction[]): PolicyAction {
-  if (actions.includes("escalate")) return "escalate";
-  if (actions.includes("review")) return "review";
-  return "auto";
 }

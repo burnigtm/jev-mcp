@@ -5,8 +5,9 @@ import { reviewQuestions } from "./review.js";
 import { screenQuestions } from "./screen.js";
 import { VERIFY_CRITERIA, verifyQuestions } from "./verify.js";
 import { toolRouteQuestions } from "./tool-route.js";
+import { stepQuestions } from "./step.js";
 
-export const PACK_IDS = ["coding-loop", "review", "verify", "screen", "rank", "gate", "tool-route"] as const;
+export const PACK_IDS = ["coding-loop", "review", "verify", "screen", "rank", "gate", "tool-route", "step"] as const;
 export type PackId = (typeof PACK_IDS)[number];
 
 export function packBody(id: PackId): unknown {
@@ -17,6 +18,11 @@ export function packBody(id: PackId): unknown {
       return {
         note: "One Choice over private call labels plus none, and an independent suitability Noul per prepared call. Arguments are host-supplied and never generated. Host eligibility, complete context, confidence and effect gates must all pass before returning an executable call.",
         example: toolRouteQuestions(2),
+      };
+    case "step":
+      return {
+        note: "One request combines the coding-loop questions with prepared-call selection. Ineligible candidates are filtered locally and never reach Jev; with no eligible candidate the map is the coding-loop pack alone. Dispatch still requires the fixed 0.8 floor, a concentrated selection distribution, and a read-only or local-write effect.",
+        example: stepQuestions(2),
       };
     case "review":
       return reviewQuestions();
