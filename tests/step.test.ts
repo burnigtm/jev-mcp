@@ -263,15 +263,28 @@ test("incomplete coverage never dispatches, including a full 32-candidate map", 
 
 test("external writes and destructive effects require review instead of dispatch", async () => {
   for (const effect of ["external_write", "destructive"] as const) {
-    await withApi((payload, response) => send(response, judgment(payload)), async () => {
-      const result = await runStep(input({ candidates: [candidate({ effect })] }));
-      assert.equal(result.call, null);
-      assert.equal(result.handoff, "review");
-      assert.equal(result.action, "review");
-      assert.ok(result.reason_codes.includes("effect_requires_review"));
-      assert.equal(result.partner_model.required, false);
-    });
+    for (const contextComplete of [true, false]) {
+      await withApi((payload, response) => send(response, judgment(payload)), async () => {
+        const result = await runStep(input({
+          candidates: [candidate({ effect })],
+          execution: { prepared_tool_call: false, context_complete: contextComplete, failed_attempts: 0 },
+        }));
+        assert.equal(result.call, null);
+        assert.equal(result.handoff, "review");
+        assert.equal(result.action, "review");
+        assert.ok(result.reason_codes.includes("effect_requires_review"));
+        assert.equal(result.partner_model.required, false);
+      });
+    }
   }
+});
+
+test("a terminal decision still outranks a selected call that would need review", async () => {
+  await withApi((payload, response) => send(response, judgment(payload, { next: "stop", done: 0.9 })), async () => {
+    const result = await runStep(input({ candidates: [candidate({ effect: "destructive" })] }));
+    assert.equal(result.handoff, "stop");
+    assert.equal(result.call, null);
+  });
 });
 
 test("permissive thresholds and flat distributions cannot dispatch", async () => {

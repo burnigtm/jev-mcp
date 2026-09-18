@@ -169,7 +169,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
     }
     const dispatchable = Boolean(candidate) && reasons.length === 0;
     // Judge the selection before routing appends its own reason codes.
-    const selected = selectionAction(selection, reasons, reviewAt);
+    const selectionVerdict = selectionAction(selection, reasons, reviewAt);
 
     const routing = partnerRouting({
       ...routingInput(answers),
@@ -184,9 +184,9 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
     let handoff: StepHandoff = routing.handoff;
     let partnerModel: { required: boolean; tier: PartnerTier; reason_codes: string[] } = routing.partner_model;
     let call: { candidate_id: string; name: string; arguments: unknown } | null = null;
-    if (dispatchable && routing.handoff === "use_tools") {
+    if (dispatchable && candidate && routing.handoff === "use_tools") {
       handoff = "execute_tool";
-      call = { candidate_id: candidate!.id, name: candidate!.name, arguments: candidate!.arguments };
+      call = { candidate_id: candidate.id, name: candidate.name, arguments: candidate.arguments };
     } else if (dispatchable) {
       // Terminal, risky, uncertain, or repeatedly failing steps outrank a call.
       reasons.push("routing_blocked_dispatch");
@@ -197,6 +197,9 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
       handoff = needsReview ? "review" : "gather_context";
       partnerModel = { required: false, tier: "none", reason_codes: ["prepared_candidates_declined"] };
     }
+    // A selected external or destructive call needs review, as in jev_tool_route.
+    // Terminal, tool, and partner handoffs still outrank that.
+    if (needsReview && handoff === "gather_context") handoff = "review";
     if (!reasons.length) reasons.push("accepted");
 
     return stepOutputSchema.parse({
@@ -204,7 +207,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
       usage: result.usage,
       truncated: result.truncated,
       coverage: result.coverage,
-      action: worstAction([action, selected]),
+      action: worstAction([action, selectionVerdict]),
       handoff,
       call,
       partner_model: partnerModel,
