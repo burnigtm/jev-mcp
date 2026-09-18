@@ -9,6 +9,7 @@ import { runRank, rankInputSchema } from "./tools/rank.js";
 import { runReview, reviewInputSchema } from "./tools/review.js";
 import { runScreen, screenInputSchema } from "./tools/screen.js";
 import { runVerify, verifyInputSchema } from "./tools/verify.js";
+import { runToolRoute, toolRouteInputSchema, toolRouteOutputSchema } from "./tools/tool-route.js";
 import { SERVER_NAME, VERSION } from "./version.js";
 import { withToolContext } from "./typesafe.js";
 
@@ -46,7 +47,7 @@ export function createJevServer(): McpServer {
     {
       title: "Jev coding-loop router",
       description:
-        "Call before spending a frontier turn on retry/stop/model-tier. One Jev fan-out returns next (continue|retry|ask_user|stop), model_tier (cheap|standard|reasoning), risk, focus, and noul flags done_enough / needs_more_context / tests_likely_fail. Policy in code maps confidence to action auto|review|escalate. Does not edit files.",
+        "Call before retry/stop/model-tier decisions. One Jev fan-out returns next, risk, focus, and explicit handoff / partner_model fields. Prefer prepared tools or gathering context; request a partner generative model only when needed and confidently supported. Legacy model_tier is conditional, not an instruction to invoke a model. Does not edit files.",
       inputSchema: codingLoopInputSchema,
       annotations: {
         readOnlyHint: true,
@@ -60,6 +61,25 @@ export function createJevServer(): McpServer {
         return jsonResult(await withToolContext({ signal: extra.signal }, context => runCodingLoop(args, context)));
       } catch (err) {
         return jsonError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "jev_tool_route",
+    {
+      title: "Jev prepared tool-call router",
+      description: "Choose among up to 32 exact host-prepared tool calls without generating arguments or invoking a partner model. Host supplies trusted authorization, schema validation, prerequisites, effect and retry counts. Only confident, suitable, complete, low-risk selections expose a call; otherwise call is null. Empty/ineligible lists return locally without Jev. This server never executes the selected call. Use jev_coding_loop if new generation may be necessary.",
+      inputSchema: toolRouteInputSchema,
+      outputSchema: toolRouteOutputSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async (args, extra) => {
+      try {
+        const payload = await runToolRoute(args, { signal: extra.signal });
+        return { ...jsonResult(payload), structuredContent: payload };
+      } catch (err) {
+        return jsonError(err, false);
       }
     },
   );

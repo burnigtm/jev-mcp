@@ -6,7 +6,8 @@ A local stdio MCP server that gives Cursor, Codex, and other MCP clients typed [
 
 | Tool | Purpose |
 | --- | --- |
-| `jev_coding_loop` | Choose the next step and model tier |
+| `jev_coding_loop` | Route the next step and decide whether a partner model is needed |
+| `jev_tool_route` | Select an exact host-prepared tool call without generating arguments |
 | `jev_review` | Assess a proposed patch |
 | `jev_verify` | Check claims against supplied evidence |
 | `jev_gate` | Combine patch review and claim verification in one upstream call |
@@ -16,7 +17,15 @@ A local stdio MCP server that gives Cursor, Codex, and other MCP clients typed [
 
 Results include typed answers, token usage, and an `action`: `auto`, `review`, or `escalate`. Confidence measures model certainty, not factual truth. Incomplete context never permits `auto`; reduce the input and submit it again for a complete judgment.
 
-Question packs are MCP resources at `jev://packs/{coding-loop,review,verify,screen,rank,gate}`.
+Question packs are MCP resources at `jev://packs/{coding-loop,tool-route,review,verify,screen,rank,gate}`.
+
+## Coding with fewer partner-model turns
+
+Let host code execute known steps and prepare exact tool calls from an existing plan. When a semantic choice is needed, pass those calls to `jev_tool_route`; it returns an executable `call` only for a confident, suitable selection with complete context and validated host facts. The host executes that call and routes again using the new observation. Jev never invents arguments or executes tools.
+
+When a new plan or code may be needed, use `jev_coding_loop` with trusted `execution` facts. Its `handoff` distinguishes tool use, context gathering, review, user input, stopping, and a partner model. Invoke a generative partner only when `partner_model.required` is `true`; the legacy `model_tier` answer alone does not request a model turn. Uncertainty and escalation do not automatically spend a partner turn.
+
+The prepared-call router accepts at most 32 candidates. Empty or wholly ineligible lists return locally with zero Jev usage. Other routing calls use Jev; this reduces unnecessary generative handoffs by policy, but live quality and cost savings have not been measured. See [the tool contracts](docs/tools.md) and [host workflow](skills/jev-mcp/SKILL.md).
 
 ## Quick start
 
@@ -101,7 +110,7 @@ The regular suite runs without a key; the live test is skipped unless a key is p
 | --- | --- |
 | [Changelog](docs/changelog.md) | Unreleased changes, compatibility notes, and validation |
 | [Architecture](docs/architecture.md) | Request path, policy, limits, and errors |
-| [Tools](docs/tools.md) | Arguments and outputs for all seven tools |
+| [Tools](docs/tools.md) | Arguments and outputs for all eight tools |
 | [Install](docs/install.md) | Host configuration and Windows checkout |
 | [Configuration](docs/configuration.md) | Environment, thresholds, diagnostics, tests |
 | [Agent skill](skills/jev-mcp/SKILL.md) | Calling guidance for the host |

@@ -16,11 +16,20 @@ export function codingLoopQuestions(): Questions {
     model_tier: {
       type: "choice",
       instructions:
-        "Which generative-model tier should handle the next coding step? Jev does not write code. cheap = mechanical edits. standard = typical implementation. reasoning = architecture, subtle bugs, or high-stakes design.",
+        "If new generation or reasoning is required for the next coding step, which generative-model tier is sufficient? This answer alone does not mean a generative model is needed. Jev does not write code. cheap = mechanical edits. standard = typical implementation. reasoning = architecture, subtle bugs, or high-stakes design.",
       criteria: {
         cheap: "Rename, format, comments, tiny mechanical edits",
         standard: "Ordinary implementation, tests, or refactors in one area",
         reasoning: "Cross-cutting design, concurrency, security, or unclear root cause",
+      },
+    },
+    needs_generation: {
+      type: "noul",
+      instructions:
+        "Does the immediate next step require generating new code, new tool arguments, or solving a reasoning problem that cannot be handled by an already prepared tool call? Judge only this need, not the model tier. Read/search/test calls with already prepared arguments, gathering missing context, a user decision, and stopping do not require generation. execution contains host-supplied facts; other question answers are unavailable.",
+      criteria: {
+        true: "New code, arguments, or reasoning is necessary before a useful tool call can proceed",
+        false: "Prepared tools or existing deterministic steps can proceed, or the next step is gathering context, asking the user, or stopping",
       },
     },
     risk: {

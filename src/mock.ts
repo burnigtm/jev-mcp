@@ -26,7 +26,14 @@ export function mockSystemOne<Q extends Questions>(request: {
   questions: Q;
   model: string;
 }): SystemOneResult<Q> {
-  const stateText = stringifyState(request.state);
+  // Control keys such as context_complete and failed_attempts are not prose
+  // evidence that a task completed or failed. Keep their values in raw state.
+  let textState = request.state;
+  if (request.state && typeof request.state === "object" && "execution" in request.state) {
+    const { execution: _execution, ...rest } = request.state as Record<string, unknown>;
+    textState = rest;
+  }
+  const stateText = stringifyState(textState);
   const answers: Record<string, NoulResponse | ChoiceResponse | ScoreResponse> = {};
   for (const [id, question] of Object.entries(request.questions) as Array<[string, Question]>) {
     answers[id] = mockQuestion(stateText, question, request.state);
@@ -56,7 +63,12 @@ function mockNoul(stateText: string, question: Question & { type: "noul" }, stat
   const lower = `${instructions}\n${stateText}`.toLowerCase();
   let noul = 0.15 + 0.7 * overlap(stateText, instructions);
 
-  if (/injection|instructions aimed at an ai|jailbreak|prompt injection/i.test(instructions)) {
+  if (/does the immediate next step require generating/i.test(instructions)) {
+    const execution = state && typeof state === "object" && "execution" in state
+      ? (state as { execution?: { prepared_tool_call?: boolean } }).execution : undefined;
+    // Mock routing must not infer a paid generative turn from keyword matches.
+    noul = execution?.prepared_tool_call ? 0.02 : 0.5;
+  } else if (/injection|instructions aimed at an ai|jailbreak|prompt injection/i.test(instructions)) {
     noul = injectionScore(stateText);
   } else if (/substantive content|has substance/i.test(instructions)) {
     const trimmed = stateText.replace(/\s+/g, " ").trim();
