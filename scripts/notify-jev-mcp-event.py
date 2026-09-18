@@ -84,7 +84,9 @@ def main() -> int:
     print(f"Notifying {agent_id} with Cursor API key ({describe_key(api_key)}).")
 
     last_error = ""
-    for attempt in range(1, 7):
+    retries = max(1, int(env("CURSOR_NOTIFY_RETRIES") or "6"))
+    busy_sleep = float(env("CURSOR_NOTIFY_RETRY_SLEEP") or "20")
+    for attempt in range(1, retries + 1):
         req = urllib.request.Request(url, data=body, method="POST", headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
@@ -101,8 +103,8 @@ def main() -> int:
         except urllib.error.HTTPError as err:
             last_error = err.read().decode("utf-8", "replace")
             if err.code == 409:
-                print(f"Agent busy (409); retry {attempt}/6.")
-                time.sleep(20)
+                print(f"Agent busy (409); retry {attempt}/{retries}.")
+                time.sleep(busy_sleep)
                 continue
             print(f"Notify failed HTTP {err.code}:")
             print(last_error)
@@ -115,13 +117,18 @@ def main() -> int:
                 )
             return 1
         except urllib.error.URLError as err:
+            reason = str(err.reason if getattr(err, "reason", None) else err)
+            if "timed out" in reason.lower() or isinstance(getattr(err, "reason", None), TimeoutError):
+                print(f"Cursor POST timed out; retry {attempt}/{retries}.")
+                time.sleep(min(busy_sleep, 10))
+                continue
             print(f"Notify failed: {err}", file=sys.stderr)
             return 1
 
-    print("Agent stayed busy after retries.")
+    print("Cursor agent stayed busy or timed out; GitHub dashboard still publishes.")
     if last_error:
         print(last_error)
-    return 1
+    return 0
 
 
 if __name__ == "__main__":

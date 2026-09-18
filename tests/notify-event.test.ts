@@ -153,3 +153,21 @@ test("watch dashboard writer records a workflow_dispatch ping without secrets", 
   assert.match(text, /Projects → Jev_MCP/);
   rmSync(join(out, ".."), { recursive: true, force: true });
 });
+
+test("notify script treats exhausted busy retries as success so the dashboard can publish", async () => {
+  await withServer(
+    () => ({ status: 409, body: JSON.stringify({ code: "error", message: "agent_busy" }) }),
+    async (base, requests) => {
+      const result = await runNotify({
+        CURSOR_API_KEY: fixtureKey,
+        DEFAULT_AGENT_ID: "bc-test-agent",
+        CURSOR_API_BASE: base,
+        CURSOR_NOTIFY_RETRIES: "2",
+        CURSOR_NOTIFY_RETRY_SLEEP: "0",
+      });
+      assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.equal(requests.length, 2);
+      assert.match(result.stdout, /dashboard still publishes/);
+    },
+  );
+});
