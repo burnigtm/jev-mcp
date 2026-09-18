@@ -95,8 +95,9 @@ test("notify script sends Basic auth on the first POST and strips quotes/whitesp
       assert.equal(requests.length, 1);
       const expected = Buffer.from(`${fixtureKey}:`, "utf8").toString("base64");
       assert.equal(requests[0]?.auth, `Basic ${expected}`);
-      assert.match(requests[0]?.body ?? "", /GitHub webhook/);
+      assert.match(requests[0]?.body ?? "", /docs\/github-watch\.md/);
       assert.match(result.stdout, /HTTP 201/);
+      assert.match(result.stdout, /Cursor run id: run-1/);
       assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(fixtureKey));
     },
   );
@@ -118,4 +119,37 @@ test("notify script explains HTTP 401 without printing the key", async () => {
       assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(fixtureKey));
     },
   );
+});
+
+test("watch dashboard writer records a workflow_dispatch ping without secrets", async () => {
+  const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const out = join(mkdtempSync(join(tmpdir(), "jev-watch-")), "github-watch.md");
+  const writer = fileURLToPath(new URL("../scripts/write-github-watch-dashboard.py", import.meta.url));
+  const child = spawn("python3", [writer, "--out", out], {
+    cwd: root,
+    env: {
+      ...process.env,
+      GH_TOKEN: "",
+      GITHUB_TOKEN: "",
+      EVENT_NAME: "workflow_dispatch",
+      GITHUB_SHA: "c0d4c95f70d13e1347f999d51c6addfcf61b96e7",
+      GITHUB_REF_NAME: "main",
+      DEFAULT_AGENT_ID: "bc-c78e565c-bc13-4d27-ada8-cc5e7e04eb9e",
+    },
+  });
+  const done = await new Promise<{ status: number | null; stderr: string }>(resolve => {
+    let stderr = "";
+    child.stderr.on("data", chunk => {
+      stderr += String(chunk);
+    });
+    child.on("close", status => resolve({ status, stderr }));
+  });
+  assert.equal(done.status, 0, done.stderr);
+  const text = readFileSync(out, "utf8");
+  assert.match(text, /Jev_MCP GitHub watch/);
+  assert.match(text, /workflow_dispatch/);
+  assert.match(text, /Projects → Jev_MCP/);
+  rmSync(join(out, ".."), { recursive: true, force: true });
 });

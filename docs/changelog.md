@@ -6,6 +6,7 @@
 
 - Added `.github/workflows/notify-jev-mcp.yml` so GitHub PR/merge events POST into the Jev_MCP Cloud Agent instead of a polling timer. Requires repository secret `CURSOR_API_KEY`.
 - Notify sends HTTP Basic auth on the first request (same as `curl -u KEY:`), strips whitespace/quotes, and rejects masked dashboard table values that Cursor reports as `Invalid User API Key`.
+- Notify also writes a live dashboard (`docs/github-watch.md` on branch `cursor-watch` plus GitHub Actions job summary) and tells the Project coordinator to refresh the same file in the Cursor Project store and post a visible Project chat line, including manual `workflow_dispatch` pings.
 
 ### Routing follow-up to PR #2
 

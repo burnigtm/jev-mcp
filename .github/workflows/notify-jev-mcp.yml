@@ -1,7 +1,7 @@
-# GitHub event delivery for the Jev_MCP Cloud Agent (replaces polling).
-# Secret CURSOR_API_KEY: create a User API Key at https://cursor.com/dashboard/api
-# and paste the full secret from the create dialog (not the masked table).
-# Optional repository variable CURSOR_JEV_MCP_AGENT_ID overrides the default agent.
+# GitHub event delivery for the Jev_MCP Project (replaces polling).
+# Secret CURSOR_API_KEY: full User API Key from https://cursor.com/dashboard/api create dialog.
+# Optional variable CURSOR_JEV_MCP_AGENT_ID overrides the default Project id.
+# Also publishes docs/github-watch.md on branch cursor-watch (does not push main).
 name: Notify Jev_MCP
 
 on:
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: notify-jev-mcp-${{ github.event.pull_request.number || github.sha }}
@@ -43,3 +43,22 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_SHA: ${{ github.sha }}
         run: python3 scripts/notify-jev-mcp-event.py
+      - name: Update GitHub watch dashboard
+        env:
+          AGENT_ID: ${{ vars.CURSOR_JEV_MCP_AGENT_ID }}
+          DEFAULT_AGENT_ID: bc-c78e565c-bc13-4d27-ada8-cc5e7e04eb9e
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+          PR_USER: ${{ github.event.pull_request.user.login }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+          REVIEW_STATE: ${{ github.event.review.state }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/write-github-watch-dashboard.py --out docs/github-watch.md
+          python3 scripts/publish-github-watch-dashboard.py
