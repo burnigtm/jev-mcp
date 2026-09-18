@@ -18,7 +18,7 @@ after(() => {
   }
 });
 
-test("MCP lists seven tools and six packs", async () => {
+test("MCP lists eight tools and seven packs", async () => {
   const server = createJevServer();
   const client = new Client({ name: "test", version: "0.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -33,10 +33,11 @@ test("MCP lists seven tools and six packs", async () => {
       "jev_rank",
       "jev_review",
       "jev_screen",
+      "jev_tool_route",
       "jev_verify",
     ]);
     const resources = await client.listResources();
-    assert.equal(resources.resources.length, 6);
+    assert.equal(resources.resources.length, 7);
     const pack = await client.readResource({ uri: "jev://packs/coding-loop" });
     assert.ok(pack.contents[0] && "text" in pack.contents[0]);
     const called = await client.callTool({

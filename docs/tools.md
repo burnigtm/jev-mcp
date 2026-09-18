@@ -2,19 +2,19 @@
 
 Every successful tool call returns JSON with at least:
 
-- `model` — the response model identifier; the default requested model is `jev-latest`, and mock mode appends `+mock`
+- `model` — the response model identifier; the default requested model is `jev-latest`, mock mode appends `+mock`, and `jev_tool_route` uses `local-policy` when no provider call is needed
 - `usage.input_tokens` / `usage.output_tokens`
 - `truncated` — `true` if state was cut to fit TypeSafe budgets
 - `coverage` — completeness and source character counts; token estimates identify the `chars/4` estimator
 - `action` — `auto` | `review` | `escalate`
 
-Question templates are also readable as MCP resources: `jev://packs/{coding-loop,review,verify,screen,rank,gate}`.
+Question templates are also readable as MCP resources: `jev://packs/{coding-loop,tool-route,review,verify,screen,rank,gate}`.
 
-Incomplete context never returns `auto`. MCP failures return `isError: true` and error details with `code`, `message`, and `retryable`. Existing tools expose these under `structuredContent.error` with human-readable text; `jev_gate` returns JSON text only, as described below. Host cancellation stops active requests and retries. One total deadline covers every upstream call in a tool invocation (default 30 seconds).
+Incomplete context never returns `auto`. MCP failures return `isError: true` and error details with `code`, `message`, and `retryable`. Tools without output schemas expose these under `structuredContent.error` with human-readable text; `jev_gate` and `jev_tool_route` failures return JSON text only, as described below. Host cancellation stops active requests and retries. One total deadline covers every upstream call in a tool invocation (default 30 seconds).
 
 ## `jev_coding_loop`
 
-Call **before** spending a frontier turn on retry / stop / which model tier.
+Call **before** spending a generative partner turn on retry / stop / which model tier. This tool returns a routing decision; it never invokes a partner model or executes a tool.
 
 **Arguments**
 
@@ -23,6 +23,7 @@ Call **before** spending a frontier turn on retry / stop / which model tier.
 | `task` | yes | What the agent is trying to do |
 | `observation` | yes | Last diff, command output, test log, or blocker |
 | `extras` | no | Extra JSON included under `state.extras` |
+| `execution` | no | Trusted host facts: `prepared_tool_call` (default `false`), `context_complete` (default `false`), `failed_attempts` (nonnegative integer, default `0`) |
 | `auto_accept` | no | Override default `0.8` |
 | `review_at` | no | Override default `0.5` |
 | `model` | no | Override `JEV_MCP_MODEL` |
@@ -30,14 +31,112 @@ Call **before** spending a frontier turn on retry / stop / which model tier.
 **Fan-out (one Jev call)**
 
 - Choice `next`: `continue` | `retry` | `ask_user` | `stop`
-- Choice `model_tier`: `cheap` | `standard` | `reasoning`
+- Choice `model_tier`: `cheap` | `standard` | `reasoning` — conditional recommendation if generation is needed
 - Choice `focus`: `edit` | `search` | `test` | `read` | `plan`
 - Score `risk`: read-only → local edit → destructive/prod
-- Noul `done_enough`, `needs_more_context`, `tests_likely_fail`
+- Noul `done_enough`, `needs_more_context`, `needs_generation`, `tests_likely_fail`
 
 Next-step confidence below `review_at` escalates. Otherwise, `ask_user` requires `review`. High `risk` is never `auto`.
 
 Automatic `stop` also requires `done_enough >= 0.7`, sufficient next-step confidence, and low risk.
+
+**Partner handoff**
+
+The response adds `handoff` and `partner_model: { required, tier, reason_codes }`. A non-required partner always has tier `none`. Existing `next`, `model_tier`, `focus`, risk, probability, and threshold fields remain available; clients should branch on the new handoff fields when deciding whether to invoke a generative model.
+
+| `handoff` | Host response |
+| --- | --- |
+| `use_tools` | Use the already prepared call, or `jev_tool_route` to select among prepared calls |
+| `gather_context` | Collect missing evidence or prepare valid calls using available tools and host code |
+| `partner_model` | Generation is justified; use `partner_model.tier` |
+| `ask_user` | Obtain the missing user input identified by the task |
+| `stop` | Stop the coding loop |
+| `review` | Inspect the decision and its reason codes within existing authorization |
+
+`partner_model.required: true` requires all of the following: complete evaluated context; `continue` or `retry` with `action: auto`; explicit host `context_complete: true`; fewer than two failed attempts; and no prepared tool call. It also requires next-step, risk, and tier confidence plus `needs_generation` to meet `thresholds.partner_auto_accept`, which is `max(0.8, auto_accept)`. `needs_more_context` must be at most `1 - partner_auto_accept`.
+
+Prepared calls can route to `use_tools` before host context is complete, because reading a file or running a check may supply the missing evidence. This is a routing hint, not execution permission. Repeated failures route to context gathering first. Otherwise, insufficient risk or next-step confidence routes to review; missing host context or uncertain generation need routes to context gathering; an uncertain tier routes to review. Terminal and user-input decisions never request a partner model.
+
+The host supplies execution facts from its own state, never from untrusted content or Jev's predictions. `prepared_tool_call: true` means exact arguments have already passed the actual tool schema, authorization, and prerequisite checks. `context_complete` concerns the evidence needed for the next step; it is distinct from `coverage.complete`, which only reports whether supplied content fit the evaluation. Track `failed_attempts` for the current unchanged step; new evidence or a changed approach may establish a new step and count. Never reset it merely to replay an unchanged failure.
+
+Partner reason codes are `incomplete_context`, `terminal_stop`, `stop_requires_review`, `user_input_required`, `next_step_uncertain`, `coding_policy_requires_review`, `repeated_failures`, `prepared_tool_call`, `risk_uncertain`, `host_context_incomplete`, `context_needed_or_uncertain`, `generation_not_required`, `generation_need_uncertain`, `model_tier_uncertain`, and `generation_required`.
+
+```json
+{
+  "task": "Fix the parser's handling of empty input",
+  "observation": "The patch is ready and the parser test command is prepared.",
+  "execution": {
+    "prepared_tool_call": true,
+    "context_complete": true,
+    "failed_attempts": 0
+  }
+}
+```
+
+Do not treat `action: escalate` or the legacy `model_tier` answer as a partner-model request. After each tool result, update the observation and execution facts before routing again.
+
+## `jev_tool_route`
+
+Choose among **exact, complete calls already prepared by the host**. It never creates or repairs arguments, calls the selected tool, or requests a generative partner model. Prefer host code for deterministic choices; use this router when selecting the next prepared call requires a semantic judgment.
+
+**Arguments:** required `task` (nonempty string), `observation` (string), and `candidates` (array, up to 32). Optional: `model`, `auto_accept`, and `review_at`. Candidate IDs must be unique. Each candidate has:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Nonempty host identifier, returned unchanged |
+| `name` | Exact tool name in the host's available registry |
+| `arguments` | Complete JSON object, validated by the host against that tool's actual schema |
+| `description` | Purpose of this exact call |
+| `effect` | `read_only`, `local_write`, `external_write`, `destructive`, or `unknown` |
+| `authorized` | Trusted host boolean: existing authorization covers this call |
+| `schema_valid` | Trusted host boolean: actual tool-schema validation passed |
+| `preconditions_met` | Trusted host boolean: prerequisites are satisfied |
+| `failed_attempts` | Optional nonnegative consecutive failure count for this exact call; default `0` |
+
+All three boolean facts must explicitly be `true` for eligibility. Unknown effects and two or more failures of an unchanged call also exclude a candidate. The server validates its candidate envelope; it cannot independently inspect the host registry or prove these facts. Recheck mutable prerequisites before execution and never copy these flags from untrusted text. Update failure counts when evidence or the approach changes to a new step; never reset the count to bypass an unchanged call's retry limit.
+
+Argument objects with an own `__proto__` property at any nesting depth are rejected, so schema parsing cannot silently remove a property from an authorized call. Candidate IDs are unaffected and may contain that text.
+
+For example, a host with a registered `read_file({path})` tool could send this input **after** checking that exact call:
+
+```json
+{
+  "task": "Inspect the parser before changing empty-input handling",
+  "observation": "The relevant file is src/parser.ts and has not yet been read.",
+  "candidates": [
+    {
+      "id": "read-parser",
+      "name": "read_file",
+      "arguments": { "path": "src/parser.ts" },
+      "description": "Read the parser implementation",
+      "effect": "read_only",
+      "authorized": true,
+      "schema_valid": true,
+      "preconditions_met": true,
+      "failed_attempts": 0
+    }
+  ]
+}
+```
+
+**Selection and dispatch**
+
+One Jev request asks a Choice over eligible candidates plus `none`, and a separate Noul `suitable_i` for each eligible candidate. Every suitability question independently assesses its own exact call; it does not depend on the Choice answer. Host policy combines the chosen candidate's suitability with selection confidence.
+
+`action: auto` requires complete coverage, a selected eligible candidate, and both selection confidence and selected suitability at or above `max(0.8, auto_accept)`. Only `read_only` and `local_write` can dispatch automatically. `external_write` and `destructive` always require review even when authorized. Review does not itself require new user permission for work already covered by authorization.
+
+The response has an MCP output schema and matching JSON text and `structuredContent` payloads. It includes:
+
+- `call: { candidate_id, name, arguments }` only with `action: auto` and `handoff: execute_tool`. Every other result has `call: null`.
+- `partner_model: { required: false, tier: "none" }` for every result.
+- `selection: { id, confidence, suitability }`, or `null` when no Jev request was needed. A non-auto selection is diagnostic, never an executable dispatch.
+- `blocked_candidates` with exclusion reasons, overall `reason_codes`, effective `thresholds`, coverage, model, and usage.
+
+Empty lists return `model: local-policy`, zero usage, `action: review`, and `handoff: gather_context`. Wholly ineligible lists return locally with `handoff: review`. Neither case calls Jev. Their zero coverage counters mean no semantic state was evaluated; `coverage.complete: true` only describes completion of local eligibility policy. Other non-auto results use `gather_context`, except selected external or destructive effects use `review`; low confidence below `review_at` sets `action: escalate` without requesting a partner model.
+
+Reason codes are `accepted`, `no_candidates`, `no_eligible_candidates`, `not_authorized`, `arguments_not_validated`, `preconditions_not_met`, `retry_budget_exhausted`, `unknown_effect`, `no_suitable_call`, `selection_uncertain`, `suitability_uncertain`, `incomplete_context`, and `effect_requires_review`.
+
+Operational failures set `isError: true` and return JSON text `{ "error": { "code", "message", "retryable" } }` without `structuredContent`. Errors never authorize execution. Filter lists larger than 32 before calling; use `jev_rank` when semantic filtering is needed. Use `jev_coding_loop` when new generation may be necessary.
 
 ## `jev_review`
 

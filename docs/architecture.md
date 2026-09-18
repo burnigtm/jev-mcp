@@ -1,6 +1,6 @@
 # Architecture
 
-jev-mcp is a local **stdio MCP server**. Cursor, Codex, Claude Code, Amp, and any other MCP host spawn it as a child process. The host still owns files, the terminal, and code generation. This process only calls [TypeSafe Jev](https://docs.typesafe.ai/introduction.md) and applies **policy in TypeScript**.
+jev-mcp is a local **stdio MCP server**. Cursor, Codex, Claude Code, Amp, and any other MCP host spawn it as a child process. The host still owns files, the terminal, and code generation. This process calls [TypeSafe Jev](https://docs.typesafe.ai/introduction.md) when a typed judgment is needed and applies **policy in TypeScript**. It never executes a selected tool or invokes a generative partner model.
 
 ```text
 Cursor / Codex agent
@@ -15,7 +15,7 @@ Cursor / Codex agent
    typed answers + probabilities + confidence
         |
         v
-   action: auto | review | escalate
+   action + handoff + typed decision
 ```
 
 ## Why Jev sits beside the coder, not instead of it
@@ -50,12 +50,26 @@ Official API: `POST https://api.typesafe.ai/v1/systemone` with `Authorization: B
 ## Request path
 
 1. The host calls a tool with JSON arguments.
-2. The tool builds a TypeSafe `questions` map (or accepts one for `jev_evaluate`).
+2. The tool builds a TypeSafe `questions` map (or accepts one for `jev_evaluate`). `jev_tool_route` first excludes ineligible candidates; empty or wholly ineligible lists return local policy results with zero usage and no provider call.
 3. [`fitState`](../src/limits.ts) enforces estimated budgets: 64k tokens for state+questions, 32k for state + the longest question. Oversized questions are rejected. State truncation includes its marker within the allowance and reports incomplete coverage. Counts use `ceil(chars / 4)`, not a provider tokenizer.
 4. If `JEV_MCP_MOCK=1`, [`mockSystemOne`](../src/mock.ts) answers locally. Else a missing `TYPESAFE_API_KEY` becomes a clear error (the host does not hang).
 5. Live calls use the SDK retry policy (429 / 5xx), bounded by a shared total tool deadline (default 30 seconds). MCP cancellation aborts active calls and pending retries. Request content is not logged; stdout stays MCP JSON-RPC.
 6. Provider results are validated before policy reads confidence, noul values, and scores. Policy sets `action`; incomplete coverage cannot produce `auto`.
 7. The MCP result is JSON text the host model can branch on.
+
+## Tool execution without a generative turn
+
+The host should perform deterministic work directly: maintain a plan, resolve known paths, validate schemas, track authorization and failures, and prepare complete argument objects. `jev_tool_route` adds semantic selection over at most 32 prepared calls. It asks one Choice, including `none`, and an independent suitability Noul for every eligible candidate. Questions cannot use one another's answers, so TypeScript combines selection with the corresponding suitability only after the response arrives.
+
+Eligibility is decided locally from trusted host facts. Authorization, schema validation, and prerequisites must all explicitly pass; an unknown effect or two failures of an unchanged call blocks it. Jev cannot grant authorization or validate an unavailable host-tool schema. Candidate metadata and observations are evidence, never instructions to change routing policy.
+
+Only complete, confident selections of suitable `read_only` or `local_write` calls can return `handoff: execute_tool` and the exact original arguments. Dispatch has a fixed minimum threshold of `0.8`, even if callers lower their judgment thresholds. External writes and destructive effects require review. Every other outcome has `call: null`. Every tool-route result has `partner_model: { required: false, tier: "none" }`.
+
+Host code can execute the returned call after checking current prerequisites, incorporate its observation, and repeat with the next prepared candidates. A plan can therefore support multiple tool steps without another generative turn. This server supplies the decision interface; it does not implement an autonomous executor or claim measured live cost savings.
+
+When exact next-step arguments or a new implementation must be generated, `jev_coding_loop` decides whether a partner turn is justified. It adds an independent `needs_generation` judgment to the existing next-step, context, risk, and model-tier questions. TypeScript emits `handoff` and `partner_model` after combining these answers with the host's `execution` facts. A partner request requires an automatic continue/retry decision, explicit complete host context, confident generation need, next step, risk and tier, low context uncertainty, no prepared call, and fewer than two failed attempts. Partner confidence has the same fixed minimum `0.8` floor as prepared-call dispatch.
+
+Prepared calls route to tools when the rest of the coding policy permits, including calls that gather missing context. Repeated failures route to context gathering; the host tracks failures of the unchanged step and updates the count only when evidence or the approach establishes a new step. Without a prepared call, missing evidence routes to context gathering. Terminal decisions, uncertain tiers or risk, incomplete coverage, and review decisions do not request a partner. The legacy `model_tier` stays available as a conditional recommendation. `review` and `escalate` are decision states, not instructions to spend a generative turn or repeat a permission request already covered by user authorization.
 
 ## Confidence vs probability
 
@@ -63,7 +77,7 @@ Choice and Score answers include both a full `probabilities` map and a derived `
 
 High confidence does **not** mean the answer is true. It means Jev is not torn between the options you defined. Keep policy, weights, and thresholds in code so a human can review them in one file: [`src/policy.ts`](../src/policy.ts).
 
-Default bands (overridable per call or with env vars):
+Default judgment bands (overridable per call or with env vars; prepared-call dispatch retains its `0.8` minimum):
 
 - **auto** — confidence ≥ `0.8` and risk is low
 - **review** — medium confidence, or high-stakes even when confident

@@ -4,14 +4,20 @@ import { rankQuestions } from "./rank.js";
 import { reviewQuestions } from "./review.js";
 import { screenQuestions } from "./screen.js";
 import { VERIFY_CRITERIA, verifyQuestions } from "./verify.js";
+import { toolRouteQuestions } from "./tool-route.js";
 
-export const PACK_IDS = ["coding-loop", "review", "verify", "screen", "rank", "gate"] as const;
+export const PACK_IDS = ["coding-loop", "review", "verify", "screen", "rank", "gate", "tool-route"] as const;
 export type PackId = (typeof PACK_IDS)[number];
 
 export function packBody(id: PackId): unknown {
   switch (id) {
     case "coding-loop":
       return codingLoopQuestions();
+    case "tool-route":
+      return {
+        note: "One Choice over private call labels plus none, and an independent suitability Noul per prepared call. Arguments are host-supplied and never generated. Host eligibility, complete context, confidence and effect gates must all pass before returning an executable call.",
+        example: toolRouteQuestions(2),
+      };
     case "review":
       return reviewQuestions();
     case "verify":
