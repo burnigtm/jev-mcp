@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Cloud Agent GitHub event delivery
+
+- Added `.github/workflows/notify-jev-mcp.yml` so GitHub PR/merge events POST into the Jev_MCP Cloud Agent instead of a polling timer. Requires repository secret `CURSOR_API_KEY`.
+
 ### Coding and prepared tool-call routing
 
 - Added `jev_tool_route` as the eighth MCP tool and `jev://packs/tool-route` as the seventh question pack. It selects among at most 32 exact host-prepared calls, with an independent suitability judgment for each eligible candidate.
