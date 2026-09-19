@@ -103,9 +103,10 @@ npm test
 npm run typecheck
 npm run build
 npm run test:package
+npm run benchmark
 ```
 
-The regular suite runs without a key; the live test is skipped unless a key is present and mock mode is disabled. Package smoke testing builds and packs the project, installs the tarball into an isolated directory with `npm --offline`, then runs its shipped CLI. Run `npm ci` first to populate the dependency cache. No test publishes the package.
+The regular suite runs without a key; the live test is skipped unless a key is present and mock mode is disabled. Package smoke testing builds and packs the project, installs the tarball into an isolated directory with `npm --offline`, then runs its shipped CLI. `npm run benchmark` builds the compiled server and measures the real MCP stdio transport in deterministic mock mode: sequential and concurrent calls, payload-size scaling, and candidate-count scaling. Use `npm run benchmark:ci` to apply broad sanity budgets; set `JEV_BENCH_ITERATIONS`, `JEV_BENCH_CONCURRENCY`, `JEV_BENCH_MAX_P95_MS`, or `JEV_BENCH_MIN_RPS` to tune a run. Run `npm ci` first to populate the dependency cache. No test publishes the package.
 
 `npm pack` and `npm publish` build automatically through `prepack`. CI checks Node 20 and 22 on Windows and Linux, including the offline packed-install smoke test.
 

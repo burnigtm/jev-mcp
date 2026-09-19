@@ -5,6 +5,7 @@
 ### Interoperability and policy hardening
 
 - Added MCP output schemas and structured success payloads for all nine tools.
+- Added an opt-in compiled MCP performance benchmark covering stdio startup, sequential and concurrent calls, payload scaling, and candidate scaling in deterministic mock mode.
 - Tool-route and fused-step judgments now receive redacted candidate projections rather than raw argument objects; selected calls still return the original host-prepared arguments after local validation.
 - Invalid numeric configuration values and malformed base URLs now fail diagnostics instead of silently falling back. Empty CLI state is preserved, and invalid evaluation bodies are rejected explicitly.
 - Added bounded inputs for ranking and claim verification, plus a local coherence guard that prevents overstated provider confidence from authorizing automatic decisions.
