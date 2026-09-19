@@ -31,6 +31,8 @@
     "dev": "tsx src/index.ts",
     "test": "node scripts/run-tests.mjs",
     "test:package": "node --import tsx --test tests/package.test.ts",
+    "benchmark": "npm run build && node scripts/benchmark.mjs",
+    "benchmark:ci": "npm run build && node scripts/benchmark.mjs --assert",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
