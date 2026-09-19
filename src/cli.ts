@@ -85,37 +85,51 @@ type EvalArgs = {
 
 function parseEvalArgs(argv: string[]): EvalArgs {
   const flags = new Map<string, string>();
+  const valuedFlags = new Set(["json", "state", "questions", "model"]);
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i] ?? "";
     if (token === "--stdin") {
+      if (flags.has("stdin")) throw new JevValidationError("Duplicate --stdin flag.");
       flags.set("stdin", "1");
       continue;
     }
-    if (token.startsWith("--")) {
-      const key = token.slice(2);
-      const value = argv[i + 1];
-      if (!value || value.startsWith("--")) {
-        flags.set(key, "1");
-      } else {
-        flags.set(key, value);
-        i += 1;
-      }
+    if (!token.startsWith("--")) {
+      throw new JevValidationError(`Unexpected argument: ${token}`);
     }
+    const separator = token.indexOf("=");
+    const key = separator >= 0 ? token.slice(2, separator) : token.slice(2);
+    if (!valuedFlags.has(key)) throw new JevValidationError(`Unknown eval option: --${key}`);
+    if (flags.has(key)) throw new JevValidationError(`Duplicate --${key} flag.`);
+    let value: string | undefined;
+    if (separator >= 0) {
+      value = token.slice(separator + 1);
+    } else {
+      value = argv[i + 1];
+      if (value === undefined || value.startsWith("--")) {
+        throw new JevValidationError(`Missing value for --${key}.`);
+      }
+      i += 1;
+    }
+    flags.set(key, value);
   }
 
   if (flags.has("json") || flags.has("stdin")) {
-    const raw = flags.has("stdin") ? readFileSync(0, "utf8") : (flags.get("json") ?? "");
-    const body = JSON.parse(raw) as EvalArgs;
-    if (!body.questions) {
-      throw new Error("JSON body must include questions");
+    if (flags.has("stdin") && flags.size !== 1) throw new JevValidationError("--stdin cannot be combined with other eval options.");
+    if (flags.has("json") && (flags.has("state") || flags.has("questions") || flags.has("model"))) {
+      throw new JevValidationError("--json cannot be combined with --state, --questions, or --model.");
     }
-    return body;
+    const raw = flags.has("stdin") ? readFileSync(0, "utf8") : (flags.get("json") ?? "");
+    const body = JSON.parse(raw) as unknown;
+    if (!body || typeof body !== "object" || Array.isArray(body) || !("questions" in body)) {
+      throw new JevValidationError("JSON body must be an object containing questions.");
+    }
+    return body as EvalArgs;
   }
 
   const state = flags.get("state");
   const questionsRaw = flags.get("questions");
-  if (!state || !questionsRaw) {
-    throw new Error(
+  if (state === undefined || questionsRaw === undefined) {
+    throw new JevValidationError(
       "Usage: jev-mcp eval --state TEXT --questions JSON  |  jev-mcp eval --json JSON  |  jev-mcp eval --stdin",
     );
   }

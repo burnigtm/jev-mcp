@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { codingLoopQuestions } from "../packs/coding-loop.js";
-import { codingLoopAction, distributionSupportsConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
+import { codingLoopAction, confidenceSupportsAuto, distributionSupportsConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
 import { asChoice, asNoul, asScore } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 
@@ -61,14 +61,22 @@ export async function runCodingLoop(input: CodingLoopInput, context?: ToolContex
   const needsGeneration = asNoul(result.answers.needs_generation);
   const testsLikelyFail = asNoul(result.answers.tests_likely_fail);
   const focus = asChoice(result.answers.focus);
-  const action = requireCompleteContext(codingLoopAction({
+  let policyAction = codingLoopAction({
     nextChoice: next.choice,
     nextConfidence: next.confidence,
     riskScore: risk.score,
     doneEnough: doneEnough.noul,
     autoAccept,
     reviewAt,
-  }), result.truncated || !result.coverage.complete);
+  });
+  if (
+    policyAction === "auto"
+    && (!confidenceSupportsAuto(next.confidence, next.probabilities, autoAccept)
+      || !confidenceSupportsAuto(risk.confidence, risk.probabilities, autoAccept))
+  ) {
+    policyAction = "review";
+  }
+  const action = requireCompleteContext(policyAction, result.truncated || !result.coverage.complete);
   const routing = partnerRouting({
     action,
     next: next.choice,
@@ -158,6 +166,7 @@ function partnerRouting(input: {
   if (input.execution.prepared_tool_call) return defer("use_tools", "prepared_tool_call");
   const partnerAutoAccept = Math.max(0.8, input.autoAccept);
   if (input.riskConfidence < partnerAutoAccept || !distributionSupportsConfidence(input.riskProbabilities, partnerAutoAccept)) return defer("review", "risk_uncertain");
+  if (input.action !== "auto") return defer("review", "coding_policy_requires_review");
   if (input.nextConfidence < partnerAutoAccept || !distributionSupportsConfidence(input.nextProbabilities, partnerAutoAccept)) return defer("review", "next_step_uncertain");
   if (!input.execution.context_complete) return defer("gather_context", "host_context_incomplete");
   if (1 - input.needsMoreContext < partnerAutoAccept) return defer("gather_context", "context_needed_or_uncertain");

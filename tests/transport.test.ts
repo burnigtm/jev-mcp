@@ -33,7 +33,7 @@ test("all eight tools and seven resources work through subprocess stdio", { time
       assert.match(body.model, /\+mock$/);
       assert.ok(["auto", "review", "escalate"].includes(body.action));
       assert.equal(body.coverage.complete, true);
-      if (name === "jev_gate" || name === "jev_tool_route") assert.deepEqual(result.structuredContent, body);
+      assert.deepEqual(result.structuredContent, body);
     }
     const resources = await client.listResources();
     assert.equal(resources.resources.length, 7);
@@ -41,7 +41,7 @@ test("all eight tools and seven resources work through subprocess stdio", { time
     const invalid = await client.callTool({ name: "jev_evaluate", arguments: { state: "fixture", questions: {} } });
     assert.equal(invalid.isError, true);
     assert.equal((invalid.structuredContent as { error: { code: string } }).error.code, "INVALID_INPUT");
-    const oversized = await client.callTool({ name: "jev_gate", arguments: { ...fixtures[6]![1], claims: Array.from({ length: 1_000 }, () => "Tests passed") } });
+    const oversized = await client.callTool({ name: "jev_gate", arguments: { ...fixtures[6]![1], claims: Array.from({ length: 1_001 }, () => "Tests passed") } });
     assert.equal(oversized.isError, true);
     assert.equal(oversized.structuredContent, undefined);
     assert.equal(JSON.parse((oversized.content as Array<{ text: string }>)[0]!.text).error.code, "INPUT_TOO_LARGE");

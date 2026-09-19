@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
+import { JevBudgetError } from "../errors.js";
 import { gateQuestions } from "../packs/gate.js";
-import { requireCompleteContext, validatePolicyThresholds, type PolicyAction } from "../policy.js";
+import { MAX_CLAIMS } from "../limits.js";
+import { confidenceSupportsAuto, requireCompleteContext, validatePolicyThresholds, type PolicyAction } from "../policy.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { projectReview } from "./review.js";
 import { evidenceSchema, projectClaims, summarizeClaims } from "./verify.js";
@@ -9,7 +11,7 @@ import { evidenceSchema, projectClaims, summarizeClaims } from "./verify.js";
 export const gateInputSchema = z.object({
   request: z.string().describe("What the user asked for; this is not evidence of completion"),
   diff: z.string().describe("Proposed patch, file excerpt, or change summary to review"),
-  claims: z.array(z.string().min(1)).min(1).describe("Completion claims to check against evidence"),
+  claims: z.array(z.string().min(1)).min(1).max(MAX_CLAIMS).describe(`Completion claims to check against evidence; at most ${MAX_CLAIMS} per request`),
   evidence: evidenceSchema.describe("Sources that support the claims; include relevant diff or test logs here"),
   tests: z.string().optional().describe("Test output for the patch review"),
   auto_accept: z.number().min(0).max(1).optional(),
@@ -33,6 +35,7 @@ export const gateReasonCodeSchema = z.enum([
   "claims_unsupported",
   "claim_confidence_low",
   "claim_confidence_below_auto_accept",
+  "confidence_incoherent",
 ]);
 
 export const gateOutputSchema = z.object({
@@ -90,6 +93,9 @@ export const gateOutputSchema = z.object({
 });
 
 export async function runGate(input: GateInput, context?: ToolContext) {
+  if (input.claims.length > MAX_CLAIMS) {
+    throw new JevBudgetError(`The completion gate accepts at most ${MAX_CLAIMS} claims per request. Split the claims before gating.`);
+  }
   const config = getConfig();
   const autoAccept = input.auto_accept ?? config.autoAccept;
   const reviewAt = input.review_at ?? config.reviewAt;
@@ -137,6 +143,9 @@ export function projectGate(result: EvaluateResponse, claims: string[], autoAcce
   if (results.some((item) => item.confidence < reviewAt)) reasonCodes.push("claim_confidence_low");
   if (results.some((item) => item.confidence >= reviewAt && item.confidence < autoAccept)) {
     reasonCodes.push("claim_confidence_below_auto_accept");
+  }
+  if (results.some((item) => item.confidence >= autoAccept && !confidenceSupportsAuto(item.confidence, item.probabilities, autoAccept))) {
+    reasonCodes.push("confidence_incoherent");
   }
   if (action === "auto") reasonCodes.push("accepted");
   return {

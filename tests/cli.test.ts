@@ -85,3 +85,23 @@ test("unknown CLI command fails promptly", () => {
   assert.equal(result.stdout, "");
   assert.match(result.stderr, /Unknown command/);
 });
+
+test("doctor fails closed on invalid threshold configuration", () => {
+  const result = cli(["doctor", "--json"], { JEV_MCP_AUTO_ACCEPT: "not-a-number" });
+  assert.equal(result.status, 1);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ready, false);
+  assert.equal(body.error.code, "CONFIG_ERROR");
+});
+
+test("eval preserves an explicitly empty state", () => {
+  const result = cli(["eval", "--state", "", "--questions", JSON.stringify({ q: { type: "noul", instructions: "Is this okay?" } })]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).coverage.original_chars, 0);
+});
+
+test("eval rejects null JSON bodies as input errors", () => {
+  const result = cli(["eval", "--json", "null"]);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /JSON body must be an object/);
+});

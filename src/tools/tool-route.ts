@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { JevValidationError } from "../errors.js";
+import { MAX_CANDIDATE_CHARS, truncateText } from "../limits.js";
 import { toolRouteQuestions } from "../packs/tool-route.js";
 import { distributionSupportsConfidence, validatePolicyThresholds, type PolicyAction } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
@@ -52,6 +53,9 @@ export const toolRouteInputSchema = z.object({
 
 export type ToolRouteInput = z.infer<typeof toolRouteInputSchema>;
 type Candidate = z.infer<typeof toolCandidateSchema>;
+type JudgeCandidate = Pick<Candidate, "id" | "name" | "description" | "effect"> & {
+  argument_shape: unknown;
+};
 const probability = z.number().min(0).max(1);
 const reasonSchema = z.enum([
   "accepted", "no_candidates", "no_eligible_candidates", "not_authorized", "arguments_not_validated",
@@ -88,6 +92,32 @@ function ineligibility(candidate: Candidate): Reason[] {
   return reasons;
 }
 
+/** Keep secret-bearing argument values inside the host; the judge only needs a shape. */
+function argumentShape(value: unknown, depth = 0): unknown {
+  if (value === null) return "null";
+  if (depth >= 3) return { type: Array.isArray(value) ? "array" : typeof value };
+  if (Array.isArray(value)) {
+    return {
+      type: "array",
+      length: value.length,
+      item_types: [...new Set(value.slice(0, 16).map(item => argumentShape(item, depth + 1)))].slice(0, 8),
+    };
+  }
+  if (typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>);
+    return {
+      type: "object",
+      keys: keys.slice(0, 32).map(key => key.slice(0, 128)),
+      extra_keys: Math.max(0, keys.length - 32),
+    };
+  }
+  return { type: typeof value };
+}
+
+function sanitizeDescription(description: string): string {
+  return truncateText(description.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim(), MAX_CANDIDATE_CHARS);
+}
+
 export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolContext) {
   return withToolContext(context, async scoped => {
     const parsed = toolRouteInputSchema.safeParse(rawInput);
@@ -105,6 +135,13 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
       if (reasons.length) blocked.push({ id: candidate.id, reason_codes: reasons });
       return reasons.length === 0;
     });
+    const judgeCandidates: JudgeCandidate[] = candidates.map(candidate => ({
+      id: candidate.id,
+      name: candidate.name,
+      description: sanitizeDescription(candidate.description),
+      effect: candidate.effect,
+      argument_shape: argumentShape(candidate.arguments),
+    }));
     const shared = {
       partner_model: { required: false as const, tier: "none" as const },
       blocked_candidates: blocked,
@@ -123,7 +160,7 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
       });
     }
     const result = await systemOne({
-      state: { task: input.task, observation: input.observation, candidates },
+      state: { task: input.task, observation: input.observation, candidates: judgeCandidates },
       questions: toolRouteQuestions(candidates.length), model: input.model,
     }, scoped);
     const selected = asChoice(result.answers.selected);

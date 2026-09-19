@@ -23,7 +23,7 @@ Per-call overrides (win over env):
 - `jev_screen`: `block_at`, `review_at` (screen review default is `0.25`)
 - All tools: `model`
 
-`jev_evaluate` uses the environment confidence thresholds. Configurable confidence bands must satisfy `0 <= review_at <= auto_accept <= 1`; standalone verification caps its internal review cutoff at the requested acceptance threshold. The screen review threshold cannot exceed its block threshold.
+`jev_evaluate` uses the environment confidence thresholds. Configurable confidence bands must satisfy `0 <= review_at <= auto_accept <= 1`; invalid environment values are configuration errors rather than silent fallbacks. `TYPESAFE_BASE_URL` must be an absolute HTTP(S) URL. Standalone verification caps its internal review cutoff at the requested acceptance threshold. The screen review threshold cannot exceed its block threshold, and `JEV_MCP_BLOCK_AT` must be at least the default screen review threshold of `0.25`.
 
 No key and no mock: tools return `CONFIG_ERROR`. The timeout must be a positive integer no greater than `2147483647`; invalid values are configuration errors.
 
@@ -46,6 +46,7 @@ Screen `skip` uses substance/relevance below `0.35`.
 - 64,000 tokens for all `state` + `questions`
 - 32,000 tokens for `state` + the longest question
 - Rank: 250 Choice options per call; candidate text 2,000 characters
+- Rank accepts at most 5,000 candidates per request; verification and the completion gate accept at most 1,000 claims per request
 
 Token estimate is `ceil(chars / 4)`, not a provider tokenizer. The server enforces these estimated budgets; actual provider token counts can differ, especially for non-English text or code.
 

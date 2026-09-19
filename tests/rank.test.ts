@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { after, afterEach, before, beforeEach, mock, test } from "node:test";
 import { TypeSafeClient, type Questions } from "@typesafe-ai/sdk";
 import { JevTimeoutError, JevValidationError } from "../src/errors.ts";
-import { MAX_CANDIDATE_CHARS, MAX_CHOICE_OPTIONS, fitState } from "../src/limits.ts";
+import { MAX_CANDIDATE_CHARS, MAX_CHOICE_OPTIONS, MAX_RANK_CANDIDATES, fitState } from "../src/limits.ts";
 import { mockSystemOne } from "../src/mock.ts";
-import { runRank } from "../src/tools/rank.ts";
+import { rankInputSchema, runRank } from "../src/tools/rank.ts";
 
 type Request = {
   state: { query: string; candidates: Array<{ id: string; original_id: string; text: string }> };
@@ -170,6 +170,16 @@ test("rank rejects a query too large to fit even one candidate", async () => {
   await assert.rejects(
     runRank({ query: "q".repeat(140000), candidates: [{ id: "a", text: "one" }, { id: "b", text: "two" }] }),
     (error: unknown) => error instanceof JevValidationError && /Shorten the query/.test(error.message),
+  );
+  assert.equal(requests.length, 0);
+});
+
+test("rank rejects unbounded candidate lists before starting a provider request", async () => {
+  const candidates = Array.from({ length: MAX_RANK_CANDIDATES + 1 }, (_, index) => ({ id: `c${index}`, text: "candidate" }));
+  assert.equal(rankInputSchema.safeParse({ query: "q", candidates }).success, false);
+  await assert.rejects(
+    runRank({ query: "q", candidates }),
+    (error: unknown) => error instanceof JevValidationError && /at most/.test(error.message),
   );
   assert.equal(requests.length, 0);
 });

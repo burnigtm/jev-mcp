@@ -188,7 +188,7 @@ test("unsafe work and unsupported stopping stay under review", async t => {
 test("uncertain risk cannot authorize partner spend even when legacy policy accepts its expected score", async t => {
   reply(t, { riskUncertain: true });
   const result = await runCodingLoop(input);
-  assert.equal(result.action, "auto");
+  assert.equal(result.action, "review");
   assert.equal(result.handoff, "review");
   assert.deepEqual(result.partner_model.reason_codes, ["risk_uncertain"]);
   assert.equal(result.partner_model.required, false);

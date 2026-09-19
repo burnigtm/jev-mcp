@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Interoperability and policy hardening
+
+- Added MCP output schemas and structured success payloads for all eight tools.
+- Tool-route judgments now receive redacted candidate projections rather than raw argument objects; selected calls still return the original host-prepared arguments after local validation.
+- Invalid numeric configuration values and malformed base URLs now fail diagnostics instead of silently falling back. Empty CLI state is preserved, and invalid evaluation bodies are rejected explicitly.
+- Added bounded inputs for ranking and claim verification, plus a local coherence guard that prevents overstated provider confidence from authorizing automatic decisions.
+
 ### Routing follow-up to PR #2
 
 - Automatic tool dispatch and partner generation now require independently concentrated probability distributions as well as the reported confidence threshold. Flat or weak selection, next-step, risk, or tier distributions cannot pass on overstated confidence alone. The additional local guard preserves reported provider fields and normalizes permitted probability rounding error.

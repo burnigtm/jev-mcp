@@ -43,6 +43,15 @@ function choice(verdict = "verified", confidence = 0.95): ChoiceResponse {
   return { type: "choice", choice: verdict, confidence, probabilities };
 }
 
+function flatChoice(verdict = "verified"): ChoiceResponse {
+  return {
+    type: "choice",
+    choice: verdict,
+    confidence: 0.99,
+    probabilities: { verified: 1 / 3, contradicted: 1 / 3, unsupported: 1 / 3 },
+  };
+}
+
 function fixture(claims: ChoiceResponse[] = [choice()]): EvaluateResponse {
   return {
     model: "jev-fixture",
@@ -100,6 +109,20 @@ test("unsupported claims require review even at high confidence", () => {
   assert.equal(gate.action, "review");
   assert.equal(gate.verification.results[0]?.action, "review");
   assert.deepEqual(gate.reason_codes, ["claims_unsupported"]);
+});
+
+test("incoherent high confidence cannot approve verification", async t => {
+  const gate = gateFor([flatChoice()]);
+  assert.equal(gate.action, "review");
+  assert.ok(gate.reason_codes.includes("confidence_incoherent"));
+
+  t.mock.method(globalThis, "fetch", async () => Response.json({
+    ...fixture(),
+    answers: { claim_0: flatChoice() },
+  }));
+  const verification = await runVerify({ claims: ["Tests passed"], evidence: "No test log" });
+  assert.equal(verification.action, "review");
+  assert.equal(verification.results[0]?.action, "review");
 });
 
 test("confident contradictions escalate while moderate contradictions require review", () => {

@@ -99,7 +99,7 @@ test("tool-route pack has valid choices and independent per-call suitability jud
   assert.doesNotThrow(() => parseQuestions((packBody("tool-route") as { example: Questions }).example));
 });
 
-test("accepted calls preserve arbitrary candidate IDs, exact names and nested JSON arguments in one request", async () => {
+test("accepted calls preserve arbitrary candidate IDs and exact arguments without sending raw values upstream", async () => {
   const candidates = [
     candidate({ id: "none" }),
     candidate({
@@ -125,7 +125,15 @@ test("accepted calls preserve arbitrary candidate IDs, exact names and nested JS
     assert.deepEqual(result.partner_model, { required: false, tier: "none" });
     assert.deepEqual(result.reason_codes, ["accepted"]);
     assert.deepEqual(result.usage, { input_tokens: 123, output_tokens: 7 });
-    assert.deepEqual((sent?.state as { candidates: unknown }).candidates, candidates);
+    const judged = (sent?.state as { candidates: Array<Record<string, unknown>> }).candidates;
+    assert.equal(judged.length, candidates.length);
+    assert.equal("arguments" in judged[1]!, false);
+    assert.deepEqual(judged[1]?.argument_shape, {
+      type: "object",
+      keys: ["patch", "options", "paths", "constructor", "prototype"],
+      extra_keys: 0,
+    });
+    assert.doesNotMatch(JSON.stringify(sent), /old|new|dryRun|preserve|ordinary JSON key/);
     assert.equal(sent?.model, "fixture-request-model");
     assert.equal(toolRouteOutputSchema.safeParse(result).success, true);
   });
@@ -146,7 +154,9 @@ test("only candidates with all trusted eligibility facts reach the provider", as
     assert.equal(calls(), 1);
     assert.equal(result.call?.candidate_id, "eligible");
     assert.equal(result.action, "auto");
-    assert.deepEqual((sent?.state as { candidates: unknown }).candidates, [candidates[5]]);
+    const judged = (sent?.state as { candidates: Array<Record<string, unknown>> }).candidates;
+    assert.deepEqual(judged.map(item => item.id), [candidates[5]!.id]);
+    assert.equal("arguments" in judged[0]!, false);
     assert.deepEqual(result.blocked_candidates, [
       { id: "unauthorized", reason_codes: ["not_authorized"] },
       { id: "unvalidated", reason_codes: ["arguments_not_validated"] },

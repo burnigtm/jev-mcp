@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
+import { JevBudgetError } from "../errors.js";
+import { MAX_CLAIMS } from "../limits.js";
 import { verifyQuestions } from "../packs/verify.js";
-import { actionFromConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
+import { actionFromConfidence, confidenceSupportsAuto, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
 import { asChoice } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import type { PolicyAction } from "../policy.js";
@@ -17,7 +19,7 @@ export const evidenceSchema = z.union([
 ]);
 
 export const verifyInputSchema = z.object({
-  claims: z.array(z.string().min(1)).min(1).describe("Factual claims to check"),
+  claims: z.array(z.string().min(1)).min(1).max(MAX_CLAIMS).describe(`Factual claims to check; at most ${MAX_CLAIMS} per request`),
   evidence: evidenceSchema.describe("Source text, or a list of {id, text} documents"),
   auto_accept: z.number().min(0).max(1).optional(),
   model: z.string().optional(),
@@ -26,6 +28,9 @@ export const verifyInputSchema = z.object({
 export type VerifyInput = z.infer<typeof verifyInputSchema>;
 
 export async function runVerify(input: VerifyInput, context?: ToolContext) {
+  if (input.claims.length > MAX_CLAIMS) {
+    throw new JevBudgetError(`Verification accepts at most ${MAX_CLAIMS} claims per request. Split the claims before verifying.`);
+  }
   const config = getConfig();
   const autoAccept = input.auto_accept ?? config.autoAccept;
   validatePolicyThresholds(autoAccept, Math.min(0.5, autoAccept));
@@ -70,13 +75,17 @@ export function projectClaims(
   return claims.map((claim, index) => {
     const answer = asChoice(result.answers[`claim_${index}`]);
     const verdict = answer.choice as "verified" | "contradicted" | "unsupported";
+    let action = actionFromConfidence(answer.confidence, autoAccept, reviewAt);
+    if (action === "auto" && !confidenceSupportsAuto(answer.confidence, answer.probabilities, autoAccept)) {
+      action = "review";
+    }
     return {
       claim,
       verdict,
       confidence: answer.confidence,
       probabilities: answer.probabilities,
       action: requireCompleteContext(
-        actionFromConfidence(answer.confidence, autoAccept, reviewAt),
+        action,
         result.truncated || !result.coverage.complete,
       ),
     };

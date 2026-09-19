@@ -7,6 +7,8 @@ export const MAX_STATE_PLUS_LONGEST_QUESTION_TOKENS = 32_000;
 /** Choice option cap used by the semantic-find cookbook / jev-mcp community servers. */
 export const MAX_CHOICE_OPTIONS = 250;
 export const MAX_CANDIDATE_CHARS = 2_000;
+export const MAX_RANK_CANDIDATES = 5_000;
+export const MAX_CLAIMS = 1_000;
 export const TRUNCATION_MARKER = "\n…[truncated]";
 
 export function estimateTokens(value: unknown): number {
