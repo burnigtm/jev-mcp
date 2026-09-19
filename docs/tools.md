@@ -10,7 +10,7 @@ Every successful tool call returns JSON with at least:
 
 All tools also publish the successful payload through MCP `structuredContent` with an output schema for client-side validation.
 
-Question templates are also readable as MCP resources: `jev://packs/{coding-loop,tool-route,review,verify,screen,rank,gate}`.
+Question templates are also readable as MCP resources: `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate}`.
 
 Incomplete context never returns `auto`. MCP failures return `isError: true` and error details with `code`, `message`, and `retryable`. Regular tool failures expose these under `structuredContent.error` with human-readable text; `jev_gate` and `jev_tool_route` failures return JSON text only, as described below, so clients do not validate an error against their success schemas. Host cancellation stops active requests and retries. One total deadline covers every upstream call in a tool invocation (default 30 seconds).
 
@@ -78,6 +78,59 @@ Partner reason codes are `incomplete_context`, `terminal_stop`, `stop_requires_r
 ```
 
 Do not treat `action: escalate` or the legacy `model_tier` answer as a partner-model request. After each tool result, update the observation and execution facts before routing again.
+
+## `jev_step`
+
+One call in place of `jev_coding_loop` followed by `jev_tool_route`. It answers both recipes in a **single** Jev request and returns either the exact prepared call to run or a handoff. Every question in a request is evaluated in parallel and in isolation, so fusing the two packs costs one request instead of two, and the loop costs one host turn instead of two. Like its parts, it never generates arguments, executes a call, or invokes a model.
+
+**Arguments:** the `jev_coding_loop` arguments (`task`, `observation`, `extras`, `execution`, `auto_accept`, `review_at`, `model`) plus optional `candidates`: up to 32 host-prepared calls in the `jev_tool_route` candidate shape, with the same trusted host facts, the same uniqueness requirement, and the same rejection of own `__proto__` keys. Omit `candidates` when no call is prepared.
+
+**One request**
+
+Ineligible candidates are filtered locally by the `jev_tool_route` rules and never receive a question. The request then carries the coding-loop pack plus `selected` and one `suitable_i` per eligible candidate; with no eligible candidate it carries the coding-loop pack alone. Either way the tool makes exactly one request, and `state.candidates` holds only the eligible list.
+
+For provider privacy, eligible candidates are sent as a redacted projection containing the id, tool name, sanitized description, effect, and argument shape. Exact argument values remain host-local and appear only in an accepted returned call.
+
+Fusing both packs raises the question budget, so the state budget shrinks accordingly. An oversized request is truncated and reported as incomplete coverage, which blocks dispatch rather than dispatching on partial evidence.
+
+**Decision order**
+
+1. Coding-loop policy produces `action` exactly as `jev_coding_loop` does.
+2. Selection policy matches `jev_tool_route`: complete coverage, selection confidence and the selected `suitable_i` at or above `thresholds.dispatch_at` (`max(0.8, auto_accept)`), a concentrated selection distribution, and a `read_only` or `local_write` effect.
+3. A dispatchable call is treated as a prepared call, so partner routing defers to tools and returns `handoff: execute_tool` with the exact `call`.
+4. Anything the coding loop ranks higher outranks the call: incomplete context, `stop`, `ask_user`, an uncertain next step, `action` other than `auto`, destructive risk, and two or more failed attempts. These set `call: null` and add `routing_blocked_dispatch`.
+
+`partner_model.required` can never be `true` alongside a returned call. When Jev declines the prepared calls **without** confidently ruling them all out, the result routes to `gather_context` with `partner_model.reason_codes: ["prepared_candidates_declined"]`, because an uncertain selection is evidence about selection rather than a reason to buy a generative turn. A confident `none` is a clean judgment and still allows the partner turn the coding loop asked for.
+
+A selected `external_write` or `destructive` call reports `handoff: review`, as `jev_tool_route` does. Terminal, tool, and partner handoffs still outrank that.
+
+**Response**
+
+The MCP output schema and `structuredContent` carry `handoff` (`execute_tool`, `use_tools`, `gather_context`, `partner_model`, `ask_user`, `stop`, `review`), `call`, `partner_model`, `selection`, `blocked_candidates`, `reason_codes`, every coding-loop signal (`next`, `model_tier`, `focus`, `risk`, `done_enough`, `needs_more_context`, `needs_generation`, `tests_likely_fail`), coverage, usage, and `thresholds: { auto_accept, review_at, dispatch_at }`. `dispatch_at` is the floor for both executable dispatch and partner confidence.
+
+Reason codes are the `jev_tool_route` set plus `routing_blocked_dispatch`. `action` is the stricter of the coding-loop action and the selection judgment: an uncertain or policy-blocked selection cannot leave the step on `auto`, and confidence below `review_at` escalates. Operational failures set `isError: true` and return JSON text `{ "error": ... }` without `structuredContent`.
+
+```json
+{
+  "task": "Fix the parser's handling of empty input",
+  "observation": "The relevant file is src/parser.ts and has not yet been read.",
+  "execution": { "context_complete": false, "failed_attempts": 0 },
+  "candidates": [
+    {
+      "id": "read-parser",
+      "name": "read_file",
+      "arguments": { "path": "src/parser.ts" },
+      "description": "Read the parser implementation",
+      "effect": "read_only",
+      "authorized": true,
+      "schema_valid": true,
+      "preconditions_met": true
+    }
+  ]
+}
+```
+
+`jev_coding_loop` and `jev_tool_route` remain available for hosts that route in two steps or need only one half.
 
 ## `jev_tool_route`
 

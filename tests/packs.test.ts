@@ -6,6 +6,7 @@ import { reviewQuestions } from "../src/packs/review.ts";
 import { screenQuestions } from "../src/packs/screen.ts";
 import { verifyQuestions } from "../src/packs/verify.ts";
 import { rankQuestions } from "../src/packs/rank.ts";
+import { stepQuestions } from "../src/packs/step.ts";
 import { estimateTokens, fitState, MAX_STATE_PLUS_LONGEST_QUESTION_TOKENS } from "../src/limits.ts";
 
 test("parseQuestions rejects empty maps", () => {
@@ -37,6 +38,15 @@ test("coding loop pack is a valid System One question map", () => {
   assert.equal(pack.model_tier?.type, "choice");
   assert.equal(pack.risk?.type, "score");
   assert.equal(pack.done_enough?.type, "noul");
+});
+
+test("step pack merges both recipes without losing a question", () => {
+  const loop = codingLoopQuestions();
+  const pack = stepQuestions(3);
+  assert.equal(Object.keys(pack).length, Object.keys(loop).length + 4);
+  for (const id of Object.keys(loop)) assert.equal(pack[id]?.type, loop[id]?.type);
+  assert.equal(pack.selected?.type, "choice");
+  assert.equal(pack.suitable_2?.type, "noul");
 });
 
 test("review pack has four scores and safe_to_apply", () => {

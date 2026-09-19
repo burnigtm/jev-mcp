@@ -42,7 +42,7 @@ Official API: `POST https://api.typesafe.ai/v1/systemone` with `Authorization: B
 | [`src/responses.ts`](../src/responses.ts) | Validates provider answer types, ranges, options, and distributions before policy |
 | [`src/mock.ts`](../src/mock.ts) | Deterministic judge for tests and demos |
 | [`src/policy.ts`](../src/policy.ts) | `auto` / `review` / `escalate` (and screen pass/block/skip) |
-| [`src/packs/`](../src/packs) | Frozen question JSON for each recipe |
+| [`src/packs/`](../src/packs) | Frozen question JSON for each recipe; `step` composes two of them |
 | [`src/tools/`](../src/tools) | One file per MCP tool |
 | [`src/limits.ts`](../src/limits.ts) | Token budgets, 250-candidate chunks, 2k char caps |
 | [`skills/jev-mcp/SKILL.md`](../skills/jev-mcp/SKILL.md) | Tells the host **when** to call tools |
@@ -67,11 +67,19 @@ Only complete, confident selections of suitable `read_only` or `local_write` cal
 
 Tool-route judgments receive a redacted candidate projection: tool name, sanitized description, effect, and argument shape. Exact argument values remain in the host and are returned only in an accepted call; they are not sent to TypeSafe.
 
+The fused `jev_step` router applies the same redacted projection before combining coding-loop and prepared-call questions.
+
 Automatic tool dispatch and partner handoffs also check distribution concentration independently of reported confidence. After normalizing probability mass, the peak must reach `1/n + (1 - 1/n) * threshold` for `n` options. This conservative local guard prevents overstated confidence from passing a flat or weak distribution; it does not redefine the provider's confidence statistic or change the reported fields.
 
 Every other automatic policy path applies the same coherence guard to Choice and Score answers. A high reported confidence with a flat or weak probability distribution can remain diagnostic, but it cannot authorize `auto`.
 
 Host code can execute the returned call after checking current prerequisites, incorporate its observation, and repeat with the next prepared candidates. A plan can therefore support multiple tool steps without another generative turn. This server supplies the decision interface; it does not implement an autonomous executor or claim measured live cost savings.
+
+## One round-trip per loop iteration
+
+Routing the step and selecting the call are two questions about the same turn, and every question in a request is evaluated in parallel and in isolation. `jev_step` therefore sends the coding-loop pack and the tool-route pack as one question map ([`src/packs/step.ts`](../src/packs/step.ts)) and applies both policies in TypeScript, so a host spends one MCP round-trip where `jev_coding_loop` followed by `jev_tool_route` spends two. Each saved round-trip is a saved host-model turn, which is the expensive part of the loop.
+
+The fused tool adds no new policy. It reuses the tool-route eligibility filter and dispatch floors for selection, and the coding-loop partner routing unchanged for the handoff, so terminal, risky, uncertain, and repeatedly failing steps still outrank a dispatchable call, and a returned call still excludes a partner request. Fusing the packs raises the question budget and lowers the state budget by the same amount; an oversized request truncates into incomplete coverage, which blocks dispatch. `jev_coding_loop` and `jev_tool_route` remain for hosts that route in two steps or need only one half.
 
 When exact next-step arguments or a new implementation must be generated, `jev_coding_loop` decides whether a partner turn is justified. It adds an independent `needs_generation` judgment to the existing next-step, context, risk, and model-tier questions. TypeScript emits `handoff` and `partner_model` after combining these answers with the host's `execution` facts. A partner request requires an automatic continue/retry decision, explicit complete host context, confident generation need, next step, risk and tier, low context uncertainty, no prepared call, and fewer than two failed attempts. Partner confidence has the same fixed minimum `0.8` floor as prepared-call dispatch.
 

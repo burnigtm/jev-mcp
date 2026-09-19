@@ -18,6 +18,7 @@ For local CLI use on Node 20.6+, copy [`.env.example`](../.env.example) to `.env
 Per-call overrides (win over env):
 
 - `jev_coding_loop`, `jev_review`: `auto_accept`, `review_at`
+- `jev_step`, `jev_tool_route`: `auto_accept`, `review_at` (executable dispatch keeps its `max(0.8, auto_accept)` floor)
 - `jev_gate`: `auto_accept`, `review_at`
 - `jev_verify`: `auto_accept`
 - `jev_screen`: `block_at`, `review_at` (screen review default is `0.25`)

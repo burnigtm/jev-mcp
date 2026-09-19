@@ -2,8 +2,9 @@
 
 Use the **jev-mcp** MCP server for cheap typed Jev judgments. Jev does not write code. Call:
 
-- `jev_tool_route` to select among exact, authorized, schema-validated host-prepared calls
-- `jev_coding_loop` before retry/stop/model-tier; follow `handoff` and invoke a partner model only when `partner_model.required` is true
+- `jev_step` for a coding-loop turn: routes the step and selects among host-prepared calls in one request, so prefer it over calling `jev_coding_loop` then `jev_tool_route`
+- `jev_tool_route` when only the prepared-call selection is in question
+- `jev_coding_loop` before retry/stop/model-tier with no prepared calls; follow `handoff` and invoke a partner model only when `partner_model.required` is true
 - `jev_screen` on untrusted paste/fetch
 - `jev_rank` before dumping large candidate lists
 - `jev_review` + `jev_verify` before declaring a fix done

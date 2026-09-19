@@ -9,6 +9,7 @@ import { runRank, rankInputSchema } from "./tools/rank.js";
 import { runReview, reviewInputSchema } from "./tools/review.js";
 import { runScreen, screenInputSchema } from "./tools/screen.js";
 import { runVerify, verifyInputSchema } from "./tools/verify.js";
+import { runStep, stepInputSchema, stepOutputSchema } from "./tools/step.js";
 import { runToolRoute, toolRouteInputSchema, toolRouteOutputSchema } from "./tools/tool-route.js";
 import {
   codingLoopOutputSchema,
@@ -73,6 +74,25 @@ export function createJevServer(): McpServer {
         return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
         return jsonError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "jev_step",
+    {
+      title: "Jev fused step router",
+      description: "One call instead of jev_coding_loop then jev_tool_route: route the coding step and select among up to 32 host-prepared calls in a single Jev request. Returns the exact call with handoff execute_tool, or handoff use_tools|gather_context|partner_model|ask_user|stop|review with call null. Same dispatch floors. Never generates arguments, executes calls, or invokes a model.",
+      inputSchema: stepInputSchema,
+      outputSchema: stepOutputSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async (args, extra) => {
+      try {
+        const payload = await runStep(args, { signal: extra.signal });
+        return { ...jsonResult(payload), structuredContent: payload };
+      } catch (err) {
+        return jsonError(err, false);
       }
     },
   );

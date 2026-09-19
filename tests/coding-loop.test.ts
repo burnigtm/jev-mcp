@@ -190,7 +190,7 @@ test("uncertain risk cannot authorize partner spend even when legacy policy acce
   const result = await runCodingLoop(input);
   assert.equal(result.action, "review");
   assert.equal(result.handoff, "review");
-  assert.deepEqual(result.partner_model.reason_codes, ["risk_uncertain"]);
+  assert.deepEqual(result.partner_model.reason_codes, ["coding_policy_requires_review"]);
   assert.equal(result.partner_model.required, false);
 });
 
