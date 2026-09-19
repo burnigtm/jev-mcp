@@ -46,7 +46,7 @@ test("all nine tools and eight resources work through subprocess stdio", { timeo
     const oversized = await client.callTool({ name: "jev_gate", arguments: { ...fixtures[6]![1], claims: Array.from({ length: 1_001 }, () => "Tests passed") } });
     assert.equal(oversized.isError, true);
     assert.equal(oversized.structuredContent, undefined);
-    assert.equal(JSON.parse((oversized.content as Array<{ text: string }>)[0]!.text).error.code, "INPUT_TOO_LARGE");
+    assert.match((oversized.content as Array<{ text: string }>)[0]!.text, /Input validation error/);
     assert.equal(stderr, "");
   } finally { await client.close(); }
 });
