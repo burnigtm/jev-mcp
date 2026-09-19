@@ -48,7 +48,7 @@ export function createJevServer(): McpServer {
         const payload = await withToolContext({ signal: extra.signal }, context => runEvaluate(args, context));
         return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -73,7 +73,7 @@ export function createJevServer(): McpServer {
         const payload = await withToolContext({ signal: extra.signal }, context => runCodingLoop(args, context));
         return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -136,7 +136,7 @@ export function createJevServer(): McpServer {
         const payload = await withToolContext({ signal: extra.signal }, context => runReview(args, context));
         return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -161,7 +161,7 @@ export function createJevServer(): McpServer {
         const payload = await withToolContext({ signal: extra.signal }, context => runVerify(args, context));
         return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -186,7 +186,7 @@ export function createJevServer(): McpServer {
         const payload = await withToolContext({ signal: extra.signal }, context => runScreen(args, context));
         return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -211,7 +211,7 @@ export function createJevServer(): McpServer {
         const payload = await withToolContext({ signal: extra.signal }, context => runRank(args, context));
         return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );

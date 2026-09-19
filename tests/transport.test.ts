@@ -41,7 +41,8 @@ test("all nine tools and eight resources work through subprocess stdio", { timeo
     for (const resource of resources.resources) assert.equal((await client.readResource({ uri: resource.uri })).contents.length, 1);
     const invalid = await client.callTool({ name: "jev_evaluate", arguments: { state: "fixture", questions: {} } });
     assert.equal(invalid.isError, true);
-    assert.equal((invalid.structuredContent as { error: { code: string } }).error.code, "INVALID_INPUT");
+    assert.equal(invalid.structuredContent, undefined);
+    assert.equal(JSON.parse((invalid.content as Array<{ text: string }>)[0]!.text).error.code, "INVALID_INPUT");
     const oversized = await client.callTool({ name: "jev_gate", arguments: { ...fixtures[6]![1], claims: Array.from({ length: 1_001 }, () => "Tests passed") } });
     assert.equal(oversized.isError, true);
     assert.equal(oversized.structuredContent, undefined);
