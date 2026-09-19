@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parseQuestions, type QuestionInput } from "../questions.js";
-import { actionFromConfidence, minConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
+import { actionFromConfidence, confidenceSupportsAuto, minConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
 import { getConfig } from "../config.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 import { asChoice, asNoul, asScore } from "../result.js";
@@ -43,22 +43,29 @@ export async function runEvaluate(input: EvaluateInput, context?: ToolContext) {
     model: input.model,
   }, context);
   const confidences: number[] = [];
+  let distributionIncoherent = false;
   for (const answer of Object.values(result.answers)) {
     if (answer.type === "choice") {
-      confidences.push(asChoice(answer).confidence);
+      const choice = asChoice(answer);
+      confidences.push(choice.confidence);
+      distributionIncoherent = distributionIncoherent || !confidenceSupportsAuto(choice.confidence, choice.probabilities, config.autoAccept);
     } else if (answer.type === "score") {
-      confidences.push(asScore(answer).confidence);
+      const score = asScore(answer);
+      confidences.push(score.confidence);
+      distributionIncoherent = distributionIncoherent || !confidenceSupportsAuto(score.confidence, score.probabilities, config.autoAccept);
     } else {
       const noul = asNoul(answer).noul;
       confidences.push(Math.abs(noul - 0.5) * 2);
     }
   }
+  let action = actionFromConfidence(minConfidence(confidences), config.autoAccept, config.reviewAt);
+  if (action === "auto" && distributionIncoherent) action = "review";
   return {
     model: result.model,
     answers: result.answers,
     usage: result.usage,
     truncated: result.truncated,
     coverage: result.coverage,
-    action: requireCompleteContext(actionFromConfidence(minConfidence(confidences), config.autoAccept, config.reviewAt), result.truncated),
+    action: requireCompleteContext(action, result.truncated || !result.coverage.complete),
   };
 }

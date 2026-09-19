@@ -9,7 +9,7 @@ export const DEFAULT_BLOCK_AT = 0.75;
 export const DEFAULT_SKIP_BELOW = 0.35;
 
 export function validatePolicyThresholds(autoAccept: number, reviewAt: number): void {
-  if (!Number.isFinite(autoAccept) || !Number.isFinite(reviewAt) || reviewAt < 0 || autoAccept > 1 || reviewAt > autoAccept) {
+  if (!Number.isFinite(autoAccept) || !Number.isFinite(reviewAt) || autoAccept < 0 || reviewAt < 0 || autoAccept > 1 || reviewAt > autoAccept) {
     throw new JevValidationError("Thresholds must satisfy 0 <= review_at <= auto_accept <= 1.");
   }
 }
@@ -53,6 +53,19 @@ export function distributionSupportsConfidence(probabilities: Record<string, num
   const requiredPeak = uniform + (1 - uniform) * threshold;
   const roundingTolerance = Number.EPSILON * (values.length + 2);
   return Math.max(...values) / total + roundingTolerance >= requiredPeak;
+}
+
+/**
+ * A provider-reported confidence may be malformed or stale. Keep that value
+ * for diagnostics, but do not let it authorize an automatic decision when the
+ * accompanying distribution cannot support the same threshold.
+ */
+export function confidenceSupportsAuto(
+  confidence: number,
+  probabilities: Record<string, number>,
+  threshold: number,
+): boolean {
+  return confidence >= threshold && distributionSupportsConfidence(probabilities, threshold);
 }
 
 export function actionFromConfidence(

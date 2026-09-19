@@ -11,6 +11,14 @@ import { runScreen, screenInputSchema } from "./tools/screen.js";
 import { runVerify, verifyInputSchema } from "./tools/verify.js";
 import { runStep, stepInputSchema, stepOutputSchema } from "./tools/step.js";
 import { runToolRoute, toolRouteInputSchema, toolRouteOutputSchema } from "./tools/tool-route.js";
+import {
+  codingLoopOutputSchema,
+  evaluateOutputSchema,
+  rankOutputSchema,
+  reviewOutputSchema,
+  screenOutputSchema,
+  verifyOutputSchema,
+} from "./tools/output-schemas.js";
 import { SERVER_NAME, VERSION } from "./version.js";
 import { withToolContext } from "./typesafe.js";
 
@@ -27,6 +35,7 @@ export function createJevServer(): McpServer {
       description:
         "Escape hatch: send shared state plus named noul/choice/score questions to TypeSafe Jev. Use when no other jev_* recipe fits. Jev does not write code or prose. Questions in one call run in parallel. Returns typed answers, probabilities, confidence, usage, and action auto|review|escalate.",
       inputSchema: evaluateInputSchema,
+      outputSchema: evaluateOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -36,9 +45,10 @@ export function createJevServer(): McpServer {
     },
     async (args, extra) => {
       try {
-        return jsonResult(await withToolContext({ signal: extra.signal }, context => runEvaluate(args, context)));
+        const payload = await withToolContext({ signal: extra.signal }, context => runEvaluate(args, context));
+        return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -50,6 +60,7 @@ export function createJevServer(): McpServer {
       description:
         "Call before retry/stop/model-tier decisions. One Jev fan-out returns next, risk, focus, and explicit handoff / partner_model fields. Prefer prepared tools or gathering context; request a partner generative model only when needed and confidently supported. Legacy model_tier is conditional, not an instruction to invoke a model. Does not edit files.",
       inputSchema: codingLoopInputSchema,
+      outputSchema: codingLoopOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -59,9 +70,10 @@ export function createJevServer(): McpServer {
     },
     async (args, extra) => {
       try {
-        return jsonResult(await withToolContext({ signal: extra.signal }, context => runCodingLoop(args, context)));
+        const payload = await withToolContext({ signal: extra.signal }, context => runCodingLoop(args, context));
+        return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -111,6 +123,7 @@ export function createJevServer(): McpServer {
       description:
         "Score a proposed diff against the request: correctness, spec-match, test-gap, blast-radius, plus noul safe_to_apply. Composite weights live in code. Call before declaring a fix done. Does not apply the patch.",
       inputSchema: reviewInputSchema,
+      outputSchema: reviewOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -120,9 +133,10 @@ export function createJevServer(): McpServer {
     },
     async (args, extra) => {
       try {
-        return jsonResult(await withToolContext({ signal: extra.signal }, context => runReview(args, context)));
+        const payload = await withToolContext({ signal: extra.signal }, context => runReview(args, context));
+        return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -134,6 +148,7 @@ export function createJevServer(): McpServer {
       description:
         "Check each claim against provided evidence (PR description, agent brief, docs, diffs). Returns per claim: verified|contradicted|unsupported, probabilities, confidence, and auto vs review. Prefer this over asking a chat model to 'double-check'.",
       inputSchema: verifyInputSchema,
+      outputSchema: verifyOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -143,9 +158,10 @@ export function createJevServer(): McpServer {
     },
     async (args, extra) => {
       try {
-        return jsonResult(await withToolContext({ signal: extra.signal }, context => runVerify(args, context)));
+        const payload = await withToolContext({ signal: extra.signal }, context => runVerify(args, context));
+        return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -157,6 +173,7 @@ export function createJevServer(): McpServer {
       description:
         "Judge fetched or pasted text before the agent reads it: prompt-injection probability, substance, and optional relevance to purpose. Recommendation: pass|review|block|skip. Use on untrusted web pages, issues, and pastes. Not for first-party repo files.",
       inputSchema: screenInputSchema,
+      outputSchema: screenOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -166,9 +183,10 @@ export function createJevServer(): McpServer {
     },
     async (args, extra) => {
       try {
-        return jsonResult(await withToolContext({ signal: extra.signal }, context => runScreen(args, context)));
+        const payload = await withToolContext({ signal: extra.signal }, context => runScreen(args, context));
+        return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );
@@ -178,8 +196,9 @@ export function createJevServer(): McpServer {
     {
       title: "Jev candidate ranker",
       description:
-        "Rank files, symbols, errors, or skills against a plain-language query. No embeddings. One Choice over candidate ids plus a Noul that the top hit actually answers the query (so a forced winner cannot masquerade as a match). Max 250 candidates per Jev call; larger lists are chunked then re-ranked. Pass candidates in; this server does not index the repo.",
+        "Rank files, symbols, errors, or skills against a plain-language query. No embeddings. One Choice over candidate ids plus a Noul that the top hit actually answers the query (so a forced winner cannot masquerade as a match). Accepts up to 5,000 supplied candidates; each Jev call uses at most 250 options and larger lists are chunked then re-ranked. Pass candidates in; this server does not index the repo.",
       inputSchema: rankInputSchema,
+      outputSchema: rankOutputSchema,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -189,9 +208,10 @@ export function createJevServer(): McpServer {
     },
     async (args, extra) => {
       try {
-        return jsonResult(await withToolContext({ signal: extra.signal }, context => runRank(args, context)));
+        const payload = await withToolContext({ signal: extra.signal }, context => runRank(args, context));
+        return { ...jsonResult(payload), structuredContent: payload };
       } catch (err) {
-        return jsonError(err);
+        return jsonError(err, false);
       }
     },
   );

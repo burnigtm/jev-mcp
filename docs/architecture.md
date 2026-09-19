@@ -65,7 +65,13 @@ Eligibility is decided locally from trusted host facts. Authorization, schema va
 
 Only complete, confident selections of suitable `read_only` or `local_write` calls can return `handoff: execute_tool` and the exact original arguments. Dispatch has a fixed minimum threshold of `0.8`, even if callers lower their judgment thresholds. External writes and destructive effects require review. Every other outcome has `call: null`. Every tool-route result has `partner_model: { required: false, tier: "none" }`.
 
+Tool-route judgments receive a redacted candidate projection: tool name, sanitized description, effect, and argument shape. Exact argument values remain in the host and are returned only in an accepted call; they are not sent to TypeSafe.
+
+The fused `jev_step` router applies the same redacted projection before combining coding-loop and prepared-call questions.
+
 Automatic tool dispatch and partner handoffs also check distribution concentration independently of reported confidence. After normalizing probability mass, the peak must reach `1/n + (1 - 1/n) * threshold` for `n` options. This conservative local guard prevents overstated confidence from passing a flat or weak distribution; it does not redefine the provider's confidence statistic or change the reported fields.
+
+Every other automatic policy path applies the same coherence guard to Choice and Score answers. A high reported confidence with a flat or weak probability distribution can remain diagnostic, but it cannot authorize `auto`.
 
 Host code can execute the returned call after checking current prerequisites, incorporate its observation, and repeat with the next prepared candidates. A plan can therefore support multiple tool steps without another generative turn. This server supplies the decision interface; it does not implement an autonomous executor or claim measured live cost savings.
 

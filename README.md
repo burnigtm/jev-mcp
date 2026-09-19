@@ -92,7 +92,9 @@ Diagnostics do not log request content or API keys. Calls have a 30-second total
 
 State plus questions must fit the estimated 64,000-token total budget and the 32,000-token state-plus-longest-question budget. State may be shortened; results expose incomplete coverage and cannot automatically accept a judgment based on omitted context. Questions alone that exceed the budget are rejected.
 
-Rank accepts unique candidate IDs and at most 250 options per upstream call. Larger lists use repeated reduction rounds; each candidate text is capped at 2,000 characters. It ranks supplied candidates and does not index your repository. Arithmetic and date calculations belong in host code.
+Rank accepts unique candidate IDs and at most 5,000 supplied candidates, with at most 250 options per upstream call. Larger lists use repeated reduction rounds; each candidate text is capped at 2,000 characters. Verify and gate accept at most 1,000 claims. It ranks supplied candidates and does not index your repository. Arithmetic and date calculations belong in host code.
+
+All nine tools expose an MCP output schema and return the same successful payload through both `structuredContent` and the JSON text content. Tool-route and fused-step judgments receive sanitized candidate descriptions and argument shapes; raw host arguments are retained only for the selected, locally validated call.
 
 ## Development
 

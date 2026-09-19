@@ -8,9 +8,11 @@ Every successful tool call returns JSON with at least:
 - `coverage` — completeness and source character counts; token estimates identify the `chars/4` estimator
 - `action` — `auto` | `review` | `escalate`
 
+All tools also publish the successful payload through MCP `structuredContent` with an output schema for client-side validation.
+
 Question templates are also readable as MCP resources: `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate}`.
 
-Incomplete context never returns `auto`. MCP failures return `isError: true` and error details with `code`, `message`, and `retryable`. Tools without output schemas expose these under `structuredContent.error` with human-readable text; `jev_gate` and `jev_tool_route` failures return JSON text only, as described below. Host cancellation stops active requests and retries. One total deadline covers every upstream call in a tool invocation (default 30 seconds).
+Incomplete context never returns `auto`. MCP failures return `isError: true` and error details with `code`, `message`, and `retryable`. Regular tool failures expose these under `structuredContent.error` with human-readable text; `jev_gate` and `jev_tool_route` failures return JSON text only, as described below, so clients do not validate an error against their success schemas. Host cancellation stops active requests and retries. One total deadline covers every upstream call in a tool invocation (default 30 seconds).
 
 ## `jev_coding_loop`
 
@@ -86,6 +88,8 @@ One call in place of `jev_coding_loop` followed by `jev_tool_route`. It answers 
 **One request**
 
 Ineligible candidates are filtered locally by the `jev_tool_route` rules and never receive a question. The request then carries the coding-loop pack plus `selected` and one `suitable_i` per eligible candidate; with no eligible candidate it carries the coding-loop pack alone. Either way the tool makes exactly one request, and `state.candidates` holds only the eligible list.
+
+For provider privacy, eligible candidates are sent as a redacted projection containing the id, tool name, sanitized description, effect, and argument shape. Exact argument values remain host-local and appear only in an accepted returned call.
 
 Fusing both packs raises the question budget, so the state budget shrinks accordingly. An oversized request is truncated and reported as incomplete coverage, which blocks dispatch rather than dispatching on partial evidence.
 
@@ -187,6 +191,8 @@ The response has an MCP output schema and matching JSON text and `structuredCont
 - `selection: { id, confidence, suitability }`, or `null` when no Jev request was needed. A non-auto selection is diagnostic, never an executable dispatch.
 - `blocked_candidates` with exclusion reasons, overall `reason_codes`, effective `thresholds`, coverage, model, and usage.
 
+For provider privacy, the judgment state contains only each eligible candidate's id, tool name, sanitized description, effect, and argument shape. Exact argument values are retained for the returned call but are not transmitted to TypeSafe.
+
 Empty lists return `model: local-policy`, zero usage, `action: review`, and `handoff: gather_context`. Wholly ineligible lists return locally with `handoff: review`. Neither case calls Jev. Their zero coverage counters mean no semantic state was evaluated; `coverage.complete: true` only describes completion of local eligibility policy. Other non-auto results use `gather_context`, except selected external or destructive effects use `review`; low confidence below `review_at` sets `action: escalate` without requesting a partner model.
 
 Reason codes are `accepted`, `no_candidates`, `no_eligible_candidates`, `not_authorized`, `arguments_not_validated`, `preconditions_not_met`, `retry_budget_exhausted`, `unknown_effect`, `no_suitable_call`, `selection_uncertain`, `suitability_uncertain`, `incomplete_context`, and `effect_requires_review`.
@@ -216,7 +222,7 @@ Check factual claims against evidence you already have (PR text, docs, logs, dif
 
 **Arguments**
 
-- `claims` — array of statements
+- `claims` — array of statements, at most 1,000 per request
 - `evidence` — a string, or `[{ "id", "text" }, …]`
 - `auto_accept` — default `0.8`; per-claim confidence at or above this threshold permits `auto` when context is complete
 
@@ -250,7 +256,7 @@ The response includes `review`, `verification` (per-claim results and counts), o
 - `review`: unsupported claims, moderate uncertainty or contradictions, or incomplete context, unless another check escalates.
 - `escalate`: unsafe or uncertain review, a claim below `review_at`, or a contradiction at or above `auto_accept`.
 
-Reason codes are deterministic: `accepted`, `incomplete_context`, `review_escalated`, `review_required`, `claims_contradicted`, `claims_unsupported`, `claim_confidence_low`, and `claim_confidence_below_auto_accept`. Operational failures return `isError: true` with JSON text `{ "error": { "code", "message", "retryable" } }` and no `structuredContent`, so clients do not validate an error against the gate's success schema. Failures never produce approval.
+Reason codes are deterministic: `accepted`, `incomplete_context`, `review_escalated`, `review_required`, `claims_contradicted`, `claims_unsupported`, `claim_confidence_low`, `claim_confidence_below_auto_accept`, and `confidence_incoherent`. Operational failures return `isError: true` with JSON text `{ "error": { "code", "message", "retryable" } }` and no `structuredContent`, so clients do not validate an error against the gate's success schema. Failures never produce approval.
 
 ## `jev_screen`
 
@@ -274,6 +280,8 @@ If any text was omitted, a detected `block` is preserved; every other recommenda
 ## `jev_rank`
 
 Rank candidates you already listed (files, symbols, errors, skills). No embeddings and no repo index. Pattern: [semantic find](https://docs.typesafe.ai/cookbooks/semantic_find.md).
+
+Each request accepts at most 5,000 candidates. Larger collections should be split by the host before ranking.
 
 **Arguments:** `query`, `candidates: [{ id, text }]`, optional `top_k` (default 5). At least two candidates.
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { reviewQuestions } from "../packs/review.js";
-import { minConfidence, requireCompleteContext, reviewAction, reviewComposite, validatePolicyThresholds } from "../policy.js";
+import { confidenceSupportsAuto, minConfidence, requireCompleteContext, reviewAction, reviewComposite, validatePolicyThresholds } from "../policy.js";
 import { asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 
@@ -52,7 +52,7 @@ export function projectReview(result: EvaluateResponse, autoAccept: number, revi
     testGap: testGap.score,
     blastRadius: blastRadius.score,
   });
-  const action = requireCompleteContext(reviewAction({
+  let policyAction = reviewAction({
     composite,
     safeToApply: safeToApply.noul,
     minConfidence: minConfidence([
@@ -63,7 +63,15 @@ export function projectReview(result: EvaluateResponse, autoAccept: number, revi
     ]),
     autoAccept,
     reviewAt,
-  }), result.truncated || !result.coverage.complete);
+  });
+  const scoreDistributions = [correctness, specMatch, testGap, blastRadius];
+  if (
+    policyAction === "auto"
+    && scoreDistributions.some(score => !confidenceSupportsAuto(score.confidence, score.probabilities, autoAccept))
+  ) {
+    policyAction = "review";
+  }
+  const action = requireCompleteContext(policyAction, result.truncated || !result.coverage.complete);
   return {
     action,
     composite,

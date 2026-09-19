@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { codingLoopQuestions } from "../packs/coding-loop.js";
-import { codingLoopAction, distributionSupportsConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
+import { codingLoopAction, confidenceSupportsAuto, distributionSupportsConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
 import { asChoice, asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 
@@ -58,14 +58,22 @@ export async function runCodingLoop(input: CodingLoopInput, context?: ToolContex
   }, context);
   const answers = readCodingLoopAnswers(result);
   const incomplete = result.truncated || !result.coverage.complete;
-  const action = requireCompleteContext(codingLoopAction({
+  let policyAction = codingLoopAction({
     nextChoice: answers.next.choice,
     nextConfidence: answers.next.confidence,
     riskScore: answers.risk.score,
     doneEnough: answers.doneEnough.noul,
     autoAccept,
     reviewAt,
-  }), incomplete);
+  });
+  if (
+    policyAction === "auto"
+    && (!confidenceSupportsAuto(answers.next.confidence, answers.next.probabilities, autoAccept)
+      || !confidenceSupportsAuto(answers.risk.confidence, answers.risk.probabilities, autoAccept))
+  ) {
+    policyAction = "review";
+  }
+  const action = requireCompleteContext(policyAction, incomplete);
   const routing = partnerRouting({
     ...routingInput(answers),
     action,

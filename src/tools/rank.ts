@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { JevBudgetError, JevValidationError } from "../errors.js";
-import { MAX_CANDIDATE_CHARS, MAX_CHOICE_OPTIONS, TRUNCATION_MARKER, fitState, truncateText } from "../limits.js";
+import { MAX_CANDIDATE_CHARS, MAX_CHOICE_OPTIONS, MAX_RANK_CANDIDATES, TRUNCATION_MARKER, fitState, truncateText } from "../limits.js";
 import { existsVerdict, rankQuestions, type RankCandidate } from "../packs/rank.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, withToolContext, type ToolContext } from "../typesafe.js";
@@ -15,7 +15,8 @@ export const rankInputSchema = z.object({
       }),
     )
     .min(2)
-    .describe("Candidates with unique IDs. Large lists are ranked in batches that fit the context budget."),
+    .max(MAX_RANK_CANDIDATES)
+    .describe(`Candidates with unique IDs. Large lists are ranked in batches that fit the context budget; at most ${MAX_RANK_CANDIDATES} candidates are accepted per request.`),
   top_k: z.number().int().min(1).max(50).optional().describe("How many ranked candidates to return. Default 5."),
   model: z.string().optional(),
 });
@@ -26,6 +27,9 @@ type RankedHit = { id: string; probability: number };
 type InternalCandidate = RankCandidate & { original_id: string };
 
 export async function runRank(input: RankInput, context?: ToolContext) {
+  if (input.candidates.length > MAX_RANK_CANDIDATES) {
+    throw new JevBudgetError(`Rank accepts at most ${MAX_RANK_CANDIDATES} candidates per request. Split the list before ranking.`);
+  }
   return withToolContext(context, async (context) => {
     const originalIds = new Map<string, string>();
     const seen = new Set<string>();

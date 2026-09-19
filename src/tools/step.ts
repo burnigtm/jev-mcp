@@ -4,6 +4,7 @@ import { JevValidationError } from "../errors.js";
 import { stepQuestions } from "../packs/step.js";
 import {
   codingLoopAction,
+  confidenceSupportsAuto,
   distributionSupportsConfidence,
   requireCompleteContext,
   validatePolicyThresholds,
@@ -28,6 +29,7 @@ import {
   ineligibility,
   probability,
   reasonSchema,
+  projectCandidateForJudgment,
   toolCandidateSchema,
   usageSchema,
   type Reason,
@@ -128,7 +130,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
         observation: input.observation,
         extras: input.extras ?? {},
         execution,
-        candidates: eligible,
+        candidates: eligible.map(projectCandidateForJudgment),
       },
       questions: stepQuestions(eligible.length),
       model: input.model,
@@ -136,14 +138,22 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
 
     const incomplete = result.truncated || !result.coverage.complete;
     const answers = readCodingLoopAnswers(result);
-    const action = requireCompleteContext(codingLoopAction({
+    let policyAction = codingLoopAction({
       nextChoice: answers.next.choice,
       nextConfidence: answers.next.confidence,
       riskScore: answers.risk.score,
       doneEnough: answers.doneEnough.noul,
       autoAccept,
       reviewAt,
-    }), incomplete);
+    });
+    if (
+      policyAction === "auto"
+      && (!confidenceSupportsAuto(answers.next.confidence, answers.next.probabilities, autoAccept)
+        || !confidenceSupportsAuto(answers.risk.confidence, answers.risk.probabilities, autoAccept))
+    ) {
+      policyAction = "review";
+    }
+    const action = requireCompleteContext(policyAction, incomplete);
 
     // Selection policy matches jev_tool_route, including its dispatch floor.
     const reasons: StepReason[] = [];
