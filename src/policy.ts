@@ -8,6 +8,31 @@ export const DEFAULT_REVIEW_AT = 0.5;
 export const DEFAULT_BLOCK_AT = 0.75;
 export const DEFAULT_SKIP_BELOW = 0.35;
 
+/** Per-call thresholds may only raise the env floors. An inverted caller pair still fails. */
+export function tightenJudgmentThresholds(
+  callerAuto: number | undefined,
+  callerReview: number | undefined,
+  envAuto: number,
+  envReview: number,
+): { autoAccept: number; reviewAt: number } {
+  if (callerAuto !== undefined && callerReview !== undefined) {
+    validatePolicyThresholds(callerAuto, callerReview);
+  }
+  const autoAccept = Math.max(callerAuto ?? envAuto, envAuto);
+  const reviewAt = Math.max(callerReview ?? envReview, envReview);
+  validatePolicyThresholds(autoAccept, reviewAt);
+  return { autoAccept, reviewAt };
+}
+
+/** A higher screen block_at blocks later, so a call can only lower it. */
+export function tightenBlockAt(caller: number | undefined, envBlock: number): number {
+  if (caller === undefined) return envBlock;
+  if (!Number.isFinite(caller) || caller < 0 || caller > 1) {
+    throw new JevValidationError("block_at must be between 0 and 1.");
+  }
+  return Math.min(caller, envBlock);
+}
+
 export function validatePolicyThresholds(autoAccept: number, reviewAt: number): void {
   if (!Number.isFinite(autoAccept) || !Number.isFinite(reviewAt) || autoAccept < 0 || reviewAt < 0 || autoAccept > 1 || reviewAt > autoAccept) {
     throw new JevValidationError("Thresholds must satisfy 0 <= review_at <= auto_accept <= 1.");

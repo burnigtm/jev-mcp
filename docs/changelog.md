@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Client bounds for URL, deadline, and token estimates
+
+- The default API root is `https://api.typesafe.ai`. Another public HTTPS host requires `JEV_MCP_ALLOW_CUSTOM_BASE_URL=1`. HTTP is loopback only. Userinfo, queries, fragments, and non-public or obfuscated addresses are rejected, and the value is stored as origin plus path.
+- Each TypeSafe attempt uses the time remaining on the tool deadline, does not retry its own timeout, and does not follow redirects. 429 and 5xx retries stay on the same cancellation signal.
+- Per-call `auto_accept` and `review_at` can only rise relative to the environment. Screen `block_at` can only fall, so a call cannot loosen the block floor.
+- Token estimates charge at least one token per non-ASCII character. Provider `input_tokens` above the total budget force incomplete coverage, so evaluate cannot auto.
+
 ### Selection, review, and rank cannot auto past a failed check
 
 - `jev_step` passes only a locally dispatchable call into partner routing. A host `prepared_tool_call` flag no longer skips uncertain selection, external or destructive effects, or a confident `none`. Empty and wholly ineligible lists are not `auto` and do not open a partner turn.

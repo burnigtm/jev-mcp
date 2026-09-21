@@ -8,23 +8,26 @@ For local CLI use on Node 20.6+, copy [`.env.example`](../.env.example) to `.env
 | --- | --- | --- |
 | `TYPESAFE_API_KEY` | (none) | Bearer token for `https://api.typesafe.ai` |
 | `JEV_MCP_MODEL` | `jev-latest` | TypeSafe model id |
-| `TYPESAFE_BASE_URL` | SDK default | Override API root |
+| `TYPESAFE_BASE_URL` | `https://api.typesafe.ai` | API root. Other public HTTPS hosts need `JEV_MCP_ALLOW_CUSTOM_BASE_URL=1`. HTTP is loopback only |
+| `JEV_MCP_ALLOW_CUSTOM_BASE_URL` | off | `1` / `true` / `yes` — allow a public HTTPS host other than `api.typesafe.ai` |
 | `JEV_MCP_MOCK` | off | `1` / `true` / `yes` — local deterministic judge |
-| `JEV_MCP_TIMEOUT_MS` | `30000` | Total deadline in milliseconds for one tool call, including retries and every ranking round |
+| `JEV_MCP_TIMEOUT_MS` | `30000` | Total deadline in milliseconds for one tool call, including retries and every ranking round. Each SDK attempt uses the time remaining and does not retry its own timeout |
 | `JEV_MCP_AUTO_ACCEPT` | `0.8` | Confidence floor for `auto` |
 | `JEV_MCP_REVIEW_AT` | `0.5` | Below this, coding-loop / review / evaluate `escalate` |
 | `JEV_MCP_BLOCK_AT` | `0.75` | Screen injection ≥ this → `block` |
 
-Per-call overrides (win over env):
+Per-call overrides can only tighten the environment floors:
 
-- `jev_coding_loop`, `jev_review`: `auto_accept`, `review_at`
+- `auto_accept` becomes `max(caller, env)`. `review_at` becomes `max(caller, env)` and must still be `<= auto_accept`. A caller pair with `review_at > auto_accept` is still rejected.
+- `jev_coding_loop`, `jev_review`, `jev_gate`: `auto_accept`, `review_at`
 - `jev_step`, `jev_tool_route`: `auto_accept`, `review_at` (executable dispatch keeps its `max(0.8, auto_accept)` floor)
-- `jev_gate`: `auto_accept`, `review_at`
 - `jev_verify`: `auto_accept`
-- `jev_screen`: `block_at`, `review_at` (screen review default is `0.25`)
+- `jev_screen`: `block_at` becomes `min(caller, env)`, so `block_at: 1` cannot loosen `0.75`. `review_at` still defaults to `0.25` and cannot exceed `block_at`
 - All tools: `model`
 
-`jev_evaluate` uses the environment confidence thresholds. Configurable confidence bands must satisfy `0 <= review_at <= auto_accept <= 1`; invalid environment values are configuration errors rather than silent fallbacks. `TYPESAFE_BASE_URL` must be an absolute HTTP(S) URL. Standalone verification caps its internal review cutoff at the requested acceptance threshold. The screen review threshold cannot exceed its block threshold, and `JEV_MCP_BLOCK_AT` must be at least the default screen review threshold of `0.25`.
+`jev_evaluate` uses the environment confidence thresholds. Configurable confidence bands must satisfy `0 <= review_at <= auto_accept <= 1`; invalid environment values are configuration errors rather than silent fallbacks. `TYPESAFE_BASE_URL` is normalized to origin plus path. Userinfo, query strings, fragments, obfuscated numeric hosts, and non-public addresses (private, link-local, and metadata) are rejected. Standalone verification caps its internal review cutoff at the requested acceptance threshold. The screen review threshold cannot exceed its block threshold, and `JEV_MCP_BLOCK_AT` must be at least the default screen review threshold of `0.25`.
+
+Review and gate `auto` also requires each raw score to clear a floor on the 0–2 scale: correctness and spec match at least 1, test gap and blast radius at most 1. The weighted composite alone is not enough.
 
 No key and no mock: tools return `CONFIG_ERROR`. The timeout must be a positive integer no greater than `2147483647`; invalid values are configuration errors.
 
@@ -49,7 +52,7 @@ Screen `skip` uses substance/relevance below `0.35`.
 - Rank: 250 Choice options per call; candidate text 2,000 characters
 - Rank accepts at most 5,000 candidates per request; verification and the completion gate accept at most 1,000 claims per request
 
-Token estimate is `ceil(chars / 4)`, not a provider tokenizer. The server enforces these estimated budgets; actual provider token counts can differ, especially for non-English text or code.
+ASCII text is still estimated as `ceil(chars / 4)`. Non-ASCII characters cost at least one token each. The server enforces these estimated budgets. If the provider reports `usage.input_tokens` above the 64,000-token total budget, coverage is incomplete and tools cannot return `auto`.
 
 Oversized question sets are rejected before sending a request. Shortened state or candidate text is reported as incomplete coverage, and no tool returns `auto` on incomplete context. Screening preserves a detected `block`; otherwise incomplete screening requires `review`.
 

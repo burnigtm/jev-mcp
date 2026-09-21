@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { getConfig } from "../src/config.ts";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const secret = "ts_do_not_print_this_key";
@@ -23,7 +24,8 @@ function cli(args: string[], extraEnv: Record<string, string> = {}, input?: stri
 test("doctor --json reports readiness without exposing configured secrets", () => {
   const result = cli(["doctor", "--json"], {
     TYPESAFE_API_KEY: secret,
-    TYPESAFE_BASE_URL: "https://username:password@example.com/api?token=private#secret",
+    TYPESAFE_BASE_URL: "https://example.com/api/",
+    JEV_MCP_ALLOW_CUSTOM_BASE_URL: "1",
   });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr);
@@ -35,7 +37,58 @@ test("doctor --json reports readiness without exposing configured secrets", () =
   assert.equal(body.base_url, "https://example.com/api");
   assert.equal(body.timeout_ms, 30_000);
   assert.ok(body.ping.input_tokens > 0);
-  assert.doesNotMatch(result.stdout, /ts_do_not_print_this_key|username|password|token=private|#secret/);
+  assert.doesNotMatch(result.stdout, /ts_do_not_print_this_key/);
+});
+
+test("doctor rejects credential-bearing base URLs without printing them", () => {
+  const result = cli(["doctor", "--json"], {
+    TYPESAFE_API_KEY: secret,
+    TYPESAFE_BASE_URL: "https://username:password@example.com/api?token=private#secret",
+    JEV_MCP_ALLOW_CUSTOM_BASE_URL: "1",
+  });
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, "");
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.ready, false);
+  assert.equal(body.error.code, "CONFIG_ERROR");
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, /ts_do_not_print_this_key|username|password|token=private|#secret/);
+});
+
+test("base URL defaults to the TypeSafe API and rejects non-public hosts", () => {
+  const names = ["TYPESAFE_BASE_URL", "JEV_MCP_ALLOW_CUSTOM_BASE_URL", "JEV_MCP_MOCK", "TYPESAFE_API_KEY"];
+  const previous = new Map(names.map(name => [name, process.env[name]]));
+  const restore = () => {
+    for (const [name, value] of previous) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  };
+  try {
+    for (const name of names) delete process.env[name];
+    assert.equal(getConfig().baseURL, "https://api.typesafe.ai");
+    process.env.TYPESAFE_BASE_URL = "https://api.typesafe.ai/v1/";
+    assert.equal(getConfig().baseURL, "https://api.typesafe.ai/v1");
+    process.env.TYPESAFE_BASE_URL = "http://127.0.0.1:9/jev";
+    assert.equal(getConfig().baseURL, "http://127.0.0.1:9/jev");
+    process.env.TYPESAFE_BASE_URL = "https://example.com";
+    assert.throws(() => getConfig(), /JEV_MCP_ALLOW_CUSTOM_BASE_URL/);
+    process.env.JEV_MCP_ALLOW_CUSTOM_BASE_URL = "1";
+    assert.equal(getConfig().baseURL, "https://example.com");
+    for (const blocked of [
+      "http://169.254.169.254",
+      "http://2130706433",
+      "http://0x7f000001",
+      "https://10.0.0.1",
+      "https://192.168.1.1",
+      "https://[fd00::1]",
+      "http://127.0.0.1/path?x=1",
+    ]) {
+      process.env.TYPESAFE_BASE_URL = blocked;
+      assert.throws(() => getConfig(), /TYPESAFE_BASE_URL/, blocked);
+    }
+  } finally {
+    restore();
+  }
 });
 
 test("doctor --json returns structured failure and nonzero status without credentials", () => {

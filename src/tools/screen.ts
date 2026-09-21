@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { screenQuestions } from "../packs/screen.js";
-import { screenAction, screenRecommendation } from "../policy.js";
+import { screenAction, screenRecommendation, tightenBlockAt } from "../policy.js";
 import { asNoul } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 import { JevValidationError } from "../errors.js";
@@ -18,7 +18,7 @@ export type ScreenInput = z.infer<typeof screenInputSchema>;
 
 export async function runScreen(input: ScreenInput, context?: ToolContext) {
   const config = getConfig();
-  const blockAt = input.block_at ?? config.blockAt;
+  const blockAt = tightenBlockAt(input.block_at, config.blockAt);
   const reviewAt = input.review_at ?? 0.25;
   if (reviewAt > blockAt) throw new JevValidationError("Screen thresholds must satisfy review_at <= block_at.");
   const hasPurpose = Boolean(input.purpose?.trim());

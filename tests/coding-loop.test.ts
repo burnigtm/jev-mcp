@@ -5,13 +5,14 @@ import { codingLoopQuestions } from "../src/packs/coding-loop.ts";
 import { codingLoopInputSchema, runCodingLoop } from "../src/tools/coding-loop.ts";
 import { errorDetails } from "../src/errors.ts";
 
-const envNames = ["JEV_MCP_MOCK", "TYPESAFE_API_KEY", "TYPESAFE_BASE_URL", "JEV_MCP_AUTO_ACCEPT", "JEV_MCP_REVIEW_AT"];
+const envNames = ["JEV_MCP_MOCK", "TYPESAFE_API_KEY", "TYPESAFE_BASE_URL", "JEV_MCP_ALLOW_CUSTOM_BASE_URL", "JEV_MCP_AUTO_ACCEPT", "JEV_MCP_REVIEW_AT"];
 const previousEnv = new Map(envNames.map(name => [name, process.env[name]]));
 
 before(() => {
   process.env.JEV_MCP_MOCK = "0";
   process.env.TYPESAFE_API_KEY = "fixture-key";
   process.env.TYPESAFE_BASE_URL = "https://coding-loop-fixture.invalid";
+  process.env.JEV_MCP_ALLOW_CUSTOM_BASE_URL = "1";
   process.env.JEV_MCP_AUTO_ACCEPT = "0.8";
   process.env.JEV_MCP_REVIEW_AT = "0.5";
 });

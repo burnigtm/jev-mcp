@@ -26,8 +26,8 @@ Call **before** spending a generative partner turn on retry / stop / which model
 | `observation` | yes | Last diff, command output, test log, or blocker |
 | `extras` | no | Extra JSON included under `state.extras` |
 | `execution` | no | Trusted host facts: `prepared_tool_call` (default `false`), `context_complete` (default `false`), `failed_attempts` (nonnegative integer, default `0`) |
-| `auto_accept` | no | Override default `0.8` |
-| `review_at` | no | Override default `0.5` |
+| `auto_accept` | no | May only raise the env floor (default `0.8`) |
+| `review_at` | no | May only raise the env floor (default `0.5`) |
 | `model` | no | Override `JEV_MCP_MODEL` |
 
 **Fan-out (one Jev call)**
@@ -262,7 +262,7 @@ Reason codes are deterministic: `accepted`, `incomplete_context`, `review_escala
 
 Judge **untrusted** paste/fetch **before** the agent reads it. Skip first-party repo files. Pattern: [LLM guardrails](https://docs.typesafe.ai/cookbooks/llm_guardrails.md).
 
-**Arguments:** `text`, optional `purpose`, optional `block_at` (default `0.75`), optional `review_at` (default `0.25`).
+**Arguments:** `text`, optional `purpose`, optional `block_at` (default `0.75`; a call can only lower the env floor), optional `review_at` (default `0.25`).
 
 Noul `injection`, `substance`, and `relevance` (only if `purpose` is set).
 

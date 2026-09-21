@@ -49,14 +49,8 @@ export async function runDoctor(options: { json?: boolean } = {}): Promise<void>
   }
 }
 
-function safeBaseUrl(baseURL: string | undefined): string {
-  if (!baseURL) return "(default)";
-  try {
-    const url = new URL(baseURL);
-    return `${url.origin}${url.pathname}`;
-  } catch {
-    throw new JevConfigError("TYPESAFE_BASE_URL must be a valid API root URL.");
-  }
+function safeBaseUrl(baseURL: string): string {
+  return baseURL;
 }
 
 export async function runEval(argv: string[]): Promise<void> {

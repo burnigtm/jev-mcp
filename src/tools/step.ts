@@ -7,7 +7,7 @@ import {
   confidenceSupportsAuto,
   distributionSupportsConfidence,
   requireCompleteContext,
-  validatePolicyThresholds,
+  tightenJudgmentThresholds,
   worstAction,
   type PolicyAction,
 } from "../policy.js";
@@ -105,9 +105,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
     if (!parsed.success) throw new JevValidationError(parsed.error.message);
     const input = parsed.data;
     const config = getConfig();
-    const autoAccept = input.auto_accept ?? config.autoAccept;
-    const reviewAt = input.review_at ?? config.reviewAt;
-    validatePolicyThresholds(autoAccept, reviewAt);
+    const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
     // Routing an executable call and buying a partner turn share one fixed floor,
     // even when callers lower their judgment thresholds.
     const dispatchAt = Math.max(0.8, autoAccept);

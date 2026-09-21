@@ -13,7 +13,14 @@ export const TRUNCATION_MARKER = "\n…[truncated]";
 
 export function estimateTokens(value: unknown): number {
   const text = stringifyState(value);
-  return Math.ceil(text.length / 4);
+  let ascii = 0;
+  let other = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code <= 0x7f) ascii += 1;
+    else other += 1;
+  }
+  return Math.ceil(ascii / 4 + other);
 }
 
 export function truncateText(text: string, maxChars: number): string {
@@ -72,7 +79,7 @@ export function fitState(
   const raw = stringifyState(state);
   const tokens = estimateTokens(raw);
   const truncated = tokens > budget;
-  const fitted = truncated ? truncateText(raw, budget * 4) : raw;
+  const fitted = truncated ? truncateToTokenBudget(raw, budget) : raw;
   return {
     state: truncated ? fitted : state,
     truncated,
@@ -84,6 +91,24 @@ export function fitState(
       estimator: "chars/4",
     },
   };
+}
+
+function truncateToTokenBudget(text: string, budget: number): string {
+  if (budget <= 0) return "";
+  let low = 0;
+  let high = Math.min(text.length, Math.max(budget, budget * 4));
+  let best = "";
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const candidate = truncateText(text, mid);
+    if (estimateTokens(candidate) <= budget) {
+      best = candidate;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return best;
 }
 
 function longestQuestionTokens(questions: unknown): number {

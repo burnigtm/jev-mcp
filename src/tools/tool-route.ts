@@ -3,7 +3,7 @@ import { getConfig } from "../config.js";
 import { JevValidationError } from "../errors.js";
 import { MAX_CANDIDATE_CHARS, truncateText } from "../limits.js";
 import { toolRouteQuestions } from "../packs/tool-route.js";
-import { distributionSupportsConfidence, validatePolicyThresholds, type PolicyAction } from "../policy.js";
+import { distributionSupportsConfidence, tightenJudgmentThresholds, type PolicyAction } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, withToolContext, type ToolContext } from "../typesafe.js";
 
@@ -147,9 +147,7 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
     if (!parsed.success) throw new JevValidationError(parsed.error.message);
     const input = parsed.data;
     const config = getConfig();
-    const autoAccept = input.auto_accept ?? config.autoAccept;
-    const reviewAt = input.review_at ?? config.reviewAt;
-    validatePolicyThresholds(autoAccept, reviewAt);
+    const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
     // Routing executable calls has a fixed safety floor, even with permissive judgment thresholds.
     const dispatchAt = Math.max(0.8, autoAccept);
     const blocked: Array<{ id: string; reason_codes: Reason[] }> = [];

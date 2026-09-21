@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { reviewQuestions } from "../packs/review.js";
-import { confidenceSupportsAuto, minConfidence, requireCompleteContext, reviewAction, reviewComposite, validatePolicyThresholds } from "../policy.js";
+import { confidenceSupportsAuto, minConfidence, requireCompleteContext, reviewAction, reviewComposite, tightenJudgmentThresholds } from "../policy.js";
 import { asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 
@@ -18,9 +18,7 @@ export type ReviewInput = z.infer<typeof reviewInputSchema>;
 
 export async function runReview(input: ReviewInput, context?: ToolContext) {
   const config = getConfig();
-  const autoAccept = input.auto_accept ?? config.autoAccept;
-  const reviewAt = input.review_at ?? config.reviewAt;
-  validatePolicyThresholds(autoAccept, reviewAt);
+  const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
   const result = await systemOne({
     state: {
       request: input.request,
