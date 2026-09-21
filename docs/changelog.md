@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Selection, review, and rank cannot auto past a failed check
+
+- `jev_step` passes only a locally dispatchable call into partner routing. A host `prepared_tool_call` flag no longer skips uncertain selection, external or destructive effects, or a confident `none`. Empty and wholly ineligible lists are not `auto` and do not open a partner turn.
+- `ask_user` requires the same distribution check as continue and retry. A flat distribution stays in review.
+- Review and gate `auto` now requires each dimension to clear a floor: correctness and spec at least 1, test gap and blast radius at most 1, on the 0–2 score scale. A weighted sum of 0.7 is not enough.
+- `jev_rank` returns `auto` only when final-round `exists` meets `auto_accept` and the `best` choice distribution supports that confidence. `partial` stays `review`. Tournament `exists` comes from the final round only.
+- A candidate description clipped at 2,000 characters is incomplete coverage and cannot be dispatched. Argument values stay on the host.
+
 ### GitHub notify no longer runs pull-request code
 
 - Notify triggers are `pull_request_target`, `pull_request_review`, pushes to `main`, and `workflow_dispatch` from `refs/heads/main` only. Both jobs check out the repository default branch with `persist-credentials: false` and never check out the PR head or `github.sha`.

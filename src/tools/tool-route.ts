@@ -118,8 +118,17 @@ function argumentShape(value: unknown, depth = 0): unknown {
   return { type: typeof value };
 }
 
+function normalizedDescription(description: string): string {
+  return description.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function sanitizeDescription(description: string): string {
-  return truncateText(description.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim(), MAX_CANDIDATE_CHARS);
+  return truncateText(normalizedDescription(description), MAX_CANDIDATE_CHARS);
+}
+
+/** A clipped description is incomplete coverage for that candidate. */
+export function descriptionClipped(description: string): boolean {
+  return normalizedDescription(description).length > MAX_CANDIDATE_CHARS;
 }
 
 export function projectCandidateForJudgment(candidate: ToolCandidate): JudgeCandidate {
@@ -176,7 +185,8 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
     const candidate = candidates[index];
     const suitability = candidate ? asNoul(result.answers[`suitable_${index}`]).noul : null;
     const reasons: Reason[] = [];
-    const incomplete = result.truncated || !result.coverage.complete;
+    const clipped = candidates.some(candidate => descriptionClipped(candidate.description));
+    const incomplete = result.truncated || !result.coverage.complete || clipped;
     if (incomplete) reasons.push("incomplete_context");
     if (selected.confidence < dispatchAt || !distributionSupportsConfidence(selected.probabilities, dispatchAt)) reasons.push("selection_uncertain");
     if (!candidate) reasons.push("no_suitable_call");
@@ -189,7 +199,8 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
       ? { candidate_id: candidate.id, name: candidate.name, arguments: candidate.arguments }
       : null;
     return toolRouteOutputSchema.parse({
-      ...shared, model: result.model, usage: result.usage, truncated: result.truncated, coverage: result.coverage,
+      ...shared, model: result.model, usage: result.usage, truncated: result.truncated,
+      coverage: clipped ? { ...result.coverage, complete: false } : result.coverage,
       action, handoff: call ? "execute_tool" : needsReview ? "review" : "gather_context", call,
       selection: { id: candidate?.id ?? null, confidence: selected.confidence, suitability },
       reason_codes: reasons.length ? reasons : ["accepted"],

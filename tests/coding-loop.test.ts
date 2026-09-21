@@ -164,6 +164,22 @@ test("two or more failed attempts gather context without repeating tools or esca
   }
 });
 
+test("a flat ask_user distribution does not hand off to the user", async t => {
+  t.mock.method(globalThis, "fetch", async () => {
+    const response = fixture({ next: "ask_user", nextConfidence: 0.99 });
+    const keys = Object.keys(response.answers.next.probabilities);
+    const flat = 1 / keys.length;
+    response.answers.next.probabilities = Object.fromEntries(keys.map(key => [key, flat]));
+    response.answers.next.confidence = 0.99;
+    return Response.json(response);
+  });
+  const result = await runCodingLoop(input);
+  assert.equal(result.handoff, "review");
+  assert.notEqual(result.handoff, "ask_user");
+  assert.equal(result.partner_model.required, false);
+  assert.deepEqual(result.partner_model.reason_codes, ["next_step_uncertain"]);
+});
+
 test("terminal stop and user input never invoke a partner", async t => {
   for (const next of ["stop", "ask_user"] as const) {
     const fetch = reply(t, { next, done: 0.95, tier: "reasoning" });

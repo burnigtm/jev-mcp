@@ -184,6 +184,49 @@ test("rank rejects unbounded candidate lists before starting a provider request"
   assert.equal(requests.length, 0);
 });
 
+test("rank auto uses only the final round and a concentrated best choice", async () => {
+  mock.method(TypeSafeClient.prototype, "systemOne", async (request: Request) => {
+    requests.push(request);
+    const result = mockSystemOne(request);
+    const exists = result.answers.exists;
+    if (exists.type === "noul") exists.noul = request.state.candidates.length > 200 ? 0.99 : 0.5;
+    return result;
+  });
+  const tournament = await runRank({
+    query: "rotate API keys",
+    candidates: Array.from({ length: 251 }, (_, index) => ({ id: `c${index}`, text: "rotate API keys" })),
+    top_k: 3,
+  });
+  assert.equal(tournament.exists, 0.5);
+  assert.equal(tournament.exists_verdict, "partial");
+  assert.equal(tournament.action, "review");
+  assert.ok(requests.length > 1);
+});
+
+test("a high exists score with a flat best choice stays in review", async () => {
+  mock.method(TypeSafeClient.prototype, "systemOne", async (request: Request) => {
+    requests.push(request);
+    const result = mockSystemOne(request);
+    const exists = result.answers.exists;
+    if (exists.type === "noul") exists.noul = 0.9;
+    const best = result.answers.best;
+    if (best.type === "choice") {
+      const keys = Object.keys(best.probabilities);
+      const flat = 1 / keys.length;
+      for (const key of keys) best.probabilities[key] = flat;
+      best.confidence = 0.99;
+    }
+    return result;
+  });
+  const result = await runRank({
+    query: "rotate API keys",
+    candidates: [{ id: "a", text: "rotate API keys" }, { id: "b", text: "unrelated invoices" }],
+  });
+  assert.equal(result.exists_verdict, "answered");
+  assert.equal(result.action, "review");
+  assert.equal(requests.length, 1);
+});
+
 test("rank keeps the same deadline across batches and the final round", async () => {
   let now = Date.now();
   const deadline = now + 10000;

@@ -182,8 +182,9 @@ export function partnerRouting(input: {
     return input.action === "auto" ? defer("stop", "terminal_stop") : defer("review", "stop_requires_review");
   }
   if (input.next === "ask_user") {
-    return input.nextConfidence >= input.autoAccept
-      ? defer("ask_user", "user_input_required") : defer("review", "next_step_uncertain");
+    const supported = input.nextConfidence >= input.autoAccept
+      && distributionSupportsConfidence(input.nextProbabilities, input.autoAccept);
+    return supported ? defer("ask_user", "user_input_required") : defer("review", "next_step_uncertain");
   }
   if (input.next !== "continue" && input.next !== "retry") return defer("review", "next_step_uncertain");
   if (input.action !== "auto") return defer("review", "coding_policy_requires_review");

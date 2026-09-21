@@ -316,6 +316,67 @@ test("prepared candidates Jev declines do not buy a generative turn", async () =
   });
 });
 
+test("host prepared_tool_call cannot skip selection, effect, or empty-list checks", async () => {
+  const execution = { prepared_tool_call: true as const, context_complete: true, failed_attempts: 0 };
+  await withApi((payload, response) => send(response, judgment(payload, { selectionConfidence: 0.6 })), async () => {
+    const result = await runStep(input({ execution }));
+    assert.notEqual(result.handoff, "use_tools");
+    assert.equal(result.handoff, "gather_context");
+    assert.equal(result.call, null);
+    assert.equal(result.partner_model.required, false);
+    assert.notEqual(result.action, "auto");
+  });
+  for (const effect of ["external_write", "destructive"] as const) {
+    await withApi((payload, response) => send(response, judgment(payload)), async () => {
+      const result = await runStep(input({ execution, candidates: [candidate({ effect })] }));
+      assert.notEqual(result.handoff, "use_tools");
+      assert.equal(result.handoff, "review");
+      assert.equal(result.call, null);
+      assert.equal(result.partner_model.required, false);
+      assert.notEqual(result.action, "auto");
+    });
+  }
+  await withApi((payload, response) => send(response, judgment(payload, { selected: "none" })), async () => {
+    const result = await runStep(input({ execution }));
+    assert.notEqual(result.handoff, "use_tools");
+    assert.equal(result.handoff, "partner_model");
+    assert.equal(result.partner_model.required, true);
+    assert.equal(result.call, null);
+    assert.equal(result.action, "auto");
+  });
+  await withApi((payload, response) => send(response, judgment(payload)), async () => {
+    const absent = await runStep(input({ execution, candidates: undefined }));
+    assert.equal(absent.handoff, "gather_context");
+    assert.equal(absent.partner_model.required, false);
+    assert.notEqual(absent.action, "auto");
+    const blocked = await runStep(input({ execution, candidates: [candidate({ authorized: false })] }));
+    assert.equal(blocked.handoff, "review");
+    assert.equal(blocked.partner_model.required, false);
+    assert.notEqual(blocked.action, "auto");
+    assert.equal(blocked.call, null);
+  });
+});
+
+test("a clipped candidate description blocks dispatch and stays off the provider payload", async () => {
+  let sent: Payload | undefined;
+  await withApi((payload, response) => {
+    sent = payload;
+    send(response, judgment(payload));
+  }, async () => {
+    const secret = "super-secret-argument-value";
+    const result = await runStep(input({
+      candidates: [candidate({ description: `Read parser ${"detail ".repeat(400)}`, arguments: { path: "src/parser.ts", token: secret } })],
+    }));
+    assert.equal(result.call, null);
+    assert.equal(result.coverage.complete, false);
+    assert.notEqual(result.action, "auto");
+    assert.ok(result.reason_codes.includes("incomplete_context"));
+    const body = JSON.stringify(sent?.state);
+    assert.equal(body.includes(secret), false);
+    assert.ok(body.length < 8_000);
+  });
+});
+
 test("a confident none still allows the partner turn the coding loop asked for", async () => {
   await withApi((payload, response) => send(response, judgment(payload, { selected: "none" })), async () => {
     const result = await runStep(input());

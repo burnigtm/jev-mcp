@@ -283,6 +283,31 @@ test("none and an unsuitable selected call cannot be rescued by another suitable
   });
 });
 
+test("a clipped candidate description is incomplete coverage and cannot dispatch", async () => {
+  let sent: Payload | undefined;
+  await withApi((payload, response) => {
+    sent = payload;
+    send(response, judgment(payload));
+  }, async calls => {
+    const secret = "super-secret-argument-value";
+    const result = await runToolRoute(input([candidate({
+      description: `Read the parser ${"detail ".repeat(400)}`,
+      arguments: { path: "src/parser.ts", token: secret },
+    })]));
+    assert.equal(calls(), 1);
+    assert.equal(result.call, null);
+    assert.equal(result.action, "review");
+    assert.equal(result.coverage.complete, false);
+    assert.ok(result.reason_codes.includes("incomplete_context"));
+    assert.equal(result.partner_model.required, false);
+    const body = JSON.stringify(sent?.state);
+    assert.equal(body.includes(secret), false);
+    const judged = (sent?.state as { candidates: Array<{ description: string }> }).candidates[0];
+    assert.ok(judged);
+    assert.ok(judged.description.length <= 2_000);
+  });
+});
+
 test("truncated evidence cannot dispatch even an otherwise confidently suitable call", async () => {
   await withApi((payload, response) => send(response, judgment(payload)), async calls => {
     const result = await runToolRoute(input(undefined, { observation: "x".repeat(200_000) }));

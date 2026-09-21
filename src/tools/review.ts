@@ -61,6 +61,10 @@ export function projectReview(result: EvaluateResponse, autoAccept: number, revi
       testGap.confidence,
       blastRadius.confidence,
     ]),
+    correctness: correctness.score,
+    specMatch: specMatch.score,
+    testGap: testGap.score,
+    blastRadius: blastRadius.score,
     autoAccept,
     reviewAt,
   });

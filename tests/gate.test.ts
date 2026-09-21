@@ -141,6 +141,21 @@ test("low-confidence claims escalate regardless of verdict", () => {
   assert.equal(gateFor([choice("verified", 0.5)]).action, "review");
 });
 
+test("a perfect weighted review cannot auto when one dimension fails its floor", () => {
+  const zeroSpec = fixture([choice()]);
+  zeroSpec.answers.spec_match = score(0);
+  const specGate = projectGate(zeroSpec, ["Claim"], 0.8, 0.5);
+  assert.equal(specGate.review.action, "review");
+  assert.notEqual(specGate.action, "auto");
+
+  const wideBlast = fixture([choice()]);
+  wideBlast.answers.test_gap = score(2);
+  wideBlast.answers.blast_radius = score(2);
+  const blastGate = projectGate(wideBlast, ["Claim"], 0.8, 0.5);
+  assert.equal(blastGate.review.action, "review");
+  assert.notEqual(blastGate.action, "auto");
+});
+
 test("unsafe patch review prevents approval even with all claims verified", () => {
   const gate = gateFor([choice()], { unsafe: true });
   assert.equal(gate.action, "escalate");

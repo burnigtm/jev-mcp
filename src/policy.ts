@@ -124,6 +124,10 @@ export function reviewAction(input: {
   composite: number;
   safeToApply: number;
   minConfidence: number;
+  correctness: number;
+  specMatch: number;
+  testGap: number;
+  blastRadius: number;
   autoAccept?: number;
   reviewAt?: number;
 }): PolicyAction {
@@ -133,7 +137,17 @@ export function reviewAction(input: {
   if (input.minConfidence < reviewAt || input.safeToApply < 0.4) {
     return "escalate";
   }
-  if (input.safeToApply >= autoAccept && input.composite >= 0.7 && input.minConfidence >= autoAccept) {
+  // Scores are 0–2. A perfect weighted sum can still hide a failed dimension.
+  const dimensionsClear = input.correctness >= 1
+    && input.specMatch >= 1
+    && input.testGap <= 1
+    && input.blastRadius <= 1;
+  if (
+    dimensionsClear
+    && input.safeToApply >= autoAccept
+    && input.composite >= 0.7
+    && input.minConfidence >= autoAccept
+  ) {
     return "auto";
   }
   return "review";
