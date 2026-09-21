@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### GitHub notify no longer runs pull-request code
+
+- Notify triggers are `pull_request_target`, `pull_request_review`, pushes to `main`, and `workflow_dispatch` from `refs/heads/main` only. Both jobs check out the repository default branch with `persist-credentials: false` and never check out the PR head or `github.sha`.
+- `CURSOR_API_KEY` stays on the notify job (`contents: read`). The publish job has `contents: write` and `pull-requests: read` and does not receive the key. `cursor-watch` is created from the checked-out default-branch SHA.
+- The notify script posts only to `https://api.cursor.com` (`http://127.0.0.1` and `http://localhost` are allowed for tests). Other hosts, userinfo, queries, and fragments are rejected. Event fields travel as a separate JSON blob with control characters removed and a length cap. The agent must confirm a merge through the GitHub API before any push. A missing key or a POST that never succeeds exits 1. Logs say only that a key is present.
+- Required reviewers on a GitHub Environment are a repository setting the owner should turn on. The workflow does not declare an environment, because a missing one would fail notify.
+
 ### Interoperability and policy hardening
 
 - Added MCP output schemas and structured success payloads for all nine tools.

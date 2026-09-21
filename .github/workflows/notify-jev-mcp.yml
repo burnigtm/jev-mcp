@@ -2,10 +2,26 @@
 # Secret CURSOR_API_KEY: full User API Key from https://cursor.com/dashboard/api create dialog.
 # Optional variable CURSOR_JEV_MCP_AGENT_ID overrides the default Project id.
 # Also publishes docs/github-watch.md on branch cursor-watch (does not push main).
+#
+# Notify never executes pull-request head code. pull_request_target loads this
+# workflow from the default branch. Both jobs check out only
+# github.event.repository.default_branch with persist-credentials: false.
+# They never check out the PR head or github.sha: on pull_request and
+# pull_request_review that SHA is the merge commit.
+# The notify script pins the API host to https://api.cursor.com.
+#
+# CURSOR_API_KEY is only on the notify job, which has contents: read and no
+# write token. The publish job has contents: write and pull-requests: read
+# and never receives CURSOR_API_KEY. cursor-watch is created from the
+# checked-out default-branch SHA (WATCH_BASE_SHA), not from github.sha.
+#
+# Required reviewers on a GitHub Environment are a repository setting the
+# owner should turn on for this workflow. This file does not declare an
+# environment: a missing environment would fail notify.
 name: Notify Jev_MCP
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, reopened, synchronize, closed, ready_for_review]
   pull_request_review:
     types: [submitted]
@@ -14,7 +30,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: notify-jev-mcp-${{ github.event.pull_request.number || github.sha }}
@@ -22,9 +38,15 @@ concurrency:
 
 jobs:
   notify:
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
       - name: POST event to Jev_MCP Cloud Agent
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
@@ -43,10 +65,25 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_SHA: ${{ github.sha }}
         run: python3 scripts/notify-jev-mcp-event.py
+
+  publish:
+    if: always() && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Record checked-out default-branch SHA
+        id: base
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Update GitHub watch dashboard
-        if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WATCH_BASE_SHA: ${{ steps.base.outputs.sha }}
           AGENT_ID: ${{ vars.CURSOR_JEV_MCP_AGENT_ID }}
           DEFAULT_AGENT_ID: bc-c78e565c-bc13-4d27-ada8-cc5e7e04eb9e
           EVENT_NAME: ${{ github.event_name }}
