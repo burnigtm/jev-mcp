@@ -1,6 +1,6 @@
 # Jev_MCP GitHub watch
 
-**Latest pull request:** [#7 Fix jev-mcp audit findings](https://github.com/burnigtm/jev-mcp/pull/7) — **merged** 2026-09-21T17:37:31Z · 11m ago · burnigtm · `cursor/jev-audit-fixes-ops` → `main` · +969 −151 · 35 files.
+**Latest pull request:** [#7 Fix jev-mcp audit findings](https://github.com/burnigtm/jev-mcp/pull/7) — **merged** 2026-09-21T17:37:31Z · 12m ago · burnigtm · `cursor/jev-audit-fixes-ops` → `main` · +969 −151 · 35 files.
 
 Open **0** · Merged **7** · Closed **0** · [Interactive board](github-watch.html)
 
@@ -8,7 +8,7 @@ This is the **Cursor Project dashboard** for [burnigtm/jev-mcp](https://github.c
 
 | | |
 | --- | --- |
-| **Last refresh** | 2026-09-21T17:48:44Z |
+| **Last refresh** | 2026-09-21T17:50:26Z |
 | **Data** | GitHub API |
 | **Last GitHub event** | `push` |
 | **Open PRs** | none |
@@ -24,8 +24,8 @@ This is the **Cursor Project dashboard** for [burnigtm/jev-mcp](https://github.c
 <tr><td><strong>State</strong></td><td>MERGED</td></tr>
 <tr><td><strong>Author</strong></td><td>burnigtm</td></tr>
 <tr><td><strong>Branches</strong></td><td>cursor/jev-audit-fixes-ops → main</td></tr>
-<tr><td><strong>Updated</strong></td><td>2026-09-21T17:37:31Z · 11m ago</td></tr>
-<tr><td><strong>Merged</strong></td><td>2026-09-21T17:37:31Z · 11m ago</td></tr>
+<tr><td><strong>Updated</strong></td><td>2026-09-21T17:37:31Z · 12m ago</td></tr>
+<tr><td><strong>Merged</strong></td><td>2026-09-21T17:37:31Z · 12m ago</td></tr>
 <tr><td><strong>Diff</strong></td><td>+969 −151 · 35 files</td></tr>
 <tr><td><strong>Commits</strong></td><td>4</td></tr>
 <tr><td><strong>Checks</strong></td><td>3 failing · 6 checks</td></tr>
