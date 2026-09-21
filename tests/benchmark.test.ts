@@ -1,6 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { percentile, summarize } from "../scripts/benchmark.mjs";
+import { childEnv, percentile, summarize } from "../scripts/benchmark.mjs";
+
+test("benchmark child env allowlists process variables and forces mock mode", () => {
+  const env = childEnv({
+    PATH: "/usr/bin",
+    NODE_OPTIONS: "--enable-source-maps",
+    SystemRoot: "C:\\Windows",
+    GITHUB_TOKEN: "ghs_secret",
+    TYPESAFE_API_KEY: "ts_secret",
+    HOME: "/home/runner",
+  });
+  assert.equal(env.JEV_MCP_MOCK, "1");
+  assert.equal(env.PATH, "/usr/bin");
+  assert.equal(env.NODE_OPTIONS, "--enable-source-maps");
+  assert.equal(env.SystemRoot, "C:\\Windows");
+  assert.equal("GITHUB_TOKEN" in env, false);
+  assert.equal("TYPESAFE_API_KEY" in env, false);
+  assert.equal("HOME" in env, false);
+});
 
 test("benchmark percentiles use nearest-rank values without mutating samples", () => {
   const samples = [30, 10, 20];

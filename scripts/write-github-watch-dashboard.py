@@ -19,10 +19,19 @@ def now_utc() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def pr_list() -> tuple[list[str], list[str]]:
+def escape_cell(value: str, limit: int = 160) -> str:
+    cleaned = "".join(" " if ord(ch) < 32 or ord(ch) == 127 else ch for ch in value)
+    cleaned = cleaned.replace("\\", "\\\\").replace("|", "\\|")
+    cleaned = " ".join(cleaned.split())
+    if len(cleaned) > limit:
+        cleaned = f"{cleaned[: limit - 1]}…"
+    return cleaned
+
+
+def pr_lines() -> tuple[str, str]:
     token = env("GITHUB_TOKEN") or env("GH_TOKEN")
     if not token:
-        return [], []
+        return "unavailable", "unavailable"
     try:
         raw = subprocess.check_output(
             [
@@ -41,21 +50,26 @@ def pr_list() -> tuple[list[str], list[str]]:
             text=True,
             timeout=20,
         )
-    except (OSError, subprocess.CalledProcessError):
-        return [], []
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return "unavailable", "unavailable"
     try:
         items = json.loads(raw)
     except json.JSONDecodeError:
-        return [], []
+        return "unavailable", "unavailable"
+    if not isinstance(items, list):
+        return "unavailable", "unavailable"
     open_prs = []
     merged = []
     for item in items:
-        link = f"[#{item['number']}]({item['url']}) {item.get('title') or ''}".strip()
+        if not isinstance(item, dict):
+            continue
+        title = escape_cell(str(item.get("title") or ""), 120)
+        link = f"[#{item.get('number')}]({item.get('url') or ''}) {title}".strip()
         if item.get("state") == "OPEN":
             open_prs.append(link)
         elif item.get("state") == "MERGED":
             merged.append(link)
-    return open_prs, merged
+    return (", ".join(open_prs) if open_prs else "none", ", ".join(merged[:5]) if merged else "none")
 
 
 def render() -> str:
@@ -72,11 +86,9 @@ def render() -> str:
     pr_user = env("PR_USER")
     pr_head = env("PR_HEAD")
     review_state = env("REVIEW_STATE")
-    open_prs, merged = pr_list()
-    open_line = ", ".join(open_prs) if open_prs else "none"
-    merged_line = ", ".join(merged[:5]) if merged else "none"
+    open_line, merged_line = pr_lines()
     if pr_number and pr_url:
-        headline = f"[PR #{pr_number}]({pr_url}) {pr_title}".strip()
+        headline = f"[PR #{pr_number}]({pr_url}) {escape_cell(pr_title)}".strip()
     elif event == "workflow_dispatch":
         headline = "Manual **Run workflow** delivery check (no PR payload)."
     elif event == "push":

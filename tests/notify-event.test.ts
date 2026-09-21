@@ -160,7 +160,69 @@ test("watch dashboard writer records a workflow_dispatch ping without secrets", 
   assert.match(text, /Jev_MCP GitHub watch/);
   assert.match(text, /workflow_dispatch/);
   assert.match(text, /Projects → Jev_MCP/);
+  assert.match(text, /unavailable/);
+  assert.doesNotMatch(text, /\| \*\*Open PRs\*\* \| none \|/);
   rmSync(join(out, ".."), { recursive: true, force: true });
+});
+
+test("watch dashboard escapes titles and distinguishes an empty PR list from gh failure", async () => {
+  const { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const writer = fileURLToPath(new URL("../scripts/write-github-watch-dashboard.py", import.meta.url));
+  const rootDir = mkdtempSync(join(tmpdir(), "jev-watch-gh-"));
+  const gh = join(rootDir, "gh");
+  writeFileSync(gh, "#!/bin/sh\nprintf '%s' '[{\"number\":7,\"title\":\"break | table\\ninject\",\"state\":\"OPEN\",\"url\":\"https://example.com/7\",\"mergedAt\":null}]'\n");
+  chmodSync(gh, 0o755);
+  const out = join(rootDir, "github-watch.md");
+  const run = (env: Record<string, string>) => new Promise<{ status: number | null; stderr: string }>(resolve => {
+    const child = spawn("python3", [writer, "--out", out], { cwd: root, env: { ...process.env, ...env } });
+    let stderr = "";
+    child.stderr.on("data", chunk => { stderr += String(chunk); });
+    child.on("close", status => resolve({ status, stderr }));
+  });
+  const listed = await run({
+    PATH: `${rootDir}:${process.env.PATH ?? ""}`,
+    GITHUB_TOKEN: "local-dashboard-token",
+    GH_TOKEN: "",
+    EVENT_NAME: "pull_request_target",
+    PR_NUMBER: "7",
+    PR_URL: "https://example.com/7",
+    PR_TITLE: "break | table\ninject",
+    GITHUB_SHA: "abc1234",
+    GITHUB_REF_NAME: "main",
+  });
+  assert.equal(listed.status, 0, listed.stderr);
+  const text = readFileSync(out, "utf8");
+  assert.match(text, /\| \*\*Open PRs\*\* \| \[#7\]\(https:\/\/example\.com\/7\) break \\\| table inject \|/);
+  for (const row of text.split("\n").filter(line => line.startsWith("|") && !line.includes("---"))) {
+    assert.equal(row.replace(/\\\|/g, "").split("|").length, 4, row);
+  }
+  writeFileSync(gh, "#!/bin/sh\nexit 1\n");
+  const failed = await run({
+    PATH: `${rootDir}:${process.env.PATH ?? ""}`,
+    GITHUB_TOKEN: "local-dashboard-token",
+    GH_TOKEN: "",
+    EVENT_NAME: "workflow_dispatch",
+    GITHUB_SHA: "abc1234",
+    GITHUB_REF_NAME: "main",
+  });
+  assert.equal(failed.status, 0, failed.stderr);
+  assert.match(readFileSync(out, "utf8"), /unavailable/);
+  writeFileSync(gh, "#!/bin/sh\nprintf '%s' '[]'\n");
+  const empty = await run({
+    PATH: `${rootDir}:${process.env.PATH ?? ""}`,
+    GITHUB_TOKEN: "local-dashboard-token",
+    GH_TOKEN: "",
+    EVENT_NAME: "workflow_dispatch",
+    GITHUB_SHA: "abc1234",
+    GITHUB_REF_NAME: "main",
+  });
+  assert.equal(empty.status, 0, empty.stderr);
+  const emptyText = readFileSync(out, "utf8");
+  assert.match(emptyText, /\| \*\*Open PRs\*\* \| none \|/);
+  assert.match(emptyText, /\| \*\*Merged \(recent\)\*\* \| none \|/);
+  rmSync(rootDir, { recursive: true, force: true });
 });
 
 test("notify script fails when busy retries are exhausted", async () => {

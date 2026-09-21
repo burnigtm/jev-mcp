@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Benchmark and dashboard output
+
+- The performance benchmark starts the MCP server with an allowlisted environment (`PATH`, `NODE_*`, `SystemRoot`) and `JEV_MCP_MOCK=1`. It does not pass `GITHUB_TOKEN`, and it does not print raw server stderr.
+- The GitHub watch dashboard writes `unavailable` when `gh pr list` fails or no token is present. A successful empty list stays `none`. Pull request titles are escaped and length-capped before they enter a markdown table. The publish job already requests `pull-requests: read`.
+- Notify exits 1 when the Cursor key is missing or the POST never succeeds. The dashboard job still runs with `if: always()`.
+
 ### Client bounds for URL, deadline, and token estimates
 
 - The default API root is `https://api.typesafe.ai`. Another public HTTPS host requires `JEV_MCP_ALLOW_CUSTOM_BASE_URL=1`. HTTP is loopback only. Userinfo, queries, fragments, and non-public or obfuscated addresses are rejected, and the value is stored as origin plus path.
