@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jev_MCP GitHub watch</title>
+<style>
+  :root { color-scheme: light; --bg:#f3efe6; --ink:#1c1915; --muted:#5e584e; --line:#ddd4c6; --card:#fffdf8; --open:#1d4e89; --merged:#1f6b45; --closed:#6d645b; --fail:#8d2f2f; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 "Segoe UI", system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header, .toolbar, main { width:min(980px, calc(100% - 28px)); margin:0 auto; }
+  header { padding:28px 0 8px; }
+  .kicker { margin:0; color:var(--muted); letter-spacing:.04em; text-transform:uppercase; font-size:12px; }
+  h1 { margin:4px 0 8px; font-size:32px; line-height:1.1; }
+  .lede { margin:0; font-size:18px; }
+  .meta { color:var(--muted); }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:16px 0; position:sticky; top:0; background:rgba(243,239,230,.94); }
+  input { flex:1 1 220px; min-width:180px; border:1px solid var(--line); background:white; border-radius:999px; padding:10px 14px; font:inherit; }
+  button { border:1px solid var(--line); background:var(--card); border-radius:999px; padding:8px 12px; font:inherit; cursor:pointer; }
+  button[aria-pressed="true"] { background:var(--ink); color:white; border-color:var(--ink); }
+  main { padding-bottom:48px; }
+  article { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin:0 0 12px; }
+  article[data-pinned="true"] { border-color:#1c1915; }
+  article h2 { margin:0 0 6px; font-size:20px; }
+  article h2 a { color:inherit; }
+  .row { display:flex; flex-wrap:wrap; gap:8px 14px; color:var(--muted); margin-bottom:8px; }
+  .badge { color:white; border-radius:999px; padding:2px 8px; font-size:12px; letter-spacing:.03em; }
+  .OPEN { background:var(--open); } .MERGED { background:var(--merged); } .CLOSED { background:var(--closed); }
+  table { width:100%; border-collapse:collapse; margin:8px 0 12px; }
+  td { border-top:1px solid var(--line); padding:6px 8px 6px 0; vertical-align:top; }
+  td:first-child { width:140px; color:var(--muted); }
+  ul { margin:6px 0 12px; padding-left:18px; }
+  .empty { color:var(--muted); }
+  a { color:#1d4e89; }
+  .fail { color:var(--fail); font-weight:600; }
+</style>
+</head>
+<body>
+<header>
+  <p class="kicker">burnigtm/jev-mcp · GitHub API</p>
+  <h1>GitHub watch</h1>
+  <p class="lede" id="latest-line">Latest is #7 Fix jev-mcp audit findings (merged, 2026-09-21T17:37:31Z · 11m ago).</p>
+  <p class="meta">Refreshed 2026-09-21T17:48:44Z. Open 0 · Merged 7 · Closed 0. The newest pull request stays visible while you filter.</p>
+</header>
+<div class="toolbar">
+  <input id="q" type="search" placeholder="Filter by number, title, author, or branch" aria-label="Filter pull requests">
+  <button type="button" data-filter="all" aria-pressed="true">All <span>7</span></button>
+  <button type="button" data-filter="OPEN" aria-pressed="false">Open <span>0</span></button>
+  <button type="button" data-filter="MERGED" aria-pressed="false">Merged <span>7</span></button>
+  <button type="button" data-filter="CLOSED" aria-pressed="false">Closed <span>0</span></button>
+  <button type="button" id="refresh">Refresh</button>
+</div>
+<main id="list">
+<article class="card" data-pinned="true" data-state="MERGED" data-search="7 fix jev-mcp audit findings burnigtm cursor/jev-audit-fixes-ops main merged">
+  <h2><a href="https://github.com/burnigtm/jev-mcp/pull/7">#7 Fix jev-mcp audit findings</a> <span class="badge MERGED">MERGED</span></h2>
+  <div class="row"><span>burnigtm</span><span>+969 −151 · 35 files</span><span>3 failing · 6 checks</span></div>
+  <details open>
+    <summary>Details</summary>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>cursor/jev-audit-fixes-ops</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-09-21T17:37:31Z · 11m ago</td></tr><tr><td>Merged</td><td>2026-09-21T17:37:31Z · 11m ago</td></tr><tr><td>Diff</td><td>+969 −151 · 35 files</td></tr><tr><td>Commits</td><td>4</td></tr><tr><td>Checks</td><td>3 failing · 6 checks</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/b92f9a01f24180281239166c5554849051c8ae71">b92f9a0</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/7cafc402cbd776cae55902415d84482971df17d4">7cafc40</a></td></tr></table>
+    <h3>Commits</h3><ul><li><a href="https://github.com/burnigtm/jev-mcp/commit/23f72a982817f50d54090e9d52fe77c7c5217214"><code>23f72a9</code></a> fix: detach GitHub notify from pull-request code</li><li><a href="https://github.com/burnigtm/jev-mcp/commit/c4de6895bf14f2387ef9e87f7bf654e5a102fb29"><code>c4de689</code></a> fix: stop policy auto from skipping failed checks</li><li><a href="https://github.com/burnigtm/jev-mcp/commit/110bd97f564dcd60b619014903a495f3ce7d21f9"><code>110bd97</code></a> fix: bound the TypeSafe client and per-call floors</li><li><a href="https://github.com/burnigtm/jev-mcp/commit/b92f9a01f24180281239166c5554849051c8ae71"><code>b92f9a0</code></a> fix: keep benchmark env and dashboard output bounded</li></ul><h3>Files</h3><ul><li><code>.env.example</code> modified +1 −0</li><li><code>.github/workflows/notify-jev-mcp.yml</code> modified +40 −3</li><li><code>docs/changelog.md</code> modified +28 −0</li><li><code>docs/configuration.md</code> modified +12 −9</li><li><code>docs/tools.md</code> modified +3 −3</li><li><code>scripts/benchmark.mjs</code> modified +12 −3</li><li><code>scripts/notify-jev-mcp-event.py</code> modified +88 −31</li><li><code>scripts/publish-github-watch-dashboard.py</code> modified +19 −2</li><li><code>scripts/write-github-watch-dashboard.py</code> modified +23 −11</li><li><code>skills/jev-mcp/SKILL.md</code> modified +1 −1</li><li><code>src/cli.ts</code> modified +2 −8</li><li><code>src/config.ts</code> modified +96 −6</li></ul><h3>Checks</h3><ul><li class=""><a href="https://github.com/burnigtm/jev-mcp/actions/runs/35633204704/job/106444176339">notify</a> <code>success</code></li><li class="fail"><a href="https://github.com/burnigtm/jev-mcp/actions/runs/35633204704/job/106444176110">publish</a> <code>failure</code></li><li class=""><a href="https://github.com/burnigtm/jev-mcp/actions/runs/35633196352/job/106444146800">check (ubuntu-latest, 20)</a> <code>success</code></li><li class="fail"><a href="https://github.com/burnigtm/jev-mcp/actions/runs/35633196352/job/106444146781">check (windows-latest, 20)</a> <code>failure</code></li><li class=""><a href="https://github.com/burnigtm/jev-mcp/actions/runs/35633196352/job/106444146660">check (ubuntu-latest, 22)</a> <code>success</code></li><li class="fail"><a href="https://github.com/burnigtm/jev-mcp/actions/runs/35633196352/job/106444146287">check (windows-latest, 22)</a> <code>failure</code></li></ul><h3>Description</h3><p>## Summary - GitHub notify no longer runs pull-request head code, and it pins the API host. - `jev_step` ignores the host `prepared_tool_call` flag, and empty candidate lists are not treated as auto. - Review and gate require per-dimension floors. - Rank auto needs a final-round exists result plus a coherent best. - TypeSafe timeout and base URL are bounded. - Per-call floors can only tighten. - The benchmark does not inherit `GITHUB_TOKEN`. - Dashboard titles are escaped. Mock tests passed (15…</p>
+  </details>
+</article>
+<article class="card" data-pinned="false" data-state="MERGED" data-search="6 test: add mcp performance benchmark suite burnigtm codex/pr2-routing-followup main merged">
+  <h2><a href="https://github.com/burnigtm/jev-mcp/pull/6">#6 test: add MCP performance benchmark suite</a> <span class="badge MERGED">MERGED</span></h2>
+  <div class="row"><span>burnigtm</span><span>+296 −1 · 7 files</span><span>no checks reported</span></div>
+  <details >
+    <summary>Details</summary>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>codex/pr2-routing-followup</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-09-19T11:22:46Z · 2d ago</td></tr><tr><td>Merged</td><td>2026-09-19T11:22:44Z · 2d ago</td></tr><tr><td>Diff</td><td>+296 −1 · 7 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/26144ab50360f550514141b733fcbadf0ab47a26">26144ab</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/4f4ae11a5e1e9a502cdc432550d878f728851820">4f4ae11</a></td></tr></table>
+    <h3>Description</h3><p>## Summary - Add an opt-in benchmark for the compiled MCP stdio transport. - Measure all nine tools with sequential, concurrent, startup, latency, throughput, payload-size, and candidate-count scenarios. - Add deterministic mock-mode CI sanity budgets and JSON output for automation. - Add benchmark helper tests, documentation, and a scheduled/manual GitHub Actions workflow across Ubuntu/Windows and Node 20/22. ## Validation - npm run typecheck - npm run benchmark:ci - Direct ESM assertions for…</p>
+  </details>
+</article>
+<article class="card" data-pinned="false" data-state="MERGED" data-search="5 harden routing and expose typed mcp outputs burnigtm codex/pr2-routing-followup main merged">
+  <h2><a href="https://github.com/burnigtm/jev-mcp/pull/5">#5 Harden routing and expose typed MCP outputs</a> <span class="badge MERGED">MERGED</span></h2>
+  <div class="row"><span>burnigtm</span><span>+449 −70 · 26 files</span><span>no checks reported</span></div>
+  <details >
+    <summary>Details</summary>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>codex/pr2-routing-followup</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-09-19T09:13:36Z · 2d ago</td></tr><tr><td>Merged</td><td>2026-09-19T09:12:30Z · 2d ago</td></tr><tr><td>Diff</td><td>+449 −70 · 26 files</td></tr><tr><td>Commits</td><td>5</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/1be6e7529fd9ddfab15c9824fb78b21c871d752d">1be6e75</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/5d5fb6b3b14990d47219bdb8700172b3410e458a">5d5fb6b</a></td></tr></table>
+    <h3>Description</h3><p>## Summary Harden Jev routing and MCP interoperability while preserving the GitHub event-delivery workflow. ## Changes - Require probability distributions to support reported confidence before any automatic policy decision. - Apply the coherence guard to evaluate, coding-loop, review, verify, and gate paths. - Add typed MCP output schemas and structuredContent parity for all nine tools, including the fused step router. - Redact tool-route argument values from upstream judgment state while prese…</p>
+  </details>
+</article>
+<article class="card" data-pinned="false" data-state="MERGED" data-search="4 add jev_step: one request for the coding-loop turn and the prepared-call selection burnigtm cursor/fused-jev-step-router-bde8 main merged">
+  <h2><a href="https://github.com/burnigtm/jev-mcp/pull/4">#4 Add jev_step: one request for the coding-loop turn and the prepared-call selection</a> <span class="badge MERGED">MERGED</span></h2>
+  <div class="row"><span>burnigtm</span><span>+858 −92 · 19 files</span><span>no checks reported</span></div>
+  <details >
+    <summary>Details</summary>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>cursor/fused-jev-step-router-bde8</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-09-18T18:37:36Z · 2d ago</td></tr><tr><td>Merged</td><td>2026-09-18T18:37:36Z · 2d ago</td></tr><tr><td>Diff</td><td>+858 −92 · 19 files</td></tr><tr><td>Commits</td><td>2</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/05325ae8285bcb32d27864c411a3133f7d656902">05325ae</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/dd2e639f74db940c6aee994fe6db5bd21d1ec6ee">dd2e639</a></td></tr></table>
+    <h3>Description</h3><p>## What Adds `jev_step`, a ninth MCP tool that answers the coding-loop and prepared-call recipes in **one** Jev request. Today a loop iteration costs two MCP round-trips: `jev_coding_loop` returns `handoff: use_tools`, then the host calls `jev_tool_route` to learn *which* prepared call to run. Each round-trip spends a host-model turn to issue the call and interpret the JSON. TypeSafe evaluates every question in a request in parallel and in isolation, so both answers can come from a single reque…</p>
+  </details>
+</article>
+<article class="card" data-pinned="false" data-state="MERGED" data-search="3 fix routing confidence gaps and probability boundaries from pr #2 burnigtm codex/pr2-routing-followup main merged">
+  <h2><a href="https://github.com/burnigtm/jev-mcp/pull/3">#3 Fix routing confidence gaps and probability boundaries from PR #2</a> <span class="badge MERGED">MERGED</span></h2>
+  <div class="row"><span>burnigtm</span><span>+125 −8 · 8 files</span><span>no checks reported</span></div>
+  <details >
+    <summary>Details</summary>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>codex/pr2-routing-followup</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-09-18T17:19:27Z · 3d ago</td></tr><tr><td>Merged</td><td>2026-09-18T17:19:27Z · 3d ago</td></tr><tr><td>Diff</td><td>+125 −8 · 8 files</td></tr><tr><td>Commits</td><td>2</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/31aa49a9e999349ad01573dc65a0f3a1d4c84f20">31aa49a</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/472e532a8478ee360f0e9adcafd6956c2ce146bc">472e532</a></td></tr></table>
+    <h3>Description</h3><p>PR #2 is merged and its existing checks passed, but review reproduced two routing gaps: - A provider can report high confidence alongside a tied or weak probability distribution. The prepared-call router could still return `execute_tool`, and the coding loop could request a partner. Both now require an independent distribution-concentration check in addition to the existing confidence floor. This is a conservative local policy guard; reported provider fields remain unchanged. It may send more b…</p>
+  </details>
+</article>
+<article class="card" data-pinned="false" data-state="MERGED" data-search="2 harden jev reliability and completion gates burnigtm codex/reliability-and-completion-gate main merged">
+  <h2><a href="https://github.com/burnigtm/jev-mcp/pull/2">#2 Harden Jev reliability and completion gates</a> <span class="badge MERGED">MERGED</span></h2>
+  <div class="row"><span>burnigtm</span><span>+1128 −37 · 17 files</span><span>no checks reported</span></div>
+  <details >
+    <summary>Details</summary>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>codex/reliability-and-completion-gate</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-09-18T16:39:12Z · 3d ago</td></tr><tr><td>Merged</td><td>2026-09-18T16:39:12Z · 3d ago</td></tr><tr><td>Diff</td><td>+1128 −37 · 17 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/baf29479adf4413e9fc527d68ea0360657a29b2a">baf2947</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/2f9edcdb164c7aaa969d03bf77d33aae36be30e8">2f9edcd</a></td></tr></table>
+    <h3>Description</h3><p>## Summary - Add typed routing, policy, limits, screening, ranking, review, verification, and coding-loop safeguards - Expand packs, mock support, configuration, CLI behavior, documentation, and CI coverage - Add comprehensive unit, integration, installer, transport, and live end-to-end tests ## Testing - Comprehensive test suite covering CLI, runtime, MCP transport, policy, limits, tools, packs, and installation - CI workflow and live end-to-end validation configured</p>
+  </details>
+</article>
+<article class="card" data-pinned="false" data-state="MERGED" data-search="1 harden jev reliability and add a combined completion gate burnigtm codex/reliability-and-completion-gate main merged">
+  <h2><a href="https://github.com/burnigtm/jev-mcp/pull/1">#1 Harden Jev reliability and add a combined completion gate</a> <span class="badge MERGED">MERGED</span></h2>
+  <div class="row"><span>burnigtm</span><span>+2047 −462 · 45 files</span><span>no checks reported</span></div>
+  <details >
+    <summary>Details</summary>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>codex/reliability-and-completion-gate</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-09-18T03:51:39Z · 3d ago</td></tr><tr><td>Merged</td><td>2026-09-18T03:51:39Z · 3d ago</td></tr><tr><td>Diff</td><td>+2047 −462 · 45 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/26fdcd231d7c55c25d3de0bcebb16ac5890b3eb1">26fdcd2</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/c619e101296ac08875c5f4cef772e3dd2cd6638f">c619e10</a></td></tr></table>
+    <h3>Description</h3><p>## Summary Large or truncated inputs could previously produce automatic decisions without complete context, ranking could lose candidate identity or exceed request limits, and upstream failures were not consistently bounded or validated. This change makes those cases explicit and adds a combined completion gate. - Add `jev_gate` and its question-pack resource to review a diff and verify completion claims in one upstream request. Approval requires complete context, accepted review, and confident…</p>
+  </details>
+</article>
+</main>
+<script id="watch-data" type="application/json">{"source": "github-api", "refreshedAt": "2026-09-21T17:48:44Z"}</script>
+<script>
+const q = document.getElementById("q");
+let filter = "all";
+function apply() {
+  const query = q.value.trim().toLowerCase();
+  document.querySelectorAll("article.card").forEach((card) => {
+    const pinned = card.dataset.pinned === "true";
+    const stateOk = filter === "all" || card.dataset.state === filter;
+    const textOk = !query || (card.dataset.search || "").includes(query);
+    card.hidden = pinned ? false : !(stateOk && textOk);
+  });
+}
+document.querySelectorAll("[data-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    filter = button.dataset.filter || "all";
+    document.querySelectorAll("[data-filter]").forEach((item) => item.setAttribute("aria-pressed", item === button ? "true" : "false"));
+    apply();
+  });
+});
+q.addEventListener("input", apply);
+document.getElementById("refresh").addEventListener("click", async () => {
+  const button = document.getElementById("refresh");
+  button.disabled = true;
+  button.textContent = "Refreshing";
+  try {
+    const response = await fetch("/api/refresh", { method: "POST" });
+    if (!response.ok) throw new Error(String(response.status));
+    location.reload();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = "Refresh needs the watch server";
+  }
+});
+</script>
+</body>
+</html>
