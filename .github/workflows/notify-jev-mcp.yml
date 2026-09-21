@@ -1,7 +1,7 @@
 # GitHub event delivery for the Jev_MCP Project (replaces polling).
 # Secret CURSOR_API_KEY: full User API Key from https://cursor.com/dashboard/api create dialog.
 # Optional variable CURSOR_JEV_MCP_AGENT_ID overrides the default Project id.
-# Also publishes docs/github-watch.md on branch cursor-watch (does not push main).
+# Also publishes docs/github-watch.md and docs/github-watch.html on branch cursor-watch (does not push main).
 #
 # Notify never executes pull-request head code. pull_request_target loads this
 # workflow from the default branch. Both jobs check out only
