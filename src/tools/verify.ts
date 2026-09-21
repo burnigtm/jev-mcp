@@ -3,7 +3,7 @@ import { getConfig } from "../config.js";
 import { JevBudgetError } from "../errors.js";
 import { MAX_CLAIMS } from "../limits.js";
 import { verifyQuestions } from "../packs/verify.js";
-import { actionFromConfidence, confidenceSupportsAuto, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
+import { actionFromConfidence, confidenceSupportsAuto, requireCompleteContext, tightenJudgmentThresholds, validatePolicyThresholds } from "../policy.js";
 import { asChoice } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import type { PolicyAction } from "../policy.js";
@@ -32,7 +32,7 @@ export async function runVerify(input: VerifyInput, context?: ToolContext) {
     throw new JevBudgetError(`Verification accepts at most ${MAX_CLAIMS} claims per request. Split the claims before verifying.`);
   }
   const config = getConfig();
-  const autoAccept = input.auto_accept ?? config.autoAccept;
+  const { autoAccept } = tightenJudgmentThresholds(input.auto_accept, undefined, config.autoAccept, config.reviewAt);
   validatePolicyThresholds(autoAccept, Math.min(0.5, autoAccept));
   const result = await systemOne({
     state: {

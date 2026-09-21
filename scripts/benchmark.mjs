@@ -131,9 +131,18 @@ async function measure(client, label, name, arguments_, samples, concurrency = 1
   return summarize(label, values, performance.now() - start);
 }
 
-async function benchmark(options) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key, value]) => value !== undefined && !/^(JEV_MCP_|TYPESAFE_)/.test(key)));
+export function childEnv(source = process.env) {
+  const env = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value !== "string") continue;
+    if (key === "PATH" || key === "SystemRoot" || key.startsWith("NODE_")) env[key] = value;
+  }
   env.JEV_MCP_MOCK = "1";
+  return env;
+}
+
+async function benchmark(options) {
+  const env = childEnv();
   const transport = new StdioClientTransport({ command: process.execPath, args: [entrypoint], cwd: root, env, stderr: "pipe" });
   const client = new Client({ name: "jev-mcp-performance", version: "0" });
   let stderr = "";
@@ -176,7 +185,7 @@ async function benchmark(options) {
     await client.close().catch(() => undefined);
   }
 
-  if (stderr.trim()) throw new Error(`Benchmark server wrote to stderr:\n${stderr}`);
+  if (stderr.trim()) throw new Error(`Benchmark server wrote to stderr (${stderr.length} bytes).`);
   return {
     version: 1,
     generated_at: new Date().toISOString(),

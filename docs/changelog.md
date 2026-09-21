@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Benchmark and dashboard output
+
+- The performance benchmark starts the MCP server with an allowlisted environment (`PATH`, `NODE_*`, `SystemRoot`) and `JEV_MCP_MOCK=1`. It does not pass `GITHUB_TOKEN`, and it does not print raw server stderr.
+- The GitHub watch dashboard writes `unavailable` when `gh pr list` fails or no token is present. A successful empty list stays `none`. Pull request titles are escaped and length-capped before they enter a markdown table. The publish job already requests `pull-requests: read`.
+- Notify exits 1 when the Cursor key is missing or the POST never succeeds. The dashboard job still runs with `if: always()`.
+
+### Client bounds for URL, deadline, and token estimates
+
+- The default API root is `https://api.typesafe.ai`. Another public HTTPS host requires `JEV_MCP_ALLOW_CUSTOM_BASE_URL=1`. HTTP is loopback only. Userinfo, queries, fragments, and non-public or obfuscated addresses are rejected, and the value is stored as origin plus path.
+- Each TypeSafe attempt uses the time remaining on the tool deadline, does not retry its own timeout, and does not follow redirects. 429 and 5xx retries stay on the same cancellation signal.
+- Per-call `auto_accept` and `review_at` can only rise relative to the environment. Screen `block_at` can only fall, so a call cannot loosen the block floor.
+- Token estimates charge at least one token per non-ASCII character. Provider `input_tokens` above the total budget force incomplete coverage, so evaluate cannot auto.
+
+### Selection, review, and rank cannot auto past a failed check
+
+- `jev_step` passes only a locally dispatchable call into partner routing. A host `prepared_tool_call` flag no longer skips uncertain selection, external or destructive effects, or a confident `none`. Empty and wholly ineligible lists are not `auto` and do not open a partner turn.
+- `ask_user` requires the same distribution check as continue and retry. A flat distribution stays in review.
+- Review and gate `auto` now requires each dimension to clear a floor: correctness and spec at least 1, test gap and blast radius at most 1, on the 0–2 score scale. A weighted sum of 0.7 is not enough.
+- `jev_rank` returns `auto` only when final-round `exists` meets `auto_accept` and the `best` choice distribution supports that confidence. `partial` stays `review`. Tournament `exists` comes from the final round only.
+- A candidate description clipped at 2,000 characters is incomplete coverage and cannot be dispatched. Argument values stay on the host.
+
+### GitHub notify no longer runs pull-request code
+
+- Notify triggers are `pull_request_target`, `pull_request_review`, pushes to `main`, and `workflow_dispatch` from `refs/heads/main` only. Both jobs check out the repository default branch with `persist-credentials: false` and never check out the PR head or `github.sha`.
+- `CURSOR_API_KEY` stays on the notify job (`contents: read`). The publish job has `contents: write` and `pull-requests: read` and does not receive the key. `cursor-watch` is created from the checked-out default-branch SHA.
+- The notify script posts only to `https://api.cursor.com` (`http://127.0.0.1` and `http://localhost` are allowed for tests). Other hosts, userinfo, queries, and fragments are rejected. Event fields travel as a separate JSON blob with control characters removed and a length cap. The agent must confirm a merge through the GitHub API before any push. A missing key or a POST that never succeeds exits 1. Logs say only that a key is present.
+- Required reviewers on a GitHub Environment are a repository setting the owner should turn on. The workflow does not declare an environment, because a missing one would fail notify.
+
 ### Interoperability and policy hardening
 
 - Added MCP output schemas and structured success payloads for all nine tools.

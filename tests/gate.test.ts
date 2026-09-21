@@ -9,13 +9,14 @@ import { runReview } from "../src/tools/review.ts";
 import { runVerify } from "../src/tools/verify.ts";
 import type { EvaluateResponse } from "../src/typesafe.ts";
 
-const envNames = ["JEV_MCP_MOCK", "TYPESAFE_API_KEY", "TYPESAFE_BASE_URL", "JEV_MCP_AUTO_ACCEPT", "JEV_MCP_REVIEW_AT"];
+const envNames = ["JEV_MCP_MOCK", "TYPESAFE_API_KEY", "TYPESAFE_BASE_URL", "JEV_MCP_ALLOW_CUSTOM_BASE_URL", "JEV_MCP_AUTO_ACCEPT", "JEV_MCP_REVIEW_AT"];
 const previousEnv = new Map(envNames.map((name) => [name, process.env[name]]));
 
 before(() => {
   process.env.JEV_MCP_MOCK = "0";
   process.env.TYPESAFE_API_KEY = "fixture-key";
   process.env.TYPESAFE_BASE_URL = "https://gate-fixture.invalid";
+  process.env.JEV_MCP_ALLOW_CUSTOM_BASE_URL = "1";
   process.env.JEV_MCP_AUTO_ACCEPT = "0.8";
   process.env.JEV_MCP_REVIEW_AT = "0.5";
 });
@@ -141,6 +142,21 @@ test("low-confidence claims escalate regardless of verdict", () => {
   assert.equal(gateFor([choice("verified", 0.5)]).action, "review");
 });
 
+test("a perfect weighted review cannot auto when one dimension fails its floor", () => {
+  const zeroSpec = fixture([choice()]);
+  zeroSpec.answers.spec_match = score(0);
+  const specGate = projectGate(zeroSpec, ["Claim"], 0.8, 0.5);
+  assert.equal(specGate.review.action, "review");
+  assert.notEqual(specGate.action, "auto");
+
+  const wideBlast = fixture([choice()]);
+  wideBlast.answers.test_gap = score(2);
+  wideBlast.answers.blast_radius = score(2);
+  const blastGate = projectGate(wideBlast, ["Claim"], 0.8, 0.5);
+  assert.equal(blastGate.review.action, "review");
+  assert.notEqual(blastGate.action, "auto");
+});
+
 test("unsafe patch review prevents approval even with all claims verified", () => {
   const gate = gateFor([choice()], { unsafe: true });
   assert.equal(gate.action, "escalate");
@@ -221,10 +237,11 @@ test("standalone review and verify cannot automatically approve truncated contex
   assert.equal(verification.results[0]?.action, "review");
 });
 
-test("standalone verify retains support for acceptance overrides below its usual review cutoff", async (t) => {
+test("a lower auto_accept cannot loosen the environment floor", async (t) => {
   t.mock.method(globalThis, "fetch", async () => Response.json({
     ...fixture(), answers: { claim_0: choice("verified", 0.4) },
   }));
   const result = await runVerify({ claims: ["Tests pass"], evidence: "Tests pass", auto_accept: 0.3 });
-  assert.equal(result.action, "auto");
+  assert.equal(result.thresholds.auto_accept, 0.8);
+  assert.notEqual(result.action, "auto");
 });

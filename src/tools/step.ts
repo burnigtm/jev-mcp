@@ -7,7 +7,7 @@ import {
   confidenceSupportsAuto,
   distributionSupportsConfidence,
   requireCompleteContext,
-  validatePolicyThresholds,
+  tightenJudgmentThresholds,
   worstAction,
   type PolicyAction,
 } from "../policy.js";
@@ -26,6 +26,7 @@ import {
 import {
   argumentsSchema,
   coverageSchema,
+  descriptionClipped,
   ineligibility,
   probability,
   reasonSchema,
@@ -104,9 +105,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
     if (!parsed.success) throw new JevValidationError(parsed.error.message);
     const input = parsed.data;
     const config = getConfig();
-    const autoAccept = input.auto_accept ?? config.autoAccept;
-    const reviewAt = input.review_at ?? config.reviewAt;
-    validatePolicyThresholds(autoAccept, reviewAt);
+    const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
     // Routing an executable call and buying a partner turn share one fixed floor,
     // even when callers lower their judgment thresholds.
     const dispatchAt = Math.max(0.8, autoAccept);
@@ -136,7 +135,8 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
       model: input.model,
     }, scoped);
 
-    const incomplete = result.truncated || !result.coverage.complete;
+    const clipped = eligible.some(candidate => descriptionClipped(candidate.description));
+    const incomplete = result.truncated || !result.coverage.complete || clipped;
     const answers = readCodingLoopAnswers(result);
     let policyAction = codingLoopAction({
       nextChoice: answers.next.choice,
@@ -185,9 +185,9 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
       ...routingInput(answers),
       action,
       incomplete,
-      // A dispatchable call is a prepared call, so coding policy defers to tools
-      // exactly as it does for a host-declared one.
-      execution: { ...execution, prepared_tool_call: dispatchable || execution.prepared_tool_call },
+      // Only a locally dispatchable call is prepared. The host flag must not
+      // skip confidence, effect, or confident-none checks.
+      execution: { ...execution, prepared_tool_call: dispatchable },
       autoAccept,
     });
 
@@ -210,13 +210,22 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
     // A selected external or destructive call needs review, as in jev_tool_route.
     // Terminal, tool, and partner handoffs still outrank that.
     if (needsReview && handoff === "gather_context") handoff = "review";
+    if (reasons.includes("no_candidates") || reasons.includes("no_eligible_candidates")) {
+      const ineligible = reasons.includes("no_eligible_candidates");
+      handoff = ineligible ? "review" : "gather_context";
+      partnerModel = {
+        required: false,
+        tier: "none",
+        reason_codes: [ineligible ? "no_eligible_candidates" : "no_candidates"],
+      };
+    }
     if (!reasons.length) reasons.push("accepted");
 
     return stepOutputSchema.parse({
       model: result.model,
       usage: result.usage,
       truncated: result.truncated,
-      coverage: result.coverage,
+      coverage: clipped ? { ...result.coverage, complete: false } : result.coverage,
       action: worstAction([action, selectionVerdict]),
       handoff,
       call,
@@ -245,6 +254,7 @@ function selectionAction(
   reasons: StepReason[],
   reviewAt: number,
 ): PolicyAction {
+  if (reasons.includes("no_candidates") || reasons.includes("no_eligible_candidates")) return "review";
   if (!selection) return "auto";
   if (selection.confidence < reviewAt || (selection.suitability !== null && selection.suitability < reviewAt)) return "escalate";
   return declinedForUncertainty(reasons) ? "review" : "auto";

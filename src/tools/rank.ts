@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { getConfig } from "../config.js";
 import { JevBudgetError, JevValidationError } from "../errors.js";
 import { MAX_CANDIDATE_CHARS, MAX_CHOICE_OPTIONS, MAX_RANK_CANDIDATES, TRUNCATION_MARKER, fitState, truncateText } from "../limits.js";
 import { existsVerdict, rankQuestions, type RankCandidate } from "../packs/rank.js";
+import { confidenceSupportsAuto } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, withToolContext, type ToolContext } from "../typesafe.js";
 
@@ -50,7 +52,6 @@ export async function runRank(input: RankInput, context?: ToolContext) {
       return { id, original_id: candidate.id, text };
     });
     const topK = Math.min(input.top_k ?? 5, candidates.length);
-    let existsMax = 0;
     let inputTokens = 0;
     let outputTokens = 0;
     let firstRoundChunks = 0;
@@ -78,14 +79,13 @@ export async function runRank(input: RankInput, context?: ToolContext) {
         truncated = truncated || partial.truncated;
         inputTokens += partial.usage.input_tokens;
         outputTokens += partial.usage.output_tokens;
-        existsMax = Math.max(existsMax, partial.exists);
 
         if (groups.length === 1) {
           return {
             ...partial,
             action: truncated ? ("review" as const) : partial.action,
-            exists: existsMax,
-            exists_verdict: existsVerdict(existsMax),
+            exists: partial.exists,
+            exists_verdict: existsVerdict(partial.exists),
             winner: originalIds.get(partial.winner)!,
             top: partial.top.map((hit) => ({ ...hit, id: originalIds.get(hit.id)! })),
             usage: { input_tokens: inputTokens, output_tokens: outputTokens },
@@ -156,12 +156,14 @@ async function rankOne(query: string, candidates: InternalCandidate[], topK: num
     .map(([id, probability]) => ({ id, probability }))
     .sort((a, b) => b.probability - a.probability);
   const top = ranked.slice(0, Math.min(topK, ranked.length));
+  const autoAccept = getConfig().autoAccept;
+  const answered = exists >= autoAccept && confidenceSupportsAuto(best.confidence, best.probabilities, autoAccept);
   return {
     model: result.model,
     usage: result.usage,
     truncated: result.truncated,
     coverage: result.coverage,
-    action: exists >= 0.4 ? ("auto" as const) : ("review" as const),
+    action: answered ? ("auto" as const) : ("review" as const),
     exists,
     exists_verdict: existsVerdict(exists),
     winner: best.choice,

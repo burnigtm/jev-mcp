@@ -4,11 +4,37 @@ import {
   type SystemOneRequest,
   type SystemOneResult,
 } from "@typesafe-ai/sdk";
-import { getConfig } from "./config.js";
+import { getConfig, type JevConfig } from "./config.js";
 import { JevCancelledError, JevConfigError, JevResponseError, JevTimeoutError } from "./errors.js";
-import { fitState, type Coverage } from "./limits.js";
+import { fitState, MAX_TOTAL_TOKENS, type Coverage, type FitResult } from "./limits.js";
 import { mockSystemOne } from "./mock.js";
 import { validateResponse } from "./responses.js";
+
+function attemptTimeoutMs(context: ToolContext, timeoutMs: number): number {
+  const deadline = context.deadline ?? Date.now() + timeoutMs;
+  return Math.max(1, Math.min(timeoutMs, deadline - Date.now()));
+}
+
+function createClient(config: JevConfig, context: ToolContext, model: string): TypeSafeClient {
+  return new TypeSafeClient({
+    apiKey: config.apiKey,
+    baseURL: config.baseURL,
+    defaultModel: model,
+    logLevel: "off",
+    logger: stderrLogger,
+    timeout: attemptTimeoutMs(context, config.timeoutMs),
+    retry: { apiTimeoutError: false },
+    fetch: (input, init) => fetch(input, { ...init, redirect: "error" }),
+  });
+}
+
+function applyProviderBudget(fitted: FitResult, inputTokens: number): { truncated: boolean; coverage: Coverage } {
+  const overBudget = inputTokens > MAX_TOTAL_TOKENS;
+  return {
+    truncated: fitted.truncated || overBudget,
+    coverage: overBudget ? { ...fitted.coverage, complete: false } : fitted.coverage,
+  };
+}
 
 const stderrLogger = {
   debug(message: string, ...args: unknown[]) {
@@ -91,7 +117,8 @@ async function evaluate<Q extends Questions>(request: EvaluateRequest<Q>, contex
 
   if (config.mock) {
     const result = mockSystemOne({ ...payload, model });
-    return { ...validateResponse(result, request.questions), truncated: fitted.truncated, coverage: fitted.coverage };
+    const bounded = applyProviderBudget(fitted, validateResponse(result, request.questions).usage.input_tokens);
+    return { ...validateResponse(result, request.questions), ...bounded };
   }
 
   if (!config.apiKey) {
@@ -100,16 +127,11 @@ async function evaluate<Q extends Questions>(request: EvaluateRequest<Q>, contex
     );
   }
 
-  const client = new TypeSafeClient({
-    apiKey: config.apiKey,
-    baseURL: config.baseURL,
-    defaultModel: model,
-    logLevel: "off",
-    logger: stderrLogger,
-  });
+  const client = createClient(config, context, model);
   try {
     const result = await client.systemOne(payload, { signal: context.signal });
-    return { ...validateResponse(result, request.questions), truncated: fitted.truncated, coverage: fitted.coverage };
+    const validated = validateResponse(result, request.questions);
+    return { ...validated, ...applyProviderBudget(fitted, validated.usage.input_tokens) };
   } catch (err) {
     if (err instanceof SyntaxError) throw new JevResponseError();
     throw err;
@@ -130,13 +152,7 @@ async function listModelsWithinDeadline(context: ToolContext): Promise<string[]>
       "Missing TYPESAFE_API_KEY. Set it in the MCP env, or set JEV_MCP_MOCK=1.",
     );
   }
-  const client = new TypeSafeClient({
-    apiKey: config.apiKey,
-    baseURL: config.baseURL,
-    defaultModel: config.model,
-    logLevel: "off",
-    logger: stderrLogger,
-  });
+  const client = createClient(config, context, config.model);
   const models = await client.models.list({ signal: context.signal });
   if (!models.every(model => typeof model?.name === "string" && model.name.length > 0)) throw new JevResponseError();
   return models.map((model) => model.name);

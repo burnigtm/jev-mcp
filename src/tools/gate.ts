@@ -3,7 +3,7 @@ import { getConfig } from "../config.js";
 import { JevBudgetError } from "../errors.js";
 import { gateQuestions } from "../packs/gate.js";
 import { MAX_CLAIMS } from "../limits.js";
-import { confidenceSupportsAuto, requireCompleteContext, validatePolicyThresholds, worstAction, type PolicyAction } from "../policy.js";
+import { confidenceSupportsAuto, requireCompleteContext, tightenJudgmentThresholds, worstAction, type PolicyAction } from "../policy.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { projectReview } from "./review.js";
 import { evidenceSchema, projectClaims, summarizeClaims } from "./verify.js";
@@ -97,9 +97,7 @@ export async function runGate(input: GateInput, context?: ToolContext) {
     throw new JevBudgetError(`The completion gate accepts at most ${MAX_CLAIMS} claims per request. Split the claims before gating.`);
   }
   const config = getConfig();
-  const autoAccept = input.auto_accept ?? config.autoAccept;
-  const reviewAt = input.review_at ?? config.reviewAt;
-  validatePolicyThresholds(autoAccept, reviewAt);
+  const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
   const result = await systemOne({
     state: {
       request: input.request,

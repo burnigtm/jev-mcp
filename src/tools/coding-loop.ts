@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { codingLoopQuestions } from "../packs/coding-loop.js";
-import { codingLoopAction, confidenceSupportsAuto, distributionSupportsConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
+import { codingLoopAction, confidenceSupportsAuto, distributionSupportsConfidence, requireCompleteContext, tightenJudgmentThresholds } from "../policy.js";
 import { asChoice, asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 
@@ -38,9 +38,7 @@ export type ExecutionFacts = { prepared_tool_call: boolean; context_complete: bo
 
 export async function runCodingLoop(input: CodingLoopInput, context?: ToolContext) {
   const config = getConfig();
-  const autoAccept = input.auto_accept ?? config.autoAccept;
-  const reviewAt = input.review_at ?? config.reviewAt;
-  validatePolicyThresholds(autoAccept, reviewAt);
+  const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
   const execution = {
     prepared_tool_call: input.execution?.prepared_tool_call ?? false,
     context_complete: input.execution?.context_complete ?? false,
@@ -182,8 +180,9 @@ export function partnerRouting(input: {
     return input.action === "auto" ? defer("stop", "terminal_stop") : defer("review", "stop_requires_review");
   }
   if (input.next === "ask_user") {
-    return input.nextConfidence >= input.autoAccept
-      ? defer("ask_user", "user_input_required") : defer("review", "next_step_uncertain");
+    const supported = input.nextConfidence >= input.autoAccept
+      && distributionSupportsConfidence(input.nextProbabilities, input.autoAccept);
+    return supported ? defer("ask_user", "user_input_required") : defer("review", "next_step_uncertain");
   }
   if (input.next !== "continue" && input.next !== "retry") return defer("review", "next_step_uncertain");
   if (input.action !== "auto") return defer("review", "coding_policy_requires_review");

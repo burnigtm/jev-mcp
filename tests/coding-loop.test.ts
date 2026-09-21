@@ -5,13 +5,14 @@ import { codingLoopQuestions } from "../src/packs/coding-loop.ts";
 import { codingLoopInputSchema, runCodingLoop } from "../src/tools/coding-loop.ts";
 import { errorDetails } from "../src/errors.ts";
 
-const envNames = ["JEV_MCP_MOCK", "TYPESAFE_API_KEY", "TYPESAFE_BASE_URL", "JEV_MCP_AUTO_ACCEPT", "JEV_MCP_REVIEW_AT"];
+const envNames = ["JEV_MCP_MOCK", "TYPESAFE_API_KEY", "TYPESAFE_BASE_URL", "JEV_MCP_ALLOW_CUSTOM_BASE_URL", "JEV_MCP_AUTO_ACCEPT", "JEV_MCP_REVIEW_AT"];
 const previousEnv = new Map(envNames.map(name => [name, process.env[name]]));
 
 before(() => {
   process.env.JEV_MCP_MOCK = "0";
   process.env.TYPESAFE_API_KEY = "fixture-key";
   process.env.TYPESAFE_BASE_URL = "https://coding-loop-fixture.invalid";
+  process.env.JEV_MCP_ALLOW_CUSTOM_BASE_URL = "1";
   process.env.JEV_MCP_AUTO_ACCEPT = "0.8";
   process.env.JEV_MCP_REVIEW_AT = "0.5";
 });
@@ -162,6 +163,22 @@ test("two or more failed attempts gather context without repeating tools or esca
     assert.deepEqual(result.partner_model.reason_codes, ["repeated_failures"]);
     assert.equal(result.partner_model.required, false);
   }
+});
+
+test("a flat ask_user distribution does not hand off to the user", async t => {
+  t.mock.method(globalThis, "fetch", async () => {
+    const response = fixture({ next: "ask_user", nextConfidence: 0.99 });
+    const keys = Object.keys(response.answers.next.probabilities);
+    const flat = 1 / keys.length;
+    response.answers.next.probabilities = Object.fromEntries(keys.map(key => [key, flat]));
+    response.answers.next.confidence = 0.99;
+    return Response.json(response);
+  });
+  const result = await runCodingLoop(input);
+  assert.equal(result.handoff, "review");
+  assert.notEqual(result.handoff, "ask_user");
+  assert.equal(result.partner_model.required, false);
+  assert.deepEqual(result.partner_model.reason_codes, ["next_step_uncertain"]);
 });
 
 test("terminal stop and user input never invoke a partner", async t => {

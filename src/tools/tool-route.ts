@@ -3,7 +3,7 @@ import { getConfig } from "../config.js";
 import { JevValidationError } from "../errors.js";
 import { MAX_CANDIDATE_CHARS, truncateText } from "../limits.js";
 import { toolRouteQuestions } from "../packs/tool-route.js";
-import { distributionSupportsConfidence, validatePolicyThresholds, type PolicyAction } from "../policy.js";
+import { distributionSupportsConfidence, tightenJudgmentThresholds, type PolicyAction } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, withToolContext, type ToolContext } from "../typesafe.js";
 
@@ -118,8 +118,17 @@ function argumentShape(value: unknown, depth = 0): unknown {
   return { type: typeof value };
 }
 
+function normalizedDescription(description: string): string {
+  return description.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function sanitizeDescription(description: string): string {
-  return truncateText(description.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim(), MAX_CANDIDATE_CHARS);
+  return truncateText(normalizedDescription(description), MAX_CANDIDATE_CHARS);
+}
+
+/** A clipped description is incomplete coverage for that candidate. */
+export function descriptionClipped(description: string): boolean {
+  return normalizedDescription(description).length > MAX_CANDIDATE_CHARS;
 }
 
 export function projectCandidateForJudgment(candidate: ToolCandidate): JudgeCandidate {
@@ -138,9 +147,7 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
     if (!parsed.success) throw new JevValidationError(parsed.error.message);
     const input = parsed.data;
     const config = getConfig();
-    const autoAccept = input.auto_accept ?? config.autoAccept;
-    const reviewAt = input.review_at ?? config.reviewAt;
-    validatePolicyThresholds(autoAccept, reviewAt);
+    const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
     // Routing executable calls has a fixed safety floor, even with permissive judgment thresholds.
     const dispatchAt = Math.max(0.8, autoAccept);
     const blocked: Array<{ id: string; reason_codes: Reason[] }> = [];
@@ -176,7 +183,8 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
     const candidate = candidates[index];
     const suitability = candidate ? asNoul(result.answers[`suitable_${index}`]).noul : null;
     const reasons: Reason[] = [];
-    const incomplete = result.truncated || !result.coverage.complete;
+    const clipped = candidates.some(candidate => descriptionClipped(candidate.description));
+    const incomplete = result.truncated || !result.coverage.complete || clipped;
     if (incomplete) reasons.push("incomplete_context");
     if (selected.confidence < dispatchAt || !distributionSupportsConfidence(selected.probabilities, dispatchAt)) reasons.push("selection_uncertain");
     if (!candidate) reasons.push("no_suitable_call");
@@ -189,7 +197,8 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
       ? { candidate_id: candidate.id, name: candidate.name, arguments: candidate.arguments }
       : null;
     return toolRouteOutputSchema.parse({
-      ...shared, model: result.model, usage: result.usage, truncated: result.truncated, coverage: result.coverage,
+      ...shared, model: result.model, usage: result.usage, truncated: result.truncated,
+      coverage: clipped ? { ...result.coverage, complete: false } : result.coverage,
       action, handoff: call ? "execute_tool" : needsReview ? "review" : "gather_context", call,
       selection: { id: candidate?.id ?? null, confidence: selected.confidence, suitability },
       reason_codes: reasons.length ? reasons : ["accepted"],

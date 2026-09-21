@@ -4,10 +4,14 @@ import { test } from "node:test";
 import type { Questions } from "@typesafe-ai/sdk";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { mock } from "node:test";
+import { TypeSafeClient } from "@typesafe-ai/sdk";
 import { createJevServer } from "../src/server.ts";
 import { systemOne, withToolContext } from "../src/typesafe.ts";
 import { mockSystemOne } from "../src/mock.ts";
 import { errorDetails } from "../src/errors.ts";
+import { MAX_TOTAL_TOKENS } from "../src/limits.ts";
+import { runEvaluate } from "../src/tools/evaluate.ts";
 
 type Payload = { state: unknown; questions: Questions; model: string };
 type Handler = (payload: Payload, response: ServerResponse, attempt: number) => void;
@@ -38,6 +42,21 @@ async function withApi<T>(handler: Handler, operation: (calls: () => number) => 
     server.closeAllConnections();
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
+}
+
+function errorChain(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 6 && current; depth += 1) {
+    if (current instanceof Error) {
+      parts.push(current.message);
+      current = current.cause;
+    } else {
+      parts.push(String(current));
+      break;
+    }
+  }
+  return parts.join(" ");
 }
 
 const request = { state: "Test fixture", questions: { ok: { type: "noul" as const, instructions: "Is this a test?" } } };
@@ -171,6 +190,52 @@ test("MCP cancellation reaches the active HTTP request", async () => {
         await Promise.race([closedPromise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("HTTP request was not cancelled")), 2_000); })]);
       } finally { clearTimeout(timer!); }
     } finally { await client.close(); await server.close(); }
+  });
+});
+
+test("SDK attempt timeout is the remaining deadline and timeouts are not retried", async () => {
+  const seen: number[] = [];
+  let retryTimeout = true;
+  mock.method(TypeSafeClient.prototype, "systemOne", async function (this: TypeSafeClient, request: Payload) {
+    seen.push(this.timeout);
+    retryTimeout = this.retry.apiTimeoutError;
+    return mockSystemOne(request);
+  });
+  try {
+    await withApi(() => undefined, async () => {
+      await systemOne(request);
+    }, 30_000);
+  } finally {
+    mock.restoreAll();
+  }
+  assert.equal(seen.length, 1);
+  assert.ok(seen[0]! > 10_000 && seen[0]! <= 30_000);
+  assert.equal(retryTimeout, false);
+});
+
+test("the client refuses redirects instead of following the API key", async () => {
+  await withApi((_payload, response) => {
+    response.writeHead(302, { location: "http://127.0.0.1:9/collect-key" });
+    response.end();
+  }, async calls => {
+    await assert.rejects(systemOne(request), (error: unknown) => /redirect/i.test(errorChain(error)));
+    assert.ok(calls() >= 1 && calls() <= 3);
+  });
+});
+
+test("provider input_tokens above the budget keep evaluate from auto", async () => {
+  await withApi((payload, response) => {
+    const body = mockSystemOne(payload);
+    body.usage.input_tokens = MAX_TOTAL_TOKENS + 1;
+    send(response, body);
+  }, async () => {
+    const result = await runEvaluate({
+      state: "Tests pass and the change is complete.",
+      questions: { ok: { type: "noul", instructions: "Is this fine?" } },
+    });
+    assert.equal(result.coverage.complete, false);
+    assert.equal(result.truncated, true);
+    assert.notEqual(result.action, "auto");
   });
 });
 

@@ -31,6 +31,15 @@ test("tiny allowances never append beyond their cap or split surrogate pairs", (
   assert.equal(result, `abc${TRUNCATION_MARKER}`);
 });
 
+test("non-ASCII text costs at least one token per character and still fits the budget", () => {
+  const dense = "密钥".repeat(10);
+  assert.ok(estimateTokens(dense) >= dense.length);
+  assert.equal(estimateTokens("abcd"), 1);
+  const fitted = fitState(dense.repeat(20_000), questions);
+  assert.equal(fitted.coverage.complete, false);
+  assert.ok(estimateTokens(fitted.state) <= MAX_STATE_PLUS_LONGEST_QUESTION_TOKENS);
+});
+
 test("exactly fitting state retains object identity and complete coverage", () => {
   const state = { evidence: "short" };
   const result = fitState(state, questions);

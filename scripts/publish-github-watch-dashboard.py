@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -48,6 +49,22 @@ def request(method: str, url: str, data: dict | None = None) -> tuple[int, dict 
         return err.code, parsed, raw
 
 
+def default_branch_sha() -> str:
+    """SHA of the checked-out default branch. Never GITHUB_SHA on PR events.
+
+    pull_request and pull_request_review set GITHUB_SHA to the merge commit.
+    The workflow checks out the default branch and passes that commit as
+    WATCH_BASE_SHA. A local fallback reads HEAD of this checkout only.
+    """
+    explicit = (os.environ.get("WATCH_BASE_SHA") or "").strip()
+    if explicit:
+        return explicit
+    try:
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, timeout=10).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
 def main() -> int:
     if not token():
         print("No GITHUB_TOKEN; skip dashboard publish.", file=sys.stderr)
@@ -57,11 +74,11 @@ def main() -> int:
         print("docs/github-watch.md missing; skip publish.", file=sys.stderr)
         return 0
     content = base64.b64encode(markdown.read_bytes()).decode("ascii")
-    sha = os.environ.get("GITHUB_SHA") or ""
+    sha = default_branch_sha()
     code, _, raw = request("GET", f"https://api.github.com/repos/{REPO}/git/ref/heads/{BRANCH}")
     if code == 404:
         if not sha:
-            print("No GITHUB_SHA to create cursor-watch.", file=sys.stderr)
+            print("No checked-out default-branch SHA to create cursor-watch.", file=sys.stderr)
             return 1
         create_code, _, create_raw = request(
             "POST",

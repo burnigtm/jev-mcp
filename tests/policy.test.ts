@@ -76,8 +76,32 @@ test("review composite weights correctness highest", () => {
 
 test("reviewAction escalates unsafe patches", () => {
   assert.equal(
-    reviewAction({ composite: 0.9, safeToApply: 0.2, minConfidence: 0.9 }),
+    reviewAction({
+      composite: 0.9,
+      safeToApply: 0.2,
+      minConfidence: 0.9,
+      correctness: 2,
+      specMatch: 2,
+      testGap: 0,
+      blastRadius: 0,
+    }),
     "escalate",
+  );
+});
+
+test("reviewAction auto requires every dimension to clear its floor", () => {
+  const shared = { safeToApply: 0.95, minConfidence: 0.95, autoAccept: 0.8, reviewAt: 0.5 };
+  assert.equal(
+    reviewAction({ ...shared, composite: 0.7, correctness: 2, specMatch: 0, testGap: 0, blastRadius: 0 }),
+    "review",
+  );
+  assert.equal(
+    reviewAction({ ...shared, composite: 0.7, correctness: 2, specMatch: 2, testGap: 2, blastRadius: 2 }),
+    "review",
+  );
+  assert.equal(
+    reviewAction({ ...shared, composite: 0.7, correctness: 1, specMatch: 1, testGap: 1, blastRadius: 1 }),
+    "auto",
   );
 });
 
