@@ -225,6 +225,68 @@ test("watch dashboard escapes titles and distinguishes an empty PR list from gh 
   rmSync(rootDir, { recursive: true, force: true });
 });
 
+test("watch dashboard pins the newest pull request and keeps a snapshot when GitHub is down", async () => {
+  const { mkdtempSync, readFileSync, rmSync, writeFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const writer = fileURLToPath(new URL("../scripts/write-github-watch-dashboard.py", import.meta.url));
+  const rootDir = mkdtempSync(join(tmpdir(), "jev-watch-rich-"));
+  const fixture = join(rootDir, "pulls.json");
+  const out = join(rootDir, "github-watch.md");
+  const html = join(rootDir, "github-watch.html");
+  writeFileSync(
+    fixture,
+    JSON.stringify({
+      pulls: [
+        { number: 3, title: "Older change", state: "MERGED", url: "https://example.com/3", user: "ada", updated_at: "2026-09-21T18:00:00Z" },
+        {
+          number: 7,
+          title: "Fix jev-mcp audit findings <script>",
+          state: "MERGED",
+          url: "https://example.com/7",
+          user: "burnigtm",
+          head: "cursor/jev-audit-fixes-ops",
+          base: "main",
+          additions: 969,
+          deletions: 151,
+          changed_files: 35,
+          commits: [{ sha: "b92f9a01", message: "fix: keep benchmark env bounded", url: "https://example.com/commit/b92f9a01" }],
+          checks: [{ name: "test", state: "success", url: "https://example.com/checks/test" }],
+          files: [{ filename: "scripts/write-github-watch-dashboard.py", status: "modified", additions: 10, deletions: 2 }],
+          merged_at: "2026-09-21T17:37:31Z",
+        },
+      ],
+    }),
+  );
+  const run = (args: string[], env: Record<string, string>) => new Promise<{ status: number | null; stderr: string }>(resolve => {
+    const child = spawn("python3", [writer, ...args], { cwd: root, env: { ...process.env, GH_TOKEN: "", GITHUB_TOKEN: "", ...env } });
+    let stderr = "";
+    child.stderr.on("data", chunk => { stderr += String(chunk); });
+    child.on("close", status => resolve({ status, stderr }));
+  });
+  const listed = await run(["--out", out, "--html", html, "--fixture", fixture], { EVENT_NAME: "push", GITHUB_REF_NAME: "main", GITHUB_SHA: "7cafc402cbd776cae55902415d84482971df17d4" });
+  assert.equal(listed.status, 0, listed.stderr);
+  const text = readFileSync(out, "utf8");
+  const latestAt = text.indexOf("**Latest pull request:**");
+  assert.ok(latestAt >= 0 && latestAt < text.indexOf("## Merged"));
+  assert.match(text.slice(0, text.indexOf("## Open")), /#7 Fix jev-mcp audit findings/);
+  assert.match(text, /fix: keep benchmark env bounded/);
+  assert.match(text, /scripts\/write-github-watch-dashboard\.py/);
+  assert.doesNotMatch(text, /<script>/);
+  const page = readFileSync(html, "utf8");
+  assert.match(page, /id="q"/);
+  assert.match(page, /data-pinned="true"/);
+  assert.match(page, /data-filter="MERGED"/);
+  assert.doesNotMatch(page, /<script>alert/);
+  assert.match(page, /#7 Fix jev-mcp audit findings &lt;script&gt;/);
+  const saved = await run(["--out", out, "--html", html, "--previous", out], { EVENT_NAME: "workflow_dispatch", GITHUB_REF_NAME: "main", GITHUB_SHA: "7cafc402cbd776cae55902415d84482971df17d4" });
+  assert.equal(saved.status, 0, saved.stderr);
+  const again = readFileSync(out, "utf8");
+  assert.match(again, /GitHub list unavailable/);
+  assert.match(again, /#7 Fix jev-mcp audit findings/);
+  rmSync(rootDir, { recursive: true, force: true });
+});
+
 test("notify script fails when busy retries are exhausted", async () => {
   await withServer(
     () => ({ status: 409, body: JSON.stringify({ code: "error", message: "agent_busy" }) }),

@@ -50,7 +50,8 @@
 
 - Added `.github/workflows/notify-jev-mcp.yml` so GitHub PR/merge events POST into the Jev_MCP Cloud Agent instead of a polling timer. Requires repository secret `CURSOR_API_KEY`.
 - Notify sends HTTP Basic auth on the first request (same as `curl -u KEY:`), strips whitespace/quotes, and rejects masked dashboard table values that Cursor reports as `Invalid User API Key`.
-- Notify also writes a live dashboard (`docs/github-watch.md` on branch `cursor-watch` plus GitHub Actions job summary) and tells the Project coordinator to refresh the same file in the Cursor Project store and post a visible Project chat line, including manual `workflow_dispatch` pings.
+- Notify also writes a live dashboard (`docs/github-watch.md` and an interactive `docs/github-watch.html` on branch `cursor-watch`, plus the GitHub Actions job summary) and tells the Project coordinator to copy both files into the Cursor Project store and post a visible Project chat line, including manual `workflow_dispatch` pings.
+- The watch board always leads with the highest-numbered pull request and keeps the last saved list when GitHub cannot be read. Each pull request shows author, branches, diff size, checks, reviews, commits, and files. The HTML board adds search and open/merged/closed filters without hiding that newest pull request.
 
 ### Routing follow-up to PR #2
 
