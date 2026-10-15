@@ -23,7 +23,7 @@ Always pass `TYPESAFE_API_KEY` in the MCP `env` block. Some hosts strip inherite
 1. Copy [`examples/cursor.mcp.json`](../examples/cursor.mcp.json) to `.cursor/mcp.json` in the project (or Cursor’s user MCP settings).
 2. Set `args` to the **absolute** path of `dist/index.js` on this machine.
 3. Set `env.TYPESAFE_API_KEY`.
-4. Copy [`skills/jev-mcp/SKILL.md`](../skills/jev-mcp/SKILL.md) into the project (Cursor skills / `AGENTS.md` pointer) so the agent actually calls the tools.
+4. Install the complete [`skills/jev-mcp/`](../skills/jev-mcp/SKILL.md) folder at `.agents/skills/jev-mcp/` in the project. Keep `references/`, `scripts/` and `LICENSE`; copying only `SKILL.md` omits its contracts and evidence helper. Codex supports the same shared discovery location.
 5. Restart MCP. Settings → MCP should show `jev` as connected.
 6. Ask: “Call `jev_coding_loop` on this task and last test output.”
 
@@ -92,6 +92,8 @@ Then point Cursor/Codex at `D:\jev-mcp\dist\index.js` as above.
 Omit `-Mock` when you have exported a real key. The helper checks every Git, npm, and doctor exit code, stops at the first failure, and prints readiness only after doctor succeeds. It restores the original working directory and mock environment setting on success or failure.
 
 ## Package distribution
+
+Run `npm run build:skill` to produce `artifacts/jev-mcp-skill-VERSION.zip` and its SHA-256 checksum. The archive contains one `jev-mcp/` folder. Extract it into `.agents/skills/`; this installs instructions only. Configure the separately built MCP server as described above. The portable [setup reference](../skills/jev-mcp/references/setup.md) includes environment-variable forwarding for both hosts. `npm run test:skill` validates the artifact and its executable examples.
 
 `npm pack` runs the build automatically. The package includes the compiled CLI, examples, skills, documentation, `AGENTS.md`, and checkout script. Run `npm run test:package` after `npm ci` to verify an offline install of the tarball and its mock diagnostics before publishing.
 

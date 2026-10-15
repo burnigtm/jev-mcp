@@ -59,16 +59,16 @@ Oversized question sets are rejected before sending a request. Shortened state o
 ## Tests
 
 ```bash
-npm test              # mock only; live case skipped
+npm test              # deterministic only; never invokes live evaluations
 npm run typecheck
 npm run build
 npm run test:package   # offline packed-install smoke; npm ci seeds the dependency cache
 npm run benchmark      # compiled MCP stdio benchmark in deterministic mock mode
 npm run benchmark:ci   # same benchmark with broad sanity budgets
-TYPESAFE_API_KEY=ts_... npm test    # includes live e2e
+TYPESAFE_API_KEY=ts_... npm run eval:live  # explicit live semantic evaluation
 ```
 
-The test runner explicitly enumerates files for consistent behavior on Node 20/22 and Windows/Linux. The live test uses the same normalized mock setting as the application, so `true` and `yes` also skip it. It checks that the returned model is not a mock.
+The test runner explicitly enumerates deterministic files for consistent behavior on Node 20/22 and Windows/Linux. Live evaluation is opt-in through `npm run eval:live` or `npm run eval:agent`; neither is discovered by `npm test`. Explicit live commands reject mock mode and custom provider endpoints and report missing prerequisites as blocked. See [evaluation guidance](../evals/README.md).
 
 Package tests run separately from `npm test`: they invoke the `prepack` build, inspect shipped files, and install the tarball in a temporary application with `npm ci --offline --ignore-scripts`. The temporary lockfile reuses the committed production dependency graph and exact integrities, so stale cached version lists cannot change resolution. The test then runs the installed mock CLI. It needs an npm dependency cache populated by `npm ci`; it never fetches packages or publishes. CI runs tests, type checking, build, and package smoke on Windows and Linux with Node 20 and 22.
 

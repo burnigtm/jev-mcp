@@ -91,7 +91,7 @@ test("tool-route pack has valid choices and independent per-call suitability jud
     assert.deepEqual(Object.keys(questions.selected.criteria), ["none", ...Array.from({ length: count }, (_, i) => `call_${i}`)]);
     for (let index = 0; index < count; index += 1) {
       assert.equal(questions[`suitable_${index}`].type, "noul");
-      assert.match(questions[`suitable_${index}`].instructions, new RegExp(`state\\.candidates\\[${index}\\]`));
+      assert.match(questions[`suitable_${index}`].instructions, new RegExp(`candidates\\[${index}\\]`));
       assert.match(questions[`suitable_${index}`].instructions, /independent/i);
     }
   }
