@@ -4,6 +4,8 @@ import {mkdtemp,rm,writeFile,readFile,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {createRequire} from 'node:module';
+import {pathToFileURL} from 'node:url';
 import {applyPatch} from 'diff';
 import {main,unifiedPatch,callPrepared,cleanEnv} from '../skills/jev-mcp/scripts/evidence.mjs';
 import {materializeTask,taskSource,gradeTask} from '../scripts/lib/tasks.mjs';
@@ -11,7 +13,12 @@ import {relevantFiles,patchMatches,attest} from '../scripts/lib/attestation.mjs'
 import {processEnv} from '../scripts/lib/mcp.mjs';
 import {root,buildSkill,inspectArchive} from '../scripts/lib/skill.mjs';
 
-test('extracted dependency-free helper produces attested evidence and calls the real installed MCP protocol', {timeout:30000}, async()=>{
+// npm test runs before the production build in a clean checkout. Resolve the
+// loader absolutely: the extracted helper starts its server from another cwd.
+const require=createRequire(import.meta.url);
+const serverArgs=['--import',pathToFileURL(require.resolve('tsx')).href,join(root,'src/index.ts')];
+
+test('extracted dependency-free helper produces attested evidence and calls the real MCP protocol', {timeout:30000}, async()=>{
   const parent=await mkdtemp(join(tmpdir(),'jev evidence with spaces ')),workspace=join(parent,'task');
   try {
     await materializeTask('pagination',workspace);
@@ -30,7 +37,7 @@ test('extracted dependency-free helper produces attested evidence and calls the 
     assert.deepEqual(attest(workspace,baseline,'pagination',args),{diff_matches:true,evidence_matches:true,claims_relevant:true});
     assert.equal(gradeTask('pagination',workspace).passed,148);
     assert.equal(run(['snapshot']).status,1,'the original snapshot cannot be replaced after editing');
-    await writeFile(join(workspace,'.jev-connection.json'),JSON.stringify({command:process.execPath,args:[join(root,'dist/index.js')]}));
+    await writeFile(join(workspace,'.jev-connection.json'),JSON.stringify({command:process.execPath,args:serverArgs}));
     const judged=run(['judge','--connection','.jev-connection.json'],{JEV_MCP_MOCK:'1'});
     assert.equal(judged.status,0,judged.stderr);assert.match(JSON.parse(judged.stdout).model,/mock/);
     assert.ok(!JSON.stringify(args).includes('private-test-sentinel'));
@@ -51,7 +58,7 @@ test('generated patches apply exactly for additions, deletions, line endings and
 
 test('the helper refuses bad schemas and missing servers without hanging or leaking diagnostics', {timeout:15000},async()=>{
   const old=process.env.JEV_MCP_MOCK;process.env.JEV_MCP_MOCK='1';
-  try {await assert.rejects(callPrepared({command:process.execPath,args:[join(root,'dist/index.js')]},'jev_gate',{request:'x',diff:'x',claims:[],evidence:'x'}),/schema_mismatch/);}
+  try {await assert.rejects(callPrepared({command:process.execPath,args:serverArgs},'jev_gate',{request:'x',diff:'x',claims:[],evidence:'x'}),/schema_mismatch/);}
   finally {if(old===undefined)delete process.env.JEV_MCP_MOCK;else process.env.JEV_MCP_MOCK=old;}
   await assert.rejects(callPrepared({command:'jev-nonexistent-server-command',args:[]},'jev_gate',{}),/mcp_connection_failed/);
   assert.equal(cleanEnv().TYPESAFE_API_KEY,undefined);
