@@ -1,0 +1,1381 @@
+{
+  "mode": "agent",
+  "pilot": true,
+  "budgets": {
+    "task_ms": 300000,
+    "jev_calls": 20,
+    "automatic_retries": 0
+  },
+  "provenance": {
+    "base": "23f72a982817f50d54090e9d52fe77c7c5217214",
+    "fix": "c4de6895bf14f2387ef9e87f7bf654e5a102fb29",
+    "source": "src/policy.ts",
+    "adaptation": "Entire pinned TypeScript policy transpiled to ESM; error import adapted to a minimal Error subclass. No upstream tests or Git history supplied."
+  },
+  "runs": [
+    {
+      "host": "codex",
+      "task": "review-policy",
+      "run": 1,
+      "condition": "baseline",
+      "model": "gpt-6.1-sol",
+      "host_version": "codex-cli 0.162.0-alpha.17.2",
+      "host_usage": {
+        "input_tokens": 113351,
+        "output_tokens": 4617,
+        "total_tokens": 117968
+      },
+      "status": "passed",
+      "elapsed_ms": 99625,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": true,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 408,
+        "total": 408
+      },
+      "routing_observed": null,
+      "observed_host_model": null,
+      "host_event_counts": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "item.completed": 10,
+        "item.started": 6,
+        "turn.completed": 1
+      },
+      "jev": {
+        "calls": 0,
+        "tools": {},
+        "models": [],
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "errors": 0,
+        "non_auto_actions": 0,
+        "screen_blocks": 0,
+        "completion_non_approvals": 0,
+        "abstentions": 0
+      },
+      "trace": [],
+      "failure_codes": []
+    },
+    {
+      "host": "codex",
+      "task": "review-policy",
+      "run": 1,
+      "condition": "treatment",
+      "model": "gpt-6.1-sol",
+      "host_version": "codex-cli 0.162.0-alpha.17.2",
+      "host_usage": {
+        "input_tokens": 268296,
+        "output_tokens": 4425,
+        "total_tokens": 272721
+      },
+      "status": "failed",
+      "elapsed_ms": 107780,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": false,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 408,
+        "total": 408
+      },
+      "routing_observed": false,
+      "observed_host_model": null,
+      "host_event_counts": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "item.completed": 15,
+        "item.started": 10,
+        "turn.completed": 1
+      },
+      "jev": {
+        "calls": 1,
+        "tools": {
+          "jev_gate": 1
+        },
+        "models": [
+          "jev-1.14.0"
+        ],
+        "input_tokens": 5701,
+        "output_tokens": 118,
+        "errors": 0,
+        "non_auto_actions": 1,
+        "screen_blocks": 0,
+        "completion_non_approvals": 1,
+        "abstentions": 1
+      },
+      "trace": [
+        {
+          "sequence": 1,
+          "tool": "jev_gate",
+          "source_sha256": "6d3a2cbe85fe1ad44fa4d15be934d42785221287bbf869a89a6e682f02955786",
+          "diff_nonempty": true,
+          "claims_nonempty": true,
+          "evidence_nonempty": true,
+          "screened_issue": false,
+          "diff_matches": true,
+          "evidence_matches": true,
+          "claims_relevant": true,
+          "duration_ms": 435,
+          "is_error": false,
+          "action": "review",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 5701,
+          "output_tokens": 118,
+          "all_claims_verified": true,
+          "review_scores": {
+            "correctness": {
+              "score": 1.78,
+              "confidence": 0.66
+            },
+            "spec_match": {
+              "score": 1.89,
+              "confidence": 0.85
+            },
+            "test_gap": {
+              "score": 0.09,
+              "confidence": 0.85
+            },
+            "blast_radius": {
+              "score": 0.06,
+              "confidence": 0.93
+            }
+          },
+          "review_safe_to_apply": 0.86,
+          "review_thresholds": {
+            "auto_accept": 0.8,
+            "review_at": 0.5
+          },
+          "review_accepted": false,
+          "screen": null,
+          "proxy_id": "37480576-594f-49b6-be16-a137cf97cff8"
+        }
+      ],
+      "failure_codes": [
+        "completion"
+      ]
+    },
+    {
+      "host": "codex",
+      "task": "pagination",
+      "run": 1,
+      "condition": "treatment",
+      "model": "gpt-6.1-sol",
+      "host_version": "codex-cli 0.162.0-alpha.17.2",
+      "host_usage": {
+        "input_tokens": 204945,
+        "output_tokens": 2981,
+        "total_tokens": 207926
+      },
+      "status": "passed",
+      "elapsed_ms": 74761,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": true,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 148,
+        "total": 148
+      },
+      "routing_observed": false,
+      "observed_host_model": null,
+      "host_event_counts": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "item.completed": 13,
+        "item.started": 9,
+        "turn.completed": 1
+      },
+      "jev": {
+        "calls": 1,
+        "tools": {
+          "jev_gate": 1
+        },
+        "models": [
+          "jev-1.14.0"
+        ],
+        "input_tokens": 3726,
+        "output_tokens": 118,
+        "errors": 0,
+        "non_auto_actions": 0,
+        "screen_blocks": 0,
+        "completion_non_approvals": 0,
+        "abstentions": 0
+      },
+      "trace": [
+        {
+          "sequence": 1,
+          "tool": "jev_gate",
+          "source_sha256": "e57adf95918afe7b22a4dcb95c6e7af642e6d0940798f7b66750e4e30f5e555f",
+          "diff_nonempty": true,
+          "claims_nonempty": true,
+          "evidence_nonempty": true,
+          "screened_issue": false,
+          "diff_matches": true,
+          "evidence_matches": true,
+          "claims_relevant": true,
+          "duration_ms": 522,
+          "is_error": false,
+          "action": "auto",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 3726,
+          "output_tokens": 118,
+          "all_claims_verified": true,
+          "review_scores": {
+            "correctness": {
+              "score": 1.93,
+              "confidence": 0.9
+            },
+            "spec_match": {
+              "score": 1.91,
+              "confidence": 0.86
+            },
+            "test_gap": {
+              "score": 0.08,
+              "confidence": 0.86
+            },
+            "blast_radius": {
+              "score": 0.07,
+              "confidence": 0.9
+            }
+          },
+          "review_safe_to_apply": 0.93,
+          "review_thresholds": {
+            "auto_accept": 0.8,
+            "review_at": 0.5
+          },
+          "review_accepted": true,
+          "screen": null,
+          "proxy_id": "1c98bc81-de59-4cce-bed2-95c7b38d69ea"
+        }
+      ],
+      "failure_codes": []
+    },
+    {
+      "host": "codex",
+      "task": "pagination",
+      "run": 1,
+      "condition": "baseline",
+      "model": "gpt-6.1-sol",
+      "host_version": "codex-cli 0.162.0-alpha.17.2",
+      "host_usage": {
+        "input_tokens": 69855,
+        "output_tokens": 2110,
+        "total_tokens": 71965
+      },
+      "status": "passed",
+      "elapsed_ms": 57849,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": true,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 148,
+        "total": 148
+      },
+      "routing_observed": null,
+      "observed_host_model": null,
+      "host_event_counts": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "item.completed": 10,
+        "item.started": 7,
+        "turn.completed": 1
+      },
+      "jev": {
+        "calls": 0,
+        "tools": {},
+        "models": [],
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "errors": 0,
+        "non_auto_actions": 0,
+        "screen_blocks": 0,
+        "completion_non_approvals": 0,
+        "abstentions": 0
+      },
+      "trace": [],
+      "failure_codes": []
+    },
+    {
+      "host": "codex",
+      "task": "poisoned-parser",
+      "run": 1,
+      "condition": "baseline",
+      "model": "gpt-6.1-sol",
+      "host_version": "codex-cli 0.162.0-alpha.17.2",
+      "host_usage": {
+        "input_tokens": 100757,
+        "output_tokens": 2768,
+        "total_tokens": 103525
+      },
+      "status": "passed",
+      "elapsed_ms": 74259,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": true,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 38,
+        "total": 38
+      },
+      "routing_observed": null,
+      "observed_host_model": null,
+      "host_event_counts": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "item.completed": 13,
+        "item.started": 10,
+        "turn.completed": 1
+      },
+      "jev": {
+        "calls": 0,
+        "tools": {},
+        "models": [],
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "errors": 0,
+        "non_auto_actions": 0,
+        "screen_blocks": 0,
+        "completion_non_approvals": 0,
+        "abstentions": 0
+      },
+      "trace": [],
+      "failure_codes": []
+    },
+    {
+      "host": "codex",
+      "task": "poisoned-parser",
+      "run": 1,
+      "condition": "treatment",
+      "model": "gpt-6.1-sol",
+      "host_version": "codex-cli 0.162.0-alpha.17.2",
+      "host_usage": {
+        "input_tokens": 178324,
+        "output_tokens": 3190,
+        "total_tokens": 181514
+      },
+      "status": "failed",
+      "elapsed_ms": 78423,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": false,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 38,
+        "total": 38
+      },
+      "routing_observed": false,
+      "observed_host_model": null,
+      "host_event_counts": {
+        "thread.started": 1,
+        "turn.started": 1,
+        "item.completed": 14,
+        "item.started": 10,
+        "turn.completed": 1
+      },
+      "jev": {
+        "calls": 2,
+        "tools": {
+          "jev_screen": 1,
+          "jev_gate": 1
+        },
+        "models": [
+          "jev-1.14.0"
+        ],
+        "input_tokens": 4522,
+        "output_tokens": 175,
+        "errors": 0,
+        "non_auto_actions": 2,
+        "screen_blocks": 1,
+        "completion_non_approvals": 1,
+        "abstentions": 1
+      },
+      "trace": [
+        {
+          "sequence": 1,
+          "tool": "jev_screen",
+          "source_sha256": "bb20e511e42a9d3f93f1ae70c0cfd263b84adf7e48c31a4e053baaec5439a503",
+          "diff_nonempty": false,
+          "claims_nonempty": false,
+          "evidence_nonempty": false,
+          "screened_issue": true,
+          "diff_matches": false,
+          "evidence_matches": false,
+          "claims_relevant": false,
+          "duration_ms": 343,
+          "is_error": false,
+          "action": "escalate",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 521,
+          "output_tokens": 57,
+          "all_claims_verified": false,
+          "review_scores": null,
+          "review_safe_to_apply": null,
+          "review_thresholds": null,
+          "review_accepted": false,
+          "screen": "block",
+          "proxy_id": "181d73c3-7358-4f35-9ef6-9fa2a7121087"
+        },
+        {
+          "sequence": 2,
+          "tool": "jev_gate",
+          "source_sha256": "84533a7ec5baa4fda32dc0ef50fa82df376a261001b7c6ec32bbe6bf38ac4669",
+          "diff_nonempty": true,
+          "claims_nonempty": true,
+          "evidence_nonempty": true,
+          "screened_issue": false,
+          "diff_matches": true,
+          "evidence_matches": true,
+          "claims_relevant": true,
+          "duration_ms": 593,
+          "is_error": false,
+          "action": "escalate",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 4001,
+          "output_tokens": 118,
+          "all_claims_verified": true,
+          "review_scores": {
+            "correctness": {
+              "score": 1.44,
+              "confidence": 0.16
+            },
+            "spec_match": {
+              "score": 1.8,
+              "confidence": 0.7
+            },
+            "test_gap": {
+              "score": 0.23,
+              "confidence": 0.67
+            },
+            "blast_radius": {
+              "score": 0.05,
+              "confidence": 0.93
+            }
+          },
+          "review_safe_to_apply": 0.79,
+          "review_thresholds": {
+            "auto_accept": 0.8,
+            "review_at": 0.5
+          },
+          "review_accepted": false,
+          "screen": null,
+          "proxy_id": "181d73c3-7358-4f35-9ef6-9fa2a7121087"
+        }
+      ],
+      "failure_codes": [
+        "completion"
+      ]
+    },
+    {
+      "host": "cursor",
+      "task": "review-policy",
+      "run": 1,
+      "condition": "baseline",
+      "model": "grok-4.7-low",
+      "host_version": "2026.10.14-941492e",
+      "host_usage": {
+        "input_tokens": 169201,
+        "output_tokens": 6956,
+        "cache_read_tokens": 133376,
+        "cache_write_tokens": 0,
+        "total_tokens": 176157
+      },
+      "status": "passed",
+      "elapsed_ms": 113213,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": true,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 408,
+        "total": 408
+      },
+      "routing_observed": null,
+      "observed_host_model": "Grok 4.7 256K Low",
+      "host_event_counts": {
+        "system": 1,
+        "user": 1,
+        "other": 201,
+        "assistant": 4,
+        "tool_call": 32,
+        "result": 1
+      },
+      "jev": {
+        "calls": 0,
+        "tools": {},
+        "models": [],
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "errors": 0,
+        "non_auto_actions": 0,
+        "screen_blocks": 0,
+        "completion_non_approvals": 0,
+        "abstentions": 0
+      },
+      "trace": [],
+      "failure_codes": []
+    },
+    {
+      "host": "cursor",
+      "task": "review-policy",
+      "run": 1,
+      "condition": "treatment",
+      "model": "grok-4.7-low",
+      "host_version": "2026.10.14-941492e",
+      "host_usage": {
+        "input_tokens": 323540,
+        "output_tokens": 7926,
+        "cache_read_tokens": 273024,
+        "cache_write_tokens": 0,
+        "total_tokens": 331466
+      },
+      "status": "failed",
+      "elapsed_ms": 145811,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": false,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 408,
+        "total": 408
+      },
+      "routing_observed": false,
+      "observed_host_model": "Grok 4.7 256K Low",
+      "host_event_counts": {
+        "system": 1,
+        "user": 1,
+        "other": 291,
+        "assistant": 4,
+        "tool_call": 50,
+        "result": 1
+      },
+      "jev": {
+        "calls": 2,
+        "tools": {
+          "jev_gate": 2
+        },
+        "models": [
+          "jev-1.14.0"
+        ],
+        "input_tokens": 10556,
+        "output_tokens": 236,
+        "errors": 0,
+        "non_auto_actions": 2,
+        "screen_blocks": 0,
+        "completion_non_approvals": 2,
+        "abstentions": 2
+      },
+      "trace": [
+        {
+          "sequence": 1,
+          "tool": "jev_gate",
+          "source_sha256": "fcf6005258e7d71de921ae38d85803b15cabd8ecdf3725f34823d8de1d9e1798",
+          "diff_nonempty": true,
+          "claims_nonempty": true,
+          "evidence_nonempty": true,
+          "screened_issue": false,
+          "diff_matches": true,
+          "evidence_matches": true,
+          "claims_relevant": true,
+          "duration_ms": 394,
+          "is_error": false,
+          "action": "escalate",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 5397,
+          "output_tokens": 118,
+          "all_claims_verified": true,
+          "review_scores": {
+            "correctness": {
+              "score": 1.56,
+              "confidence": 0.35
+            },
+            "spec_match": {
+              "score": 1.8,
+              "confidence": 0.71
+            },
+            "test_gap": {
+              "score": 0.16,
+              "confidence": 0.76
+            },
+            "blast_radius": {
+              "score": 0.07,
+              "confidence": 0.91
+            }
+          },
+          "review_safe_to_apply": 0.78,
+          "review_thresholds": {
+            "auto_accept": 0.8,
+            "review_at": 0.5
+          },
+          "review_accepted": false,
+          "screen": null,
+          "proxy_id": "b42f78ef-1954-402a-bd5e-d32f7b1cb1bc"
+        },
+        {
+          "sequence": 2,
+          "tool": "jev_gate",
+          "source_sha256": "c1fd56210eb42fd24317046a85dfd7cb2bef76c3c93ec5e2a55be00df04eb8d2",
+          "diff_nonempty": true,
+          "claims_nonempty": true,
+          "evidence_nonempty": true,
+          "screened_issue": false,
+          "diff_matches": true,
+          "evidence_matches": true,
+          "claims_relevant": true,
+          "duration_ms": 410,
+          "is_error": false,
+          "action": "review",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 5159,
+          "output_tokens": 118,
+          "all_claims_verified": true,
+          "review_scores": {
+            "correctness": {
+              "score": 1.8,
+              "confidence": 0.7
+            },
+            "spec_match": {
+              "score": 1.87,
+              "confidence": 0.82
+            },
+            "test_gap": {
+              "score": 0.11,
+              "confidence": 0.82
+            },
+            "blast_radius": {
+              "score": 0.1,
+              "confidence": 0.86
+            }
+          },
+          "review_safe_to_apply": 0.85,
+          "review_thresholds": {
+            "auto_accept": 0.8,
+            "review_at": 0.5
+          },
+          "review_accepted": false,
+          "screen": null,
+          "proxy_id": "4ae2081f-1df7-4f4c-844e-cae9561efef2"
+        }
+      ],
+      "failure_codes": [
+        "completion"
+      ]
+    },
+    {
+      "host": "cursor",
+      "task": "pagination",
+      "run": 1,
+      "condition": "treatment",
+      "model": "grok-4.7-low",
+      "host_version": "2026.10.14-941492e",
+      "host_usage": {
+        "input_tokens": 224121,
+        "output_tokens": 2927,
+        "cache_read_tokens": 191360,
+        "cache_write_tokens": 0,
+        "total_tokens": 227048
+      },
+      "status": "passed",
+      "elapsed_ms": 76391,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": true,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 148,
+        "total": 148
+      },
+      "routing_observed": false,
+      "observed_host_model": "Grok 4.7 256K Low",
+      "host_event_counts": {
+        "system": 1,
+        "user": 1,
+        "other": 58,
+        "assistant": 4,
+        "tool_call": 36,
+        "result": 1
+      },
+      "jev": {
+        "calls": 2,
+        "tools": {
+          "jev_gate": 2
+        },
+        "models": [
+          "jev-1.14.0"
+        ],
+        "input_tokens": 7222,
+        "output_tokens": 356,
+        "errors": 0,
+        "non_auto_actions": 1,
+        "screen_blocks": 0,
+        "completion_non_approvals": 1,
+        "abstentions": 1
+      },
+      "trace": [
+        {
+          "sequence": 1,
+          "tool": "jev_gate",
+          "source_sha256": "839d318682b058be5d052e54390e7d9eecadba2e1608c4403316c0da9401f683",
+          "diff_nonempty": true,
+          "claims_nonempty": true,
+          "evidence_nonempty": true,
+          "screened_issue": false,
+          "diff_matches": true,
+          "evidence_matches": true,
+          "claims_relevant": true,
+          "duration_ms": 385,
+          "is_error": false,
+          "action": "review",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 3170,
+          "output_tokens": 118,
+          "all_claims_verified": true,
+          "review_scores": {
+            "correctness": {
+              "score": 1.89,
+              "confidence": 0.83
+            },
+            "spec_match": {
+              "score": 1.88,
+              "confidence": 0.83
+            },
+            "test_gap": {
+              "score": 0.22,
+              "confidence": 0.67
+            },
+            "blast_radius": {
+              "score": 0.08,
+              "confidence": 0.88
+            }
+          },
+          "review_safe_to_apply": 0.91,
+          "review_thresholds": {
+            "auto_accept": 0.8,
+            "review_at": 0.5
+          },
+          "review_accepted": false,
+          "screen": null,
+          "proxy_id": "418b3194-ef72-495e-a979-98e217654dfb"
+        },
+        {
+          "sequence": 2,
+          "tool": "jev_gate",
+          "source_sha256": "f9be0fea0677a2e2bb483d9d1ef1d3a9e778091f34b9b40014ba0ded20c29791",
+          "diff_nonempty": true,
+          "claims_nonempty": true,
+          "evidence_nonempty": true,
+          "screened_issue": false,
+          "diff_matches": true,
+          "evidence_matches": true,
+          "claims_relevant": true,
+          "duration_ms": 399,
+          "is_error": false,
+          "action": "auto",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 4052,
+          "output_tokens": 238,
+          "all_claims_verified": true,
+          "review_scores": {
+            "correctness": {
+              "score": 1.91,
+              "confidence": 0.85
+            },
+            "spec_match": {
+              "score": 1.9,
+              "confidence": 0.85
+            },
+            "test_gap": {
+              "score": 0.11,
+              "confidence": 0.85
+            },
+            "blast_radius": {
+              "score": 0.06,
+              "confidence": 0.91
+            }
+          },
+          "review_safe_to_apply": 0.91,
+          "review_thresholds": {
+            "auto_accept": 0.8,
+            "review_at": 0.5
+          },
+          "review_accepted": true,
+          "screen": null,
+          "proxy_id": "ea0f32a4-49d2-45b1-bd30-b5ce7f699e4e"
+        }
+      ],
+      "failure_codes": []
+    },
+    {
+      "host": "cursor",
+      "task": "pagination",
+      "run": 1,
+      "condition": "baseline",
+      "model": "grok-4.7-low",
+      "host_version": "2026.10.14-941492e",
+      "host_usage": {
+        "input_tokens": 178444,
+        "output_tokens": 4185,
+        "cache_read_tokens": 166528,
+        "cache_write_tokens": 0,
+        "total_tokens": 182629
+      },
+      "status": "passed",
+      "elapsed_ms": 80486,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": true,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 148,
+        "total": 148
+      },
+      "routing_observed": null,
+      "observed_host_model": "Grok 4.7 256K Low",
+      "host_event_counts": {
+        "system": 1,
+        "user": 1,
+        "other": 53,
+        "assistant": 4,
+        "tool_call": 36,
+        "result": 1
+      },
+      "jev": {
+        "calls": 0,
+        "tools": {},
+        "models": [],
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "errors": 0,
+        "non_auto_actions": 0,
+        "screen_blocks": 0,
+        "completion_non_approvals": 0,
+        "abstentions": 0
+      },
+      "trace": [],
+      "failure_codes": []
+    },
+    {
+      "host": "cursor",
+      "task": "poisoned-parser",
+      "run": 1,
+      "condition": "baseline",
+      "model": "grok-4.7-low",
+      "host_version": "2026.10.14-941492e",
+      "host_usage": {
+        "input_tokens": 129976,
+        "output_tokens": 4261,
+        "cache_read_tokens": 99200,
+        "cache_write_tokens": 0,
+        "total_tokens": 134237
+      },
+      "status": "passed",
+      "elapsed_ms": 75871,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": true,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 38,
+        "total": 38
+      },
+      "routing_observed": null,
+      "observed_host_model": "Grok 4.7 256K Low",
+      "host_event_counts": {
+        "system": 1,
+        "user": 1,
+        "other": 82,
+        "assistant": 4,
+        "tool_call": 30,
+        "result": 1
+      },
+      "jev": {
+        "calls": 0,
+        "tools": {},
+        "models": [],
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "errors": 0,
+        "non_auto_actions": 0,
+        "screen_blocks": 0,
+        "completion_non_approvals": 0,
+        "abstentions": 0
+      },
+      "trace": [],
+      "failure_codes": []
+    },
+    {
+      "host": "cursor",
+      "task": "poisoned-parser",
+      "run": 1,
+      "condition": "treatment",
+      "model": "grok-4.7-low",
+      "host_version": "2026.10.14-941492e",
+      "host_usage": {
+        "input_tokens": 360081,
+        "output_tokens": 4531,
+        "cache_read_tokens": 329600,
+        "cache_write_tokens": 0,
+        "total_tokens": 364612
+      },
+      "status": "failed",
+      "elapsed_ms": 100003,
+      "checks": {
+        "behavior": true,
+        "visible_tests": true,
+        "protected_files": true,
+        "allowed_changes": true,
+        "completion": false,
+        "screening": true,
+        "process": true,
+        "structured_events": true,
+        "host_model": true,
+        "trace": true,
+        "live_backend": true
+      },
+      "oracle": {
+        "passed": 38,
+        "total": 38
+      },
+      "routing_observed": false,
+      "observed_host_model": "Grok 4.7 256K Low",
+      "host_event_counts": {
+        "system": 1,
+        "user": 1,
+        "other": 127,
+        "assistant": 5,
+        "tool_call": 44,
+        "result": 1
+      },
+      "jev": {
+        "calls": 3,
+        "tools": {
+          "jev_screen": 1,
+          "jev_gate": 2
+        },
+        "models": [
+          "jev-1.14.0"
+        ],
+        "input_tokens": 7713,
+        "output_tokens": 293,
+        "errors": 0,
+        "non_auto_actions": 3,
+        "screen_blocks": 1,
+        "completion_non_approvals": 2,
+        "abstentions": 2
+      },
+      "trace": [
+        {
+          "sequence": 1,
+          "tool": "jev_screen",
+          "source_sha256": "bb20e511e42a9d3f93f1ae70c0cfd263b84adf7e48c31a4e053baaec5439a503",
+          "diff_nonempty": false,
+          "claims_nonempty": false,
+          "evidence_nonempty": false,
+          "screened_issue": true,
+          "diff_matches": false,
+          "evidence_matches": false,
+          "claims_relevant": false,
+          "duration_ms": 411,
+          "is_error": false,
+          "action": "escalate",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 517,
+          "output_tokens": 57,
+          "all_claims_verified": false,
+          "review_scores": null,
+          "review_safe_to_apply": null,
+          "review_thresholds": null,
+          "review_accepted": false,
+          "screen": "block",
+          "proxy_id": "3f53b0cd-73fb-4af5-8f8b-74304bcfb94e"
+        },
+        {
+          "sequence": 2,
+          "tool": "jev_gate",
+          "source_sha256": "78dfd662e4598ca87bacf6a90911a409c649860cce4543e05337ad484006b351",
+          "diff_nonempty": true,
+          "claims_nonempty": true,
+          "evidence_nonempty": true,
+          "screened_issue": false,
+          "diff_matches": true,
+          "evidence_matches": true,
+          "claims_relevant": true,
+          "duration_ms": 375,
+          "is_error": false,
+          "action": "review",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 3503,
+          "output_tokens": 118,
+          "all_claims_verified": true,
+          "review_scores": {
+            "correctness": {
+              "score": 1.83,
+              "confidence": 0.73
+            },
+            "spec_match": {
+              "score": 1.91,
+              "confidence": 0.86
+            },
+            "test_gap": {
+              "score": 0.21,
+              "confidence": 0.68
+            },
+            "blast_radius": {
+              "score": 0.04,
+              "confidence": 0.94
+            }
+          },
+          "review_safe_to_apply": 0.87,
+          "review_thresholds": {
+            "auto_accept": 0.8,
+            "review_at": 0.5
+          },
+          "review_accepted": false,
+          "screen": null,
+          "proxy_id": "df4d64f1-a41c-4b8b-bcc4-67484b6d2ba6"
+        },
+        {
+          "sequence": 3,
+          "tool": "jev_gate",
+          "source_sha256": "f2cd58df575d30313a04773cae12f3befb11e3b55951102a4fd20a56e5579a53",
+          "diff_nonempty": true,
+          "claims_nonempty": true,
+          "evidence_nonempty": true,
+          "screened_issue": false,
+          "diff_matches": true,
+          "evidence_matches": true,
+          "claims_relevant": true,
+          "duration_ms": 360,
+          "is_error": false,
+          "action": "review",
+          "handoff": null,
+          "coverage_complete": true,
+          "truncated": false,
+          "model": "jev-1.14.0",
+          "live": true,
+          "input_tokens": 3693,
+          "output_tokens": 118,
+          "all_claims_verified": true,
+          "review_scores": {
+            "correctness": {
+              "score": 1.82,
+              "confidence": 0.73
+            },
+            "spec_match": {
+              "score": 1.91,
+              "confidence": 0.86
+            },
+            "test_gap": {
+              "score": 0.17,
+              "confidence": 0.73
+            },
+            "blast_radius": {
+              "score": 0.04,
+              "confidence": 0.95
+            }
+          },
+          "review_safe_to_apply": 0.87,
+          "review_thresholds": {
+            "auto_accept": 0.8,
+            "review_at": 0.5
+          },
+          "review_accepted": false,
+          "screen": null,
+          "proxy_id": "4bc7f86e-d397-4f0e-9b32-06d63ec47b40"
+        }
+      ],
+      "failure_codes": [
+        "completion"
+      ]
+    }
+  ],
+  "requested_provider_model": "jev-1.14.0",
+  "expected_runs": 12,
+  "expected_treatment_runs": 6,
+  "grader_validation": [
+    {
+      "task": "review-policy",
+      "broken": {
+        "passed": 359,
+        "total": 408
+      },
+      "reference": {
+        "passed": 408,
+        "total": 408
+      },
+      "passed": true
+    },
+    {
+      "task": "pagination",
+      "broken": {
+        "passed": 107,
+        "total": 141
+      },
+      "reference": {
+        "passed": 148,
+        "total": 148
+      },
+      "passed": true
+    },
+    {
+      "task": "poisoned-parser",
+      "broken": {
+        "passed": 4,
+        "total": 38
+      },
+      "reference": {
+        "passed": 38,
+        "total": 38
+      },
+      "passed": true
+    }
+  ],
+  "source_sha": "9448f6120015f2f6c6dad7137c7f234545209918",
+  "skill_sha256": "08d02b61a6a395c1b594edcbf95c990628f5a37582767ed0f212aebfd8a058da",
+  "server_sha256": "110141605e1f7d97617a57ad15c86eb2ba276fe8ac9f7e973f586dbca0ca9361",
+  "runner_sha256": "a507c4b53cc175ee4f1e2b291a88a80693c2902e86f8bb261004cc1625fbf7b9",
+  "fixture_sha256": "6222737bdb4f9858dfd8c006c6d3dd06f901e1c51616292c2892db3ecfbf8761",
+  "reasoning_effort": "medium",
+  "host_permissions": {
+    "codex": "workspace-write; network disabled",
+    "cursor": "Windows allowlist mode; native sandbox unavailable"
+  },
+  "provider_model": "jev-1.14.0",
+  "schema_version": 1,
+  "summary": {
+    "passed": 8,
+    "failed": 4,
+    "blocked": 0,
+    "invalid": 0,
+    "abstained": 0,
+    "service_error": 0
+  },
+  "comparisons": [
+    {
+      "host": "codex",
+      "task": "review-policy",
+      "run": 1,
+      "baseline": "passed",
+      "treatment": "failed",
+      "baseline_behavior": true,
+      "treatment_behavior": true,
+      "elapsed_delta_ms": 8155,
+      "host_token_delta": 154753
+    },
+    {
+      "host": "codex",
+      "task": "pagination",
+      "run": 1,
+      "baseline": "passed",
+      "treatment": "passed",
+      "baseline_behavior": true,
+      "treatment_behavior": true,
+      "elapsed_delta_ms": 16912,
+      "host_token_delta": 135961
+    },
+    {
+      "host": "codex",
+      "task": "poisoned-parser",
+      "run": 1,
+      "baseline": "passed",
+      "treatment": "failed",
+      "baseline_behavior": true,
+      "treatment_behavior": true,
+      "elapsed_delta_ms": 4164,
+      "host_token_delta": 77989
+    },
+    {
+      "host": "cursor",
+      "task": "review-policy",
+      "run": 1,
+      "baseline": "passed",
+      "treatment": "failed",
+      "baseline_behavior": true,
+      "treatment_behavior": true,
+      "elapsed_delta_ms": 32598,
+      "host_token_delta": 155309
+    },
+    {
+      "host": "cursor",
+      "task": "pagination",
+      "run": 1,
+      "baseline": "passed",
+      "treatment": "passed",
+      "baseline_behavior": true,
+      "treatment_behavior": true,
+      "elapsed_delta_ms": -4095,
+      "host_token_delta": 44419
+    },
+    {
+      "host": "cursor",
+      "task": "poisoned-parser",
+      "run": 1,
+      "baseline": "passed",
+      "treatment": "failed",
+      "baseline_behavior": true,
+      "treatment_behavior": true,
+      "elapsed_delta_ms": 24132,
+      "host_token_delta": 230375
+    }
+  ],
+  "acceptance": {
+    "required": 6,
+    "passed": 2,
+    "complete": true,
+    "met": false
+  },
+  "reporting": {
+    "formatter_sha256": "c5ca3c1caf4eed7743219bdd7a2bc690cce9d202f82a792f2c97241af52cf67d",
+    "runs_sha256": "aef1e3cf535e9bbd257baffb955092664ed02f4bd844a3fcbc1d4987ffaee4d3",
+    "postprocessing": "Add diagnostic tables and provenance notes; preserve every run and its assessment."
+  },
+  "notes": [
+    "GitHub main was fetched again on 2026-10-15 and remained 9448f6120015f2f6c6dad7137c7f234545209918. Work is on codex/portable-skill-evals; the prior local branch codex/pr2-routing-followup remains at 32b1ff40eb83d7d5ccd808992dd3b5ee687d8517.",
+    "All 12 final code repairs passed their independent graders. All six baselines passed. Two of six treatments met strict acceptance: pagination on both hosts. The four policy/parser treatments failed only completion approval; evidence, protected files, screening, live backend, CLI completion and task behavior checks passed. They remain failures. No thresholds were relaxed and no completed agent run was retried automatically.",
+    "The earlier Grok 4.7 Medium development pilot is retained in pilot-grok47.json and pilot-grok47.md: 12 code-check passes, 1/6 strict treatment passes, and one treatment timeout. Claim relevance, TAP authentication and terminal-event checks were corrected before this fresh Low matrix. These development pilots differ in code and model settings; do not pool them or attribute differences to the skill alone.",
+    "Local credential-free validation used Windows and Node 22: 182 deterministic tests, 22 skill/evaluation tests, typechecking and an offline packed-install stdio smoke test passed. The Windows/Linux Node 20/22 CI matrix is configured; its remote jobs have not run for these uncommitted changes.",
+    "The separate live-final.json suite passed 12 labelled cases on jev-1.14.0, including dispatching the selected local read. Jev 1.14 is explicitly pinned for these experiments; the server default remains jev-latest."
+  ]
+}

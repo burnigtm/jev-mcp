@@ -25,6 +25,10 @@
     "node": ">=20"
   },
   "scripts": {
+    "build:skill": "node scripts/build-skill.mjs",
+    "test:skill": "npm run build && node --import tsx --test tests/skill.test.ts tests/workflow.test.ts tests/eval-harness.test.ts tests/evidence.test.ts",
+    "eval:live": "npm run build && node scripts/eval-live.mjs",
+    "eval:agent": "npm run build && node scripts/eval-agent.mjs",
     "build": "tsc",
     "prepack": "npm run build",
     "start": "node dist/index.js",
@@ -54,7 +58,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
+    "diff": "^9.0.0",
+    "fflate": "^0.8.3",
     "tsx": "^4.23.13",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "yaml": "^2.9.1"
   }
 }

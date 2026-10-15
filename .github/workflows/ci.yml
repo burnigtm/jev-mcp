@@ -26,3 +26,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm run test:package
+      - run: npm run test:skill
+      - run: npm run build:skill
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jev-skill-${{ matrix.os }}-node-${{ matrix.node }}
+          path: |
+            artifacts/jev-mcp-skill-*.zip
+            artifacts/jev-mcp-skill-*.zip.sha256

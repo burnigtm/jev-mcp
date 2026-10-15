@@ -166,23 +166,24 @@ test("watch dashboard writer records a workflow_dispatch ping without secrets", 
 });
 
 test("watch dashboard escapes titles and distinguishes an empty PR list from gh failure", async () => {
-  const { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = await import("node:fs");
+  const { mkdtempSync, readFileSync, rmSync, writeFileSync } = await import("node:fs");
   const { join } = await import("node:path");
   const { tmpdir } = await import("node:os");
   const writer = fileURLToPath(new URL("../scripts/write-github-watch-dashboard.py", import.meta.url));
   const rootDir = mkdtempSync(join(tmpdir(), "jev-watch-gh-"));
-  const gh = join(rootDir, "gh");
-  writeFileSync(gh, "#!/bin/sh\nprintf '%s' '[{\"number\":7,\"title\":\"break | table\\ninject\",\"state\":\"OPEN\",\"url\":\"https://example.com/7\",\"mergedAt\":null}]'\n");
-  chmodSync(gh, 0o755);
+  const gh = join(rootDir, "gh-result.json");
+  writeFileSync(gh, JSON.stringify([{number:7,title:"break | table\ninject",state:"OPEN",url:"https://example.com/7",mergedAt:null}]));
   const out = join(rootDir, "github-watch.md");
+  // Stub the Python fetch boundary directly: a Unix executable/PATH separator
+  // cannot stand in for gh on native Windows. No real network calls are needed.
+  const bootstrap = `import json, pathlib, sys\nwriter, out, fixture = sys.argv[1:]\nns = {"__name__": "watch_fixture", "__file__": writer}\nexec(compile(pathlib.Path(writer).read_text(encoding="utf-8"), writer, "exec"), ns)\ndef failed_api(*args):\n    raise ns["FetchError"]("fixture API unavailable")\ndef fixture_gh():\n    value = json.loads(pathlib.Path(fixture).read_text(encoding="utf-8"))\n    if value is None:\n        raise ns["FetchError"]("fixture gh unavailable")\n    return [ns["from_gh_item"](item) for item in value]\nns["fetch_api"] = failed_api\nns["fetch_gh"] = fixture_gh\nsys.argv = [writer, "--out", out]\nraise SystemExit(ns["main"]())\n`;
   const run = (env: Record<string, string>) => new Promise<{ status: number | null; stderr: string }>(resolve => {
-    const child = spawn("python3", [writer, "--out", out], { cwd: root, env: { ...process.env, ...env } });
+    const child = spawn("python3", ["-c", bootstrap, writer, out, gh], { cwd: root, env: { ...process.env, ...env } });
     let stderr = "";
     child.stderr.on("data", chunk => { stderr += String(chunk); });
     child.on("close", status => resolve({ status, stderr }));
   });
   const listed = await run({
-    PATH: `${rootDir}:${process.env.PATH ?? ""}`,
     GITHUB_TOKEN: "local-dashboard-token",
     GH_TOKEN: "",
     EVENT_NAME: "pull_request_target",
@@ -198,9 +199,8 @@ test("watch dashboard escapes titles and distinguishes an empty PR list from gh 
   for (const row of text.split("\n").filter(line => line.startsWith("|") && !line.includes("---"))) {
     assert.equal(row.replace(/\\\|/g, "").split("|").length, 4, row);
   }
-  writeFileSync(gh, "#!/bin/sh\nexit 1\n");
+  writeFileSync(gh, "null");
   const failed = await run({
-    PATH: `${rootDir}:${process.env.PATH ?? ""}`,
     GITHUB_TOKEN: "local-dashboard-token",
     GH_TOKEN: "",
     EVENT_NAME: "workflow_dispatch",
@@ -209,9 +209,8 @@ test("watch dashboard escapes titles and distinguishes an empty PR list from gh 
   });
   assert.equal(failed.status, 0, failed.stderr);
   assert.match(readFileSync(out, "utf8"), /unavailable/);
-  writeFileSync(gh, "#!/bin/sh\nprintf '%s' '[]'\n");
+  writeFileSync(gh, "[]");
   const empty = await run({
-    PATH: `${rootDir}:${process.env.PATH ?? ""}`,
     GITHUB_TOKEN: "local-dashboard-token",
     GH_TOKEN: "",
     EVENT_NAME: "workflow_dispatch",

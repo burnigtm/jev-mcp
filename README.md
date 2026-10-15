@@ -64,7 +64,7 @@ For a deterministic local demo, set `JEV_MCP_MOCK=1` instead. Mock mode is for t
 codex mcp add jev --env TYPESAFE_API_KEY=ts_... -- node /absolute/path/to/jev-mcp/dist/index.js
 ```
 
-Copy [the agent skill](skills/jev-mcp/SKILL.md) into the project so the host knows when to call these tools. Detailed setup and the Windows checkout helper are in [installation](docs/install.md).
+Install the complete [agent skill folder](skills/jev-mcp/SKILL.md) at `.agents/skills/jev-mcp/` so Codex or Cursor knows when to call these tools. Keep its references, scripts and license together. Skill discovery and MCP configuration are separate steps; see [installation](docs/install.md). The bundled [TypeSafe reference](skills/jev-mcp/references/typesafe.md) links the relevant primary documentation; the [evidence helper](skills/jev-mcp/references/evidence.md) captures real patches and test output for completion judgments.
 
 ## CLI
 
@@ -104,9 +104,13 @@ npm run typecheck
 npm run build
 npm run test:package
 npm run benchmark
+npm run test:skill
+npm run build:skill
 ```
 
-The regular suite runs without a key; the live test is skipped unless a key is present and mock mode is disabled. Package smoke testing builds and packs the project, installs the tarball into an isolated directory with `npm --offline`, then runs its shipped CLI. `npm run benchmark` builds the compiled server and measures the real MCP stdio transport in deterministic mock mode: sequential and concurrent calls, payload-size scaling, and candidate-count scaling. Use `npm run benchmark:ci` to apply broad sanity budgets; set `JEV_BENCH_ITERATIONS`, `JEV_BENCH_CONCURRENCY`, `JEV_BENCH_MAX_P95_MS`, or `JEV_BENCH_MIN_RPS` to tune a run. Run `npm ci` first to populate the dependency cache. No test publishes the package.
+The regular suite never runs live evaluations, even when a key is inherited. Package smoke testing builds and packs the project, installs the tarball into an isolated directory with `npm --offline`, then exercises its shipped CLI and MCP server. `npm run benchmark` measures compiled MCP stdio transport in deterministic mock mode. Use `npm run benchmark:ci` for broad sanity budgets. Run `npm ci` first to populate the dependency cache. No test publishes the package.
+
+`npm run build:skill` creates a standalone versioned ZIP and checksum under ignored `artifacts/`. `npm run test:skill` checks independent extraction, contained references, all nine documented requests, task graders, and executable workflow replay. Explicit `npm run eval:live` and `npm run eval:agent -- --host all --paired --runs 1` measure live judgments and real coding tasks separately. Read [evaluation setup and interpretation](evals/README.md) for credentials, pinned models, CLI prerequisites and report meaning.
 
 `npm pack` and `npm publish` build automatically through `prepack`. CI checks Node 20 and 22 on Windows and Linux, including the offline packed-install smoke test.
 

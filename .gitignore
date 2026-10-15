@@ -5,4 +5,5 @@ dist/
 !.env.example
 *.log
 coverage/
+artifacts/
 .DS_Store

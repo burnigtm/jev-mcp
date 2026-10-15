@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Portable skill and real-task evaluations
+
+- The standalone skill ZIP contains its own tool contracts, setup and TypeSafe references, dependency-free evidence helper and MIT license. All nine request examples are checked against actual schemas and executable MCP calls; archive bytes and checksums are reproducible.
+- Added independent historical-policy, pagination and hostile-report parser tasks, bounded Codex/Cursor paired evaluation runners, redacted stdio observation and JSON/Markdown reports. Hidden behavioral graders and protected-file checks are independent of agent claims.
+- Live semantic evaluations are explicit commands. Ordinary tests never spend an inherited API key; mock transport performance remains a separate benchmark. CI validates the skill and uploads its archive and checksum.
+- Prepared-call routing judges the information the server actually receives, rather than trying to validate deliberately withheld argument values. Review questions refer directly to request, diff and tests and distinguish code scope from separate delivery steps. Confidence and approval floors remain unchanged.
+
 ### Benchmark and dashboard output
 
 - The performance benchmark starts the MCP server with an allowlisted environment (`PATH`, `NODE_*`, `SystemRoot`) and `JEV_MCP_MOCK=1`. It does not pass `GITHUB_TOKEN`, and it does not print raw server stderr.
