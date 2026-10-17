@@ -47,8 +47,14 @@ try {
     throw "Node $nodeVersion detected. Install Node.js 20+ first."
   }
 
-  $Target = [System.IO.Path]::GetFullPath($Target)
-  New-Item -ItemType Directory -Force -Path (Split-Path $Target -Parent) | Out-Null
+  $Target = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Target)
+  if ($Target -notmatch '^[A-Za-z]:[\\/]$') {
+    $Target = $Target.TrimEnd('\', '/')
+  }
+  $parentDir = Split-Path $Target -Parent
+  if ($parentDir) {
+    New-Item -ItemType Directory -Force -Path $parentDir | Out-Null
+  }
 
   if (Test-Path (Join-Path $Target ".git")) {
     Write-Host "Repo already exists at $Target - pulling main"

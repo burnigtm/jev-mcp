@@ -12,7 +12,7 @@ export function jsonResult(payload: unknown): {
   };
 }
 
-export function jsonError(err: unknown, structured = true): {
+export function jsonError(err: unknown, structured = false): {
   isError: true;
   content: Array<{ type: "text"; text: string }>;
   structuredContent?: { error: ReturnType<typeof errorDetails> };

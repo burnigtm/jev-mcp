@@ -114,6 +114,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
       context_complete: input.execution?.context_complete ?? false,
       failed_attempts: input.execution?.failed_attempts ?? 0,
     };
+    const candidatesOmitted = input.candidates === undefined && !execution.prepared_tool_call;
     const supplied = input.candidates ?? [];
     const blocked: Array<{ id: string; reason_codes: Reason[] }> = [];
     const eligible = supplied.filter(candidate => {
@@ -179,7 +180,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
     }
     const dispatchable = Boolean(candidate) && reasons.length === 0;
     // Judge the selection before routing appends its own reason codes.
-    const selectionVerdict = selectionAction(selection, reasons, reviewAt);
+    const selectionVerdict = selectionAction(selection, reasons, reviewAt, candidatesOmitted);
 
     const routing = partnerRouting({
       ...routingInput(answers),
@@ -210,9 +211,11 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
     // A selected external or destructive call needs review, as in jev_tool_route.
     // Terminal, tool, and partner handoffs still outrank that.
     if (needsReview && handoff === "gather_context") handoff = "review";
-    if (reasons.includes("no_candidates") || reasons.includes("no_eligible_candidates")) {
+    if (!candidatesOmitted && (reasons.includes("no_candidates") || reasons.includes("no_eligible_candidates"))) {
       const ineligible = reasons.includes("no_eligible_candidates");
-      handoff = ineligible ? "review" : "gather_context";
+      if (handoff !== "stop" && handoff !== "ask_user") {
+        handoff = ineligible || handoff === "review" ? "review" : "gather_context";
+      }
       partnerModel = {
         required: false,
         tier: "none",
@@ -224,7 +227,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
     return stepOutputSchema.parse({
       model: result.model,
       usage: result.usage,
-      truncated: result.truncated,
+      truncated: result.truncated || clipped,
       coverage: clipped ? { ...result.coverage, complete: false } : result.coverage,
       action: worstAction([action, selectionVerdict]),
       handoff,
@@ -253,8 +256,9 @@ function selectionAction(
   selection: { confidence: number; suitability: number | null } | null,
   reasons: StepReason[],
   reviewAt: number,
+  candidatesOmitted = false,
 ): PolicyAction {
-  if (reasons.includes("no_candidates") || reasons.includes("no_eligible_candidates")) return "review";
+  if (!candidatesOmitted && (reasons.includes("no_candidates") || reasons.includes("no_eligible_candidates"))) return "review";
   if (!selection) return "auto";
   if (selection.confidence < reviewAt || (selection.suitability !== null && selection.suitability < reviewAt)) return "escalate";
   return declinedForUncertainty(reasons) ? "review" : "auto";

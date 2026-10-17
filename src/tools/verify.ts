@@ -22,6 +22,7 @@ export const verifyInputSchema = z.object({
   claims: z.array(z.string().min(1)).min(1).max(MAX_CLAIMS).describe(`Factual claims to check; at most ${MAX_CLAIMS} per request`),
   evidence: evidenceSchema.describe("Source text, or a list of {id, text} documents"),
   auto_accept: z.number().min(0).max(1).optional(),
+  review_at: z.number().min(0).max(1).optional(),
   model: z.string().optional(),
 });
 
@@ -32,8 +33,8 @@ export async function runVerify(input: VerifyInput, context?: ToolContext) {
     throw new JevBudgetError(`Verification accepts at most ${MAX_CLAIMS} claims per request. Split the claims before verifying.`);
   }
   const config = getConfig();
-  const { autoAccept } = tightenJudgmentThresholds(input.auto_accept, undefined, config.autoAccept, config.reviewAt);
-  validatePolicyThresholds(autoAccept, Math.min(0.5, autoAccept));
+  const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
+  validatePolicyThresholds(autoAccept, reviewAt);
   const result = await systemOne({
     state: {
       claims: input.claims,
@@ -43,8 +44,12 @@ export async function runVerify(input: VerifyInput, context?: ToolContext) {
     model: input.model,
   }, context);
 
-  const results = projectClaims(result, input.claims, autoAccept);
+  const results = projectClaims(result, input.claims, autoAccept, reviewAt);
   const summary = summarizeClaims(results);
+  const allClaimsVerified = results.length > 0
+    && !result.truncated
+    && result.coverage.complete
+    && results.every((item) => item.verdict === "verified" && item.action === "auto");
 
   let action: PolicyAction = "auto";
   if (results.some((item) => item.verdict === "contradicted" && item.action === "auto")) {
@@ -59,9 +64,10 @@ export async function runVerify(input: VerifyInput, context?: ToolContext) {
     truncated: result.truncated,
     coverage: result.coverage,
     action: requireCompleteContext(action, result.truncated || !result.coverage.complete),
+    all_claims_verified: allClaimsVerified,
     summary,
     results,
-    thresholds: { auto_accept: autoAccept },
+    thresholds: { auto_accept: autoAccept, review_at: reviewAt },
   };
 }
 

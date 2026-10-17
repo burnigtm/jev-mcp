@@ -4,7 +4,7 @@
       "command": "node",
       "args": ["dist/index.js"],
       "env": {
-        "TYPESAFE_API_KEY": "ts_..."
+        "TYPESAFE_API_KEY": "${env:TYPESAFE_API_KEY}"
       }
     }
   }

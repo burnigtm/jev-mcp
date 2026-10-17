@@ -6,6 +6,7 @@ import { toolRouteQuestions } from "../packs/tool-route.js";
 import { distributionSupportsConfidence, tightenJudgmentThresholds, type PolicyAction } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, withToolContext, type ToolContext } from "../typesafe.js";
+import { MAX_JUDGE_ID_CHARS, MAX_JUDGE_KEY_CHARS, MAX_JUDGE_NAME_CHARS, sanitizeJudgeText } from "../untrusted.js";
 
 // Zod records intentionally strip __proto__. Reject it before any parsing can
 // silently change a call that the host already validated and authorized.
@@ -111,7 +112,7 @@ function argumentShape(value: unknown, depth = 0): unknown {
     const keys = Object.keys(value as Record<string, unknown>);
     return {
       type: "object",
-      keys: keys.slice(0, 32).map(key => key.slice(0, 128)),
+      keys: keys.slice(0, 32).map(key => sanitizeJudgeText(key, MAX_JUDGE_KEY_CHARS)),
       extra_keys: Math.max(0, keys.length - 32),
     };
   }
@@ -133,8 +134,8 @@ export function descriptionClipped(description: string): boolean {
 
 export function projectCandidateForJudgment(candidate: ToolCandidate): JudgeCandidate {
   return {
-    id: candidate.id,
-    name: candidate.name,
+    id: sanitizeJudgeText(candidate.id, MAX_JUDGE_ID_CHARS),
+    name: sanitizeJudgeText(candidate.name, MAX_JUDGE_NAME_CHARS),
     description: sanitizeDescription(candidate.description),
     effect: candidate.effect,
     argument_shape: argumentShape(candidate.arguments),
@@ -197,7 +198,7 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
       ? { candidate_id: candidate.id, name: candidate.name, arguments: candidate.arguments }
       : null;
     return toolRouteOutputSchema.parse({
-      ...shared, model: result.model, usage: result.usage, truncated: result.truncated,
+      ...shared, model: result.model, usage: result.usage, truncated: result.truncated || clipped,
       coverage: clipped ? { ...result.coverage, complete: false } : result.coverage,
       action, handoff: call ? "execute_tool" : needsReview ? "review" : "gather_context", call,
       selection: { id: candidate?.id ?? null, confidence: selected.confidence, suitability },

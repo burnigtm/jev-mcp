@@ -28,11 +28,25 @@ nonPublic.addSubnet("198.18.0.0", 15, "ipv4");
 nonPublic.addSubnet("198.51.100.0", 24, "ipv4");
 nonPublic.addSubnet("203.0.113.0", 24, "ipv4");
 nonPublic.addSubnet("224.0.0.0", 4, "ipv4");
+nonPublic.addSubnet("240.0.0.0", 4, "ipv4");
+nonPublic.addSubnet("255.255.255.255", 32, "ipv4");
+nonPublic.addSubnet("192.88.99.0", 24, "ipv4");
+nonPublic.addAddress("::", "ipv6");
 nonPublic.addAddress("::1", "ipv6");
 nonPublic.addSubnet("::ffff:0:0", 96, "ipv6");
+nonPublic.addSubnet("::ffff:0:0:0", 96, "ipv6");
+nonPublic.addSubnet("64:ff9b::", 96, "ipv6");
+nonPublic.addSubnet("64:ff9b:1::", 48, "ipv6");
+nonPublic.addSubnet("100::", 64, "ipv6");
+nonPublic.addSubnet("fec0::", 10, "ipv6");
 nonPublic.addSubnet("fc00::", 7, "ipv6");
 nonPublic.addSubnet("fe80::", 10, "ipv6");
+nonPublic.addSubnet("2001::", 32, "ipv6");
+nonPublic.addSubnet("2001:20::", 28, "ipv6");
 nonPublic.addSubnet("2001:db8::", 32, "ipv6");
+nonPublic.addSubnet("2002::", 16, "ipv6");
+nonPublic.addSubnet("3fff::", 20, "ipv6");
+nonPublic.addSubnet("5f00::", 16, "ipv6");
 nonPublic.addSubnet("ff00::", 8, "ipv6");
 
 function numEnv(name: string, fallback: number): number {
@@ -74,12 +88,15 @@ function baseUrlEnv(): string {
   if (url.username || url.password || url.search || url.hash || url.href.includes("@")) {
     throw new JevConfigError("TYPESAFE_BASE_URL must not include userinfo, a query, or a fragment.");
   }
-  const hostname = url.hostname.toLowerCase();
+  const hostname = unbracketHost(url.hostname.toLowerCase());
   if (rawAuthorityHost(raw) !== hostname) {
     throw new JevConfigError("TYPESAFE_BASE_URL must not use an obfuscated host.");
   }
-  if (!hostname || url.protocol === "https:" && hostname === "api.typesafe.ai") {
-    if (!hostname) throw new JevConfigError("TYPESAFE_BASE_URL must be an absolute HTTP(S) API root URL.");
+  if (!hostname) throw new JevConfigError("TYPESAFE_BASE_URL must be an absolute HTTP(S) API root URL.");
+  if (url.protocol === "https:" && hostname === "api.typesafe.ai") {
+    if (url.port) {
+      throw new JevConfigError("TYPESAFE_BASE_URL must use the default port for https://api.typesafe.ai unless JEV_MCP_ALLOW_CUSTOM_BASE_URL=1.");
+    }
     return normalizedOrigin(url);
   }
   if (url.protocol === "http:") {
@@ -100,6 +117,10 @@ function baseUrlEnv(): string {
   return normalizedOrigin(url);
 }
 
+function unbracketHost(hostname: string): string {
+  return hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+}
+
 function rawAuthorityHost(raw: string): string {
   const match = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(raw.trim());
   const authority = match?.[1] ?? "";
@@ -116,20 +137,38 @@ function normalizedOrigin(url: URL): string {
   return `${url.origin}${path}`;
 }
 
+function stripTrailingDot(hostname: string): string {
+  return hostname.toLowerCase().replace(/\.$/, "");
+}
+
 function isLoopback(hostname: string): boolean {
-  if (obfuscatedAddress(hostname)) return false;
-  if (hostname === "localhost" || hostname === "::1") return true;
-  return isIP(hostname) === 4 && hostname.startsWith("127.");
+  const normalized = stripTrailingDot(hostname);
+  if (obfuscatedAddress(normalized)) return false;
+  if (normalized === "localhost" || normalized === "::1") return true;
+  return isIP(normalized) === 4 && normalized.startsWith("127.");
 }
 
 function isPublicHostname(hostname: string): boolean {
-  if (obfuscatedAddress(hostname)) return false;
-  const mapped = hostname.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
-  if (mapped) return isPublicHostname(mapped[1] ?? "");
-  const kind = isIP(hostname);
-  if (kind === 4) return !nonPublic.check(hostname, "ipv4");
-  if (kind === 6) return !nonPublic.check(hostname, "ipv6");
-  return hostname !== "" && !hostname.endsWith(".local");
+  const normalized = stripTrailingDot(hostname);
+  if (!normalized || normalized.includes("%") || obfuscatedAddress(normalized)) return false;
+  // A custom endpoint must be a public host. Local names and single-label
+  // names are refused before DNS is consulted.
+  if (
+    normalized === "localhost"
+    || normalized.endsWith(".localhost")
+    || normalized.endsWith(".local")
+    || normalized.endsWith(".internal")
+    || normalized.endsWith(".localdomain")
+    || normalized.endsWith(".home.arpa")
+  ) {
+    return false;
+  }
+  const mapped = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  if (mapped) return isIP(mapped[1] ?? "") === 4 && isPublicHostname(mapped[1] ?? "");
+  const kind = isIP(normalized);
+  if (kind === 4) return !nonPublic.check(normalized, "ipv4");
+  if (kind === 6) return !nonPublic.check(normalized, "ipv6");
+  return normalized.includes(".");
 }
 
 function obfuscatedAddress(hostname: string): boolean {

@@ -53,7 +53,9 @@ export function errorDetails(err: unknown): { code: string; message: string; ret
   if (err instanceof APIError) return { code: "API_ERROR", message: `TypeSafe API request failed (HTTP ${err.status}).`, retryable: err.status === 408 || err.status === 429 || err.status >= 500 };
   if (err instanceof APIConnectionError) return { code: "API_ERROR", message: "Could not connect to TypeSafe.", retryable: true };
   if (err instanceof TypeSafeError) return { code: "API_ERROR", message: "TypeSafe could not complete the request.", retryable: false };
-  return { code: "INTERNAL_ERROR", message: err instanceof Error ? err.message : String(err), retryable: false };
+  // Unknown errors may contain paths, URLs, or request fragments. Keep the
+  // response diagnostic-safe and never relay the raw message.
+  return { code: "INTERNAL_ERROR", message: "An internal error occurred. No decision was accepted.", retryable: false };
 }
 
 export function errorMessage(err: unknown): string {

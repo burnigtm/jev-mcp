@@ -1,7 +1,8 @@
 import type { Questions } from "@typesafe-ai/sdk";
+import { withUntrustedDataClause } from "./safety.js";
 
 export function codingLoopQuestions(): Questions {
-  return {
+  return withUntrustedDataClause({
     next: {
       type: "choice",
       instructions:
@@ -68,5 +69,5 @@ export function codingLoopQuestions(): Questions {
         plan: "Think through the approach before editing",
       },
     },
-  };
+  });
 }

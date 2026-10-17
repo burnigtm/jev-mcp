@@ -4,13 +4,13 @@ Every successful tool call returns JSON with at least:
 
 - `model` — the response model identifier; the default requested model is `jev-latest`, mock mode appends `+mock`, and `jev_tool_route` uses `local-policy` when no provider call is needed
 - `usage.input_tokens` / `usage.output_tokens`
-- `truncated` — `true` if state was cut to fit TypeSafe budgets
+- `truncated` — `true` if supplied state, candidate text, or candidate metadata was cut or clipped
 - `coverage` — completeness and source character counts; token estimates identify the `chars/4` estimator
 - `action` — `auto` | `review` | `escalate`
 
 All tools also publish the successful payload through MCP `structuredContent` with an output schema for client-side validation.
 
-Question templates are also readable as MCP resources: `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate}`.
+Question templates are also readable as MCP resources: `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate}`. Workflow prompts are exposed as MCP prompts: `jev-step-loop`, `jev-completion-gate`, and `jev-screen-untrusted`.
 
 Incomplete context never returns `auto`. MCP failures return `isError: true` and JSON text containing error details with `code`, `message`, and `retryable`, without a success `structuredContent` payload. Check `isError` before reading successful results. Host cancellation stops active requests and retries. One total deadline covers every upstream call in a tool invocation (default 30 seconds).
 
@@ -89,7 +89,7 @@ One call in place of `jev_coding_loop` followed by `jev_tool_route`. It answers 
 
 Ineligible candidates are filtered locally by the `jev_tool_route` rules and never receive a question. The request then carries the coding-loop pack plus `selected` and one `suitable_i` per eligible candidate; with no eligible candidate it carries the coding-loop pack alone. Either way the tool makes exactly one request, and `state.candidates` holds only the eligible list.
 
-For provider privacy, eligible candidates are sent as a redacted projection containing the id, tool name, sanitized description, effect, and argument shape. Exact argument values remain host-local and appear only in an accepted returned call.
+For provider privacy, eligible candidates are sent as a redacted projection containing a control-stripped id, control-stripped tool name, sanitized description, effect, and argument shape (argument key names are also control-stripped). Exact argument values remain host-local and appear only in an accepted returned call.
 
 Fusing both packs raises the question budget, so the state budget shrinks accordingly. An oversized request is truncated and reported as incomplete coverage, which blocks dispatch rather than dispatching on partial evidence.
 
@@ -100,7 +100,7 @@ Fusing both packs raises the question budget, so the state budget shrinks accord
 3. A dispatchable call is treated as a prepared call, so partner routing defers to tools and returns `handoff: execute_tool` with the exact `call`.
 4. Anything the coding loop ranks higher outranks the call: incomplete context, `stop`, `ask_user`, an uncertain next step, `action` other than `auto`, destructive risk, and two or more failed attempts. These set `call: null` and add `routing_blocked_dispatch`.
 
-`partner_model.required` can never be `true` alongside a returned call. When Jev declines the prepared calls **without** confidently ruling them all out, the result routes to `gather_context` with `partner_model.reason_codes: ["prepared_candidates_declined"]`, because an uncertain selection is evidence about selection rather than a reason to buy a generative turn. A confident `none` is a clean judgment and still allows the partner turn the coding loop asked for.
+`partner_model.required` can never be `true` alongside a returned call. When Jev declines the prepared calls **without** confidently ruling them all out, the result routes to `gather_context` with `partner_model.reason_codes: ["prepared_candidates_declined"]`, because an uncertain selection is evidence about selection rather than a reason to buy a generative turn. A confident `none` is a clean judgment and still allows the partner turn the coding loop asked for. When `candidates` is omitted (and `execution.prepared_tool_call` is `false`), `jev_step` acts as a full superset of `jev_coding_loop`, preserving `stop`, `ask_user`, `partner_model`, `gather_context`, and `review` handoffs; supplying an empty `candidates: []` list, wholly ineligible candidates, or `prepared_tool_call: true` without eligible candidates blocks `auto` and `partner_model`.
 
 A selected `external_write` or `destructive` call reports `handoff: review`, as `jev_tool_route` does. Terminal, tool, and partner handoffs still outrank that.
 
@@ -191,7 +191,7 @@ The response has an MCP output schema and matching JSON text and `structuredCont
 - `selection: { id, confidence, suitability }`, or `null` when no Jev request was needed. A non-auto selection is diagnostic, never an executable dispatch.
 - `blocked_candidates` with exclusion reasons, overall `reason_codes`, effective `thresholds`, coverage, model, and usage.
 
-For provider privacy, the judgment state contains only each eligible candidate's id, tool name, sanitized description, effect, and argument shape. Exact argument values are retained for the returned call but are not transmitted to TypeSafe.
+For provider privacy, the judgment state contains only each eligible candidate's control-stripped id, control-stripped tool name, sanitized description, effect, and argument shape (key names control-stripped). Exact argument values are retained for the returned call but are not transmitted to TypeSafe.
 
 Empty lists return `model: local-policy`, zero usage, `action: review`, and `handoff: gather_context`. Wholly ineligible lists return locally with `handoff: review`. Neither case calls Jev. Their zero coverage counters mean no semantic state was evaluated; `coverage.complete: true` only describes completion of local eligibility policy. Other non-auto results use `gather_context`, except selected external or destructive effects use `review`; low confidence below `review_at` sets `action: escalate` without requesting a partner model.
 
@@ -234,13 +234,14 @@ Check factual claims against evidence you already have (PR text, docs, logs, dif
 
 - `claims` — array of statements, at most 1,000 per request
 - `evidence` — a string, or `[{ "id", "text" }, …]`
-- `auto_accept` — default `0.8`; per-claim confidence at or above this threshold permits `auto` when context is complete
+- `auto_accept` — default `0.8`; may only raise the env floor; per-claim confidence at or above this threshold permits `auto` when context is complete
+- `review_at` — default `0.5`; may only raise the env floor
 
-Per claim: `verified` | `contradicted` | `unsupported`, full probabilities, confidence, and a per-item action. Confidence below `min(0.5, auto_accept)` produces a per-item `escalate`; confidence between that threshold and `auto_accept` produces `review`.
+Per claim: `verified` | `contradicted` | `unsupported`, full probabilities, confidence, and a per-item action. Confidence below `review_at` produces a per-item `escalate`; confidence between `review_at` and `auto_accept` produces `review`.
 
 The response includes summary counts and an overall `action`. A contradiction with per-item `auto` escalates the overall result. Otherwise, any non-auto per-item action or contradiction makes the overall result `review`; remaining results permit `auto` only with complete context.
 
-For standalone verification, a confident `unsupported` verdict can have `action: auto`: this accepts the classification, not the claim. Use `jev_gate` when you need an overall completion approval.
+For standalone verification, a confident `unsupported` verdict can have `action: auto`: this accepts the classification, not the claim. The additive `all_claims_verified` field is `true` only when every claim is `verified`, every per-item action is `auto`, and coverage is complete. Use that field, or `jev_gate`, when you need an overall completion approval.
 
 ```json
 {
@@ -279,7 +280,7 @@ Reason codes are deterministic: `accepted`, `incomplete_context`, `review_escala
 
 Judge **untrusted** paste/fetch **before** the agent reads it. Skip first-party repo files. Pattern: [LLM guardrails](https://docs.typesafe.ai/cookbooks/llm_guardrails.md).
 
-**Arguments:** `text`, optional `purpose`, optional `block_at` (default `0.75`; a call can only lower the env floor), optional `review_at` (default `0.25`).
+**Arguments:** `text`, optional `purpose`, optional `block_at` (default `0.75`; a call can only lower the env floor), optional `review_at` (default `0.25`; a call can only lower the `0.25` floor).
 
 Noul `injection`, `substance`, and `relevance` (only if `purpose` is set).
 
@@ -292,7 +293,7 @@ Noul `injection`, `substance`, and `relevance` (only if `purpose` is set).
 | `block` | Injection ≥ `block_at` → MCP `escalate` |
 | `skip` | Low substance or low relevance |
 
-If any text was omitted, a detected `block` is preserved; every other recommendation becomes `review`. Character coverage excludes the truncation marker. Screening only classifies the supplied content; it cannot guarantee freedom from prompt injection.
+If any text was omitted, a detected `block` is preserved; every other recommendation becomes `review`. A deterministic high-signal instruction pattern also forces `review` rather than allowing `pass`/`skip`, independently of the model. Character coverage excludes the truncation marker. Screening only classifies the supplied content; it cannot guarantee freedom from prompt injection. Treat its output as advisory, never as permission to follow external text.
 
 ```json
 {
@@ -316,7 +317,7 @@ One Choice over ids plus a Noul `exists` so a forced winner cannot masquerade as
 - Batches fit both estimated context budgets and the 250-option cap. Further rounds reduce finalists until they fit; singleton batches advance without a Choice call. If retaining `top_k` prevents reduction, the tool asks you to lower `top_k` or shorten text with `INPUT_TOO_LARGE`.
 - Response includes `chunked` and, when chunked, `chunks` for the initial round. Usage sums all rounds. Tournament ranking is approximate; final probabilities are relative to the finalists.
 - Rank coverage has `candidate_fields` totals across all original candidates. `estimated_tokens_scope: "final_request"` identifies the request represented by its token estimates; these are not summed usage.
-- `exists_verdict`: `answered` | `partial` | `absent`
+- `exists_verdict`: `answered` | `partial` | `absent`. `answered` requires `exists` at or above `max(0.75, auto_accept)`; `action: auto` requires an `answered` verdict, a concentrated `best` distribution, and complete coverage.
 
 ```json
 {

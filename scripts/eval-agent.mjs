@@ -12,6 +12,10 @@ import { writeReport, summarizeJevEvents } from './lib/report.mjs';
 import { relevantFiles } from './lib/attestation.mjs';
 import { reservedCount, validTrace, finalizeTrace } from './lib/budget.mjs';
 
+if (process.env.JEV_EVAL_ISOLATED !== '1') {
+  console.error('JEV_EVAL_ISOLATED=1 is required; run agent evaluation in a disposable container or VM with no host credentials.');
+  process.exit(2);
+}
 const {values}=parseArgs({options:{host:{type:'string',default:'all'},task:{type:'string',default:'all'},paired:{type:'boolean',default:false},runs:{type:'string',default:'1'},report:{type:'string',default:'artifacts/agents.json'},'codex-bin':{type:'string'},'cursor-bin':{type:'string'},'codex-model':{type:'string'},'cursor-model':{type:'string'},'jev-model':{type:'string'}}});
 if(values['jev-model']) {if(!/^jev-[a-zA-Z0-9_.-]+$/.test(values['jev-model']))throw new Error('Invalid Jev model');process.env.JEV_MCP_MODEL=values['jev-model'];}
 const repetitions=Number(values.runs);

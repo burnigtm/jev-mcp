@@ -8,6 +8,10 @@ import { liveEnv } from './lib/mcp.mjs';
 import { attest } from './lib/attestation.mjs';
 import { reserveCall } from './lib/budget.mjs';
 
+if (process.env.JEV_EVAL_ISOLATED !== '1') {
+  console.error('JEV_EVAL_ISOLATED=1 is required; run agent evaluation in a disposable container or VM.');
+  process.exit(2);
+}
 const [workspace, traceFile, baselineFile, task, budget] = process.argv.slice(2);
 if (!workspace || !traceFile || !baselineFile || !task || !budget) process.exit(2);
 let child,closing=false;

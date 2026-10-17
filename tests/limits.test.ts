@@ -26,6 +26,8 @@ test("tiny allowances never append beyond their cap or split surrogate pairs", (
   for (const cap of [0, 1, 5, TRUNCATION_MARKER.length, 50]) {
     assert.ok(truncateText("x".repeat(500), cap).length <= cap);
   }
+  assert.equal(truncateText("abcdef", 2), "ab");
+  assert.equal(truncateText("abcdef", TRUNCATION_MARKER.length - 1).includes(TRUNCATION_MARKER), false);
   const text = "abc😀def";
   const result = truncateText(text.repeat(100), TRUNCATION_MARKER.length + 4);
   assert.equal(result, `abc${TRUNCATION_MARKER}`);

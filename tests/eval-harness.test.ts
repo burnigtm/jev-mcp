@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { mkdtemp, rm, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { TraceObserver, jsonLines, workflowChecks, attackMarker } from '../scripts/lib/trace.mjs';
 import { taskIds, materializeTask, gradeTask, fileDigests, integrityChecks, provenance, validateTaskGraders } from '../scripts/lib/tasks.mjs';
 import { liveCases, gradeLiveCase } from '../scripts/lib/live-cases.mjs';
@@ -24,6 +25,7 @@ test('agent telemetry handles real Cursor usage fields and classifies prerequisi
   const blocked=await runAgent(process.execPath,['-e','console.error("Sandbox mode is enabled but not available on this system. Sandbox requires macOS or Linux.");process.exit(1)'],{env:processEnv(),prompt:'',cwd:process.cwd()});
   assert.equal(blocked.infrastructure_reason,'sandbox_unavailable');
   assert.equal(infrastructureReason('Invalid API key secret-value'),'agent_auth_missing');
+  assert.equal(infrastructureReason('You’ve hit your usage limit. Upgrade to Pro or purchase more credits.'),'agent_rate_limited');
   assert.ok(!JSON.stringify(blocked).includes('Sandbox mode'));
 });
 
@@ -162,6 +164,28 @@ test('live-case grading separates abstention, mock backends and unsafe automatic
   assert.equal(gradeLiveCase(supported,{model:'jev-1.13.0',coverage:{complete:true},results:[{verdict:'verified',action:'review'}]}).status,'abstained');
   assert.equal(gradeLiveCase(supported,{model:'jev-1.13.0',coverage:{complete:true},results:[{verdict:'contradicted',action:'auto'}]}).status,'failed');
 });
+test('evaluation entrypoints require explicit isolation and processEnv excludes NODE_OPTIONS', () => {
+  const previousNodeOptions = process.env.NODE_OPTIONS;
+  const previousIsolation = process.env.JEV_EVAL_ISOLATED;
+  try {
+    process.env.NODE_OPTIONS = '--require should-not-leak';
+    process.env.JEV_EVAL_ISOLATED = '1';
+    const env = processEnv();
+    assert.equal(env.NODE_OPTIONS, undefined);
+    assert.equal(env.JEV_EVAL_ISOLATED, '1');
+    delete env.JEV_EVAL_ISOLATED;
+    const proxy = spawnSync(process.execPath, ['scripts/trace-proxy.mjs'], { env, encoding: 'utf8', timeout: 10000 });
+    assert.equal(proxy.status, 2);
+    const agent = spawnSync(process.execPath, ['scripts/eval-agent.mjs'], { env, encoding: 'utf8', timeout: 10000 });
+    assert.equal(agent.status, 2);
+  } finally {
+    if (previousNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = previousNodeOptions;
+    if (previousIsolation === undefined) delete process.env.JEV_EVAL_ISOLATED;
+    else process.env.JEV_EVAL_ISOLATED = previousIsolation;
+  }
+});
+
 test('the environment for generated test code excludes provider and host credentials', () => {
   const previous=[process.env.TYPESAFE_API_KEY,process.env.CURSOR_API_KEY,process.env.OPENAI_API_KEY];
   try {

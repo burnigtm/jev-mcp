@@ -30,13 +30,17 @@ export function validateResponse<Q extends Questions>(raw: unknown, questions: Q
     const actual = Object.keys(answer.probabilities);
     if (actual.length !== expected.length || expected.some(key => !Object.hasOwn(answer.probabilities, key))) throw new JevResponseError();
     const total = Object.values(answer.probabilities).reduce((sum, value) => sum + value, 0);
-    if (Math.abs(total - 1) > 0.01) throw new JevResponseError();
+    // Provider responses round each option probability to 2 decimal places, so n
+    // options can accumulate up to n * 0.005 rounding drift plus IEEE-754 noise.
+    const totalTolerance = Math.min(0.25, Math.max(0.02, expected.length * 0.005)) + 1e-9;
+    if (Math.abs(total - 1) > totalTolerance) throw new JevResponseError();
     if (answer.type === "choice") {
       if (!expected.includes(answer.choice) || answer.probabilities[answer.choice]! + 1e-9 < Math.max(...Object.values(answer.probabilities))) throw new JevResponseError();
     }
     if (answer.type === "score") {
       const expectedScore = expected.reduce((sum, key) => sum + Number(key) * answer.probabilities[key]!, 0);
-      if (answer.score > expected.length - 1 || expected.some(key => !Object.hasOwn(answer.legend, key)) || Math.abs(answer.score - expectedScore) > 0.01 * (expected.length - 1)) throw new JevResponseError();
+      const scoreTolerance = 0.02 * (expected.length - 1) + 1e-9;
+      if (answer.score > expected.length - 1 || expected.some(key => !Object.hasOwn(answer.legend, key)) || Math.abs(answer.score - expectedScore) > scoreTolerance) throw new JevResponseError();
     }
   }
   return result as SystemOneResult<Q>;

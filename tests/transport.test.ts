@@ -39,6 +39,19 @@ test("all nine tools and eight resources work through subprocess stdio", { timeo
     const resources = await client.listResources();
     assert.equal(resources.resources.length, 8);
     for (const resource of resources.resources) assert.equal((await client.readResource({ uri: resource.uri })).contents.length, 1);
+    const prompts = await client.listPrompts();
+    assert.equal(prompts.prompts.length, 3);
+    for (const prompt of prompts.prompts) {
+      const rendered = await client.getPrompt({
+        name: prompt.name,
+        arguments: prompt.name === "jev-step-loop"
+          ? { task: "Fix parser", observation: "Read parser first" }
+          : prompt.name === "jev-completion-gate"
+            ? { request: "Fix parser", test_command: "npm test" }
+            : { purpose: "Inspect bug report", source: "external-issue.txt" },
+      });
+      assert.equal(rendered.messages.length, 1);
+    }
     const invalid = await client.callTool({ name: "jev_evaluate", arguments: { state: "fixture", questions: {} } });
     assert.equal(invalid.isError, true);
     assert.equal(invalid.structuredContent, undefined);

@@ -15,11 +15,15 @@ import json
 import os
 import re
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.safe_http import open_no_redirect  # noqa: E402
 
 
 REPO = "burnigtm/jev-mcp"
@@ -264,13 +268,20 @@ def event_pull() -> dict[str, Any] | None:
     return pull
 
 
-def merge_event(pulls: list[dict[str, Any]], event: dict[str, Any] | None) -> list[dict[str, Any]]:
+def merge_event(pulls: list[dict[str, Any]], event: dict[str, Any] | None, source: str = "") -> list[dict[str, Any]]:
     if not event:
         return pulls
+    authoritative_event = source in ("snapshot", "event-only") or event.get("state") == "MERGED"
+    overwrite_keys = {"state", "merged_at", "updated_at", "sha", "title", "head", "user", "url"}
     for pull in pulls:
         if pull.get("number") == event["number"]:
             for key, value in event.items():
-                if pull.get(key) in ("", None, [], {}):
+                if pull.get(key) in ("", None, [], {}) or (
+                    authoritative_event
+                    and key in overwrite_keys
+                    and value not in ("", None, [], {})
+                    and not (key == "title" and value == f"Pull request {event['number']}" and pull.get("title"))
+                ):
                     pull[key] = value
             return pulls
     return [event, *pulls]
@@ -292,7 +303,7 @@ def api_json(path: str, auth: str) -> Any:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with open_no_redirect(request, 20) as response:
             return json.loads(response.read().decode("utf-8", "replace") or "null")
     except urllib.error.HTTPError as err:
         err.read()
@@ -969,7 +980,7 @@ def event_from_env() -> dict[str, str]:
 
 def build_model(fixture: Path | None, previous: Path | None) -> dict[str, Any]:
     pulls, source, note = load_pulls(fixture, previous)
-    pulls = merge_event(pulls, event_pull())
+    pulls = merge_event(pulls, event_pull(), source)
     return {
         "refreshed_at": iso(now_utc()),
         "source": source,
@@ -1041,7 +1052,7 @@ def main() -> int:
     parser.add_argument("--fixture", help="JSON fixture instead of GitHub")
     parser.add_argument("--previous", help="Prior dashboard used when GitHub cannot be read")
     parser.add_argument("--serve", type=int, help="Serve the interactive board on this port")
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
     out = Path(args.out)
     html_path = None if args.no_html else Path(args.html) if args.html else out.with_suffix(".html")

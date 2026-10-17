@@ -222,6 +222,23 @@ test("absent and wholly ineligible candidates ask no selection question", async 
     assert.ok(result.reason_codes.includes("no_candidates"));
     assert.equal(result.selection, null);
     assert.deepEqual(result.blocked_candidates, []);
+    assert.equal(result.handoff, "partner_model");
+    assert.equal(result.partner_model.required, true);
+    assert.equal(result.action, "auto");
+  });
+
+  await withApi((payload, response) => send(response, judgment(payload, { next: "stop", done: 0.9 })), async () => {
+    const stopResult = await runStep(input({ candidates: undefined }));
+    assert.equal(stopResult.handoff, "stop");
+    assert.equal(stopResult.action, "auto");
+    assert.equal(stopResult.partner_model.required, false);
+  });
+
+  await withApi((payload, response) => send(response, judgment(payload, { risk: 2 })), async () => {
+    const riskResult = await runStep(input({ candidates: undefined }));
+    assert.equal(riskResult.handoff, "review");
+    assert.equal(riskResult.action, "review");
+    assert.equal(riskResult.partner_model.required, false);
   });
 
   let sent: Payload | undefined;
@@ -368,6 +385,7 @@ test("a clipped candidate description blocks dispatch and stays off the provider
       candidates: [candidate({ description: `Read parser ${"detail ".repeat(400)}`, arguments: { path: "src/parser.ts", token: secret } })],
     }));
     assert.equal(result.call, null);
+    assert.equal(result.truncated, true);
     assert.equal(result.coverage.complete, false);
     assert.notEqual(result.action, "auto");
     assert.ok(result.reason_codes.includes("incomplete_context"));

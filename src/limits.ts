@@ -31,7 +31,9 @@ export function truncateText(text: string, maxChars: number): string {
   // Reserve marker space before slicing: the returned text must fit the cap.
   const marker = TRUNCATION_MARKER;
   if (limit < marker.length) {
-    return marker.slice(0, limit);
+    // The marker itself must never be presented as evaluated state. With too
+    // little room for marker plus text, keep a true prefix instead.
+    return text.slice(0, limit);
   }
   let end = limit - marker.length;
   // Never split a UTF-16 surrogate pair at the truncation boundary.
@@ -86,7 +88,11 @@ export function fitState(
     coverage: {
       complete: !truncated,
       original_chars: raw.length,
-      evaluated_chars: truncated ? Math.max(0, fitted.length - TRUNCATION_MARKER.length) : raw.length,
+      evaluated_chars: truncated
+        ? fitted.endsWith(TRUNCATION_MARKER)
+          ? Math.max(0, fitted.length - TRUNCATION_MARKER.length)
+          : fitted.length
+        : raw.length,
       estimated_tokens: { state: estimateTokens(fitted), questions: questionsTokens, longest_question: longest },
       estimator: "chars/4",
     },

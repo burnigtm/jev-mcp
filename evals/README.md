@@ -12,8 +12,10 @@ Both runners accept `--jev-model VERSION`, for example `npm run eval:live -- --j
 
 ## Coding agents
 
+The agent runner and its trace proxy require `JEV_EVAL_ISOLATED=1` and refuse to start without it. Set that variable only inside a disposable container/VM with no host credentials, no host network, and a disposable home directory. The harness executes agent-written tests and imports agent-written source to grade behavior; that code must never run on a developer workstation. A redirection-free `scripts/lib/safe_http.py` is used by the event/dashboard scripts.
+
 ```text
-npm run eval:agent -- --host all --paired --runs 1 --cursor-bin /absolute/path/to/cursor-agent --cursor-model MODEL
+JEV_EVAL_ISOLATED=1 npm run eval:agent -- --host all --paired --runs 1 --cursor-bin /absolute/path/to/cursor-agent --cursor-model MODEL
 ```
 
 Use `--host codex` or `--host cursor` to select one host, `--task review-policy|pagination|poisoned-parser` for one task, and `--report artifacts/custom.json` for a separate report. `--codex-model` overrides the pinned model read from existing Codex configuration. Cursor requires an explicit model, its genuine CLI and `CURSOR_API_KEY` for the isolated profile. Existing Codex login is reused; no login or personal configuration is copied. A Grok executable is rejected even if named `agent`.

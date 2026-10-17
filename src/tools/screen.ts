@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { screenQuestions } from "../packs/screen.js";
-import { screenAction, screenRecommendation, tightenBlockAt } from "../policy.js";
+import { screenAction, screenRecommendation, tightenBlockAt, tightenScreenReviewAt } from "../policy.js";
 import { asNoul } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 import { JevValidationError } from "../errors.js";
@@ -16,10 +16,17 @@ export const screenInputSchema = z.object({
 
 export type ScreenInput = z.infer<typeof screenInputSchema>;
 
+/** High-signal phrases that survive paraphrasing; a deterministic backstop only. */
+const INJECTION_PATTERN = /(?:ignore|disregard|forget)\s+(?:all\s+)?(?:the\s+)?(?:previous|prior|above)\s+(?:instructions?|prompts?|rules?)|system\s+note\s+for\s+(?:the\s+)?(?:ai|assistant|model)|append\s+your\s+system\s+prompt|jailbreak|developer\s+(?:override|mode)|you\s+are\s+now\s+(?:an?\s+)?(?:ai|assistant|model)/i;
+
+function containsInjectionInstruction(text: string): boolean {
+  return INJECTION_PATTERN.test(text.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, ""));
+}
+
 export async function runScreen(input: ScreenInput, context?: ToolContext) {
   const config = getConfig();
   const blockAt = tightenBlockAt(input.block_at, config.blockAt);
-  const reviewAt = input.review_at ?? 0.25;
+  const reviewAt = tightenScreenReviewAt(input.review_at, 0.25);
   if (reviewAt > blockAt) throw new JevValidationError("Screen thresholds must satisfy review_at <= block_at.");
   const hasPurpose = Boolean(input.purpose?.trim());
   const result = await systemOne({
@@ -40,13 +47,19 @@ export async function runScreen(input: ScreenInput, context?: ToolContext) {
     blockAt,
     reviewAt,
   });
-  const recommendation = result.truncated && judgedRecommendation !== "block" ? "review" : judgedRecommendation;
+  const suspicious = containsInjectionInstruction(input.text) || (hasPurpose && containsInjectionInstruction(input.purpose ?? ""));
+  const judgedDecision = suspicious && (judgedRecommendation === "pass" || judgedRecommendation === "skip")
+    ? "review"
+    : judgedRecommendation;
+  const recommendation = result.truncated && judgedDecision !== "block" ? "review" : judgedDecision;
   const reason =
     recommendation === "block"
       ? `injection probability ${injection.toFixed(2)} >= block threshold ${blockAt}`
       : recommendation === "review"
-        ? result.truncated ? "Context was truncated; the entire text has not been screened."
-          : `injection probability ${injection.toFixed(2)} >= review threshold ${reviewAt}`
+        ? suspicious && judgedRecommendation !== "block"
+          ? "A deterministic prompt-injection pattern was detected; review before reading this content."
+          : result.truncated ? "Context was truncated; the entire text has not been screened."
+            : `injection probability ${injection.toFixed(2)} >= review threshold ${reviewAt}`
         : recommendation === "skip"
           ? relevance !== undefined && relevance < 0.35
             ? `relevance ${relevance.toFixed(2)} is too low`

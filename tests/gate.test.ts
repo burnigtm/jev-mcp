@@ -126,6 +126,18 @@ test("incoherent high confidence cannot approve verification", async t => {
   assert.equal(verification.results[0]?.action, "review");
 });
 
+test("all_claims_verified distinguishes classification auto from completion approval", async (t) => {
+  let call = 0;
+  t.mock.method(globalThis, "fetch", async () => Response.json({
+    ...fixture(), answers: { claim_0: choice(++call === 1 ? "unsupported" : "verified", 0.95) },
+  }));
+  const unsupported = await runVerify({ claims: ["Deployment succeeded"], evidence: "No deployment evidence." });
+  assert.equal(unsupported.all_claims_verified, false);
+
+  const verified = await runVerify({ claims: ["Tests passed"], evidence: "Tests passed." });
+  assert.equal(verified.all_claims_verified, true);
+});
+
 test("confident contradictions escalate while moderate contradictions require review", () => {
   assert.equal(gateFor([choice("contradicted", 0.8)]).action, "escalate");
   const moderate = gateFor([choice("contradicted", 0.6)]);
@@ -237,11 +249,17 @@ test("standalone review and verify cannot automatically approve truncated contex
   assert.equal(verification.results[0]?.action, "review");
 });
 
-test("a lower auto_accept cannot loosen the environment floor", async (t) => {
+test("a lower auto_accept or review_at cannot loosen the environment floor in verify", async (t) => {
   t.mock.method(globalThis, "fetch", async () => Response.json({
-    ...fixture(), answers: { claim_0: choice("verified", 0.4) },
+    ...fixture(), answers: { claim_0: choice("verified", 0.55) },
   }));
-  const result = await runVerify({ claims: ["Tests pass"], evidence: "Tests pass", auto_accept: 0.3 });
+  const result = await runVerify({ claims: ["Tests pass"], evidence: "Tests pass", auto_accept: 0.3, review_at: 0.2 });
   assert.equal(result.thresholds.auto_accept, 0.8);
+  assert.equal(result.thresholds.review_at, 0.5);
   assert.notEqual(result.action, "auto");
+  assert.equal(result.results[0]?.action, "review");
+
+  const tightenedReview = await runVerify({ claims: ["Tests pass"], evidence: "Tests pass", review_at: 0.6 });
+  assert.equal(tightenedReview.thresholds.review_at, 0.6);
+  assert.equal(tightenedReview.results[0]?.action, "escalate");
 });

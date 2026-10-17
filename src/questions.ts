@@ -14,6 +14,9 @@ export function parseQuestions(raw: Record<string, QuestionInput>): Questions {
   if (ids.length === 0) {
     throw new JevValidationError("questions must contain at least one entry");
   }
+  if (ids.includes("__proto__")) {
+    throw new JevValidationError("Question IDs must not use __proto__; the JSON record cannot preserve it.");
+  }
   for (const [id, value] of Object.entries(raw)) {
     questions[id] = parseQuestion(id, value);
   }
@@ -30,11 +33,21 @@ export function parseQuestion(id: string, value: QuestionInput): Question {
       type: "noul",
       instructions: value.instructions,
     };
-    if (value.criteria && typeof value.criteria === "object" && !Array.isArray(value.criteria)) {
-      const criteria = value.criteria as { true?: string; false?: string };
+    if (value.criteria !== undefined && value.criteria !== null) {
+      if (typeof value.criteria !== "object" || Array.isArray(value.criteria)) {
+        throw new JevValidationError(`Question ${id}: noul criteria must be an object with true/false descriptions`);
+      }
+      const criteria = value.criteria as Record<string, unknown>;
+      const keys = Object.keys(criteria);
+      if (keys.some(key => key !== "true" && key !== "false")) {
+        throw new JevValidationError(`Question ${id}: noul criteria may only contain true and false`);
+      }
+      if (keys.some(key => criteria[key] !== null && typeof criteria[key] !== "string")) {
+        throw new JevValidationError(`Question ${id}: noul descriptions must be text or null`);
+      }
       question.criteria = {
-        true: criteria.true,
-        false: criteria.false,
+        true: (criteria.true as string | undefined) ?? undefined,
+        false: (criteria.false as string | undefined) ?? undefined,
       };
     }
     return question;
@@ -45,6 +58,9 @@ export function parseQuestion(id: string, value: QuestionInput): Question {
     }
     const criteria = value.criteria as Record<string, string | null>;
     const keys = Object.keys(criteria);
+    if (keys.includes("__proto__")) {
+      throw new JevValidationError(`Question ${id}: choice options must not use __proto__; the JSON record cannot preserve it.`);
+    }
     if (keys.length < 2) {
       throw new JevValidationError(`Question ${id}: choice needs at least two options`);
     }

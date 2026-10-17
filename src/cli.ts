@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { getConfig } from "./config.js";
 import { errorDetails, JevConfigError, JevValidationError } from "./errors.js";
 import { listModels, systemOne, withToolContext } from "./typesafe.js";
-import { parseQuestions, type QuestionInput } from "./questions.js";
+import { type QuestionInput } from "./questions.js";
 import { VERSION } from "./version.js";
 import { validatePolicyThresholds } from "./policy.js";
-import { evaluateInputSchema } from "./tools/evaluate.js";
+import { evaluateInputSchema, runEvaluate } from "./tools/evaluate.js";
 
 export async function runDoctor(options: { json?: boolean } = {}): Promise<void> {
   const report: Record<string, unknown> = { version: VERSION, node: process.version, ready: false };
@@ -50,7 +50,11 @@ export async function runDoctor(options: { json?: boolean } = {}): Promise<void>
 }
 
 function safeBaseUrl(baseURL: string): string {
-  return baseURL;
+  try {
+    return new URL(baseURL).origin;
+  } catch {
+    return "<invalid>";
+  }
 }
 
 export async function runEval(argv: string[]): Promise<void> {
@@ -61,13 +65,9 @@ export async function runEval(argv: string[]): Promise<void> {
     if (error instanceof SyntaxError) throw new JevValidationError("Evaluation input must be valid JSON.");
     throw error;
   }
-  if (!evaluateInputSchema.safeParse(parsed).success) throw new JevValidationError("Evaluation requires state (text or JSON object/array) and a valid questions map.");
-  const questions = parseQuestions(parsed.questions);
-  const result = await systemOne({
-    state: parsed.state,
-    questions,
-    model: parsed.model,
-  });
+  const validated = evaluateInputSchema.safeParse(parsed);
+  if (!validated.success) throw new JevValidationError("Evaluation requires state (text or JSON object/array) and a valid questions map.");
+  const result = await runEvaluate(validated.data);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
@@ -99,7 +99,7 @@ function parseEvalArgs(argv: string[]): EvalArgs {
       value = token.slice(separator + 1);
     } else {
       value = argv[i + 1];
-      if (value === undefined || value.startsWith("--")) {
+      if (value === undefined || value === "--stdin" || /^--(json|state|questions|model)(?:=|$)/.test(value)) {
         throw new JevValidationError(`Missing value for --${key}.`);
       }
       i += 1;

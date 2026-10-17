@@ -6,6 +6,7 @@ import { existsVerdict, rankQuestions, type RankCandidate } from "../packs/rank.
 import { confidenceSupportsAuto } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, withToolContext, type ToolContext } from "../typesafe.js";
+import { MAX_JUDGE_ID_CHARS, sanitizeJudgeText } from "../untrusted.js";
 
 export const rankInputSchema = z.object({
   query: z.string().describe("What you are looking for, in natural language"),
@@ -32,6 +33,10 @@ export async function runRank(input: RankInput, context?: ToolContext) {
   if (input.candidates.length > MAX_RANK_CANDIDATES) {
     throw new JevBudgetError(`Rank accepts at most ${MAX_RANK_CANDIDATES} candidates per request. Split the list before ranking.`);
   }
+  const requestedTopK = input.top_k ?? 5;
+  if (!Number.isInteger(requestedTopK) || requestedTopK < 1 || requestedTopK > 50) {
+    throw new JevValidationError("top_k must be an integer between 1 and 50.");
+  }
   return withToolContext(context, async (context) => {
     const originalIds = new Map<string, string>();
     const seen = new Set<string>();
@@ -49,9 +54,9 @@ export async function runRank(input: RankInput, context?: ToolContext) {
       originalChars += candidate.text.length;
       evaluatedChars += text === candidate.text ? text.length : Math.max(0, text.length - TRUNCATION_MARKER.length);
       truncated = truncated || text !== candidate.text;
-      return { id, original_id: candidate.id, text };
+      return { id, original_id: sanitizeJudgeText(candidate.id, MAX_JUDGE_ID_CHARS), text };
     });
-    const topK = Math.min(input.top_k ?? 5, candidates.length);
+    const topK = Math.min(requestedTopK, candidates.length);
     let inputTokens = 0;
     let outputTokens = 0;
     let firstRoundChunks = 0;
@@ -85,7 +90,7 @@ export async function runRank(input: RankInput, context?: ToolContext) {
             ...partial,
             action: truncated ? ("review" as const) : partial.action,
             exists: partial.exists,
-            exists_verdict: existsVerdict(partial.exists),
+            exists_verdict: partial.exists_verdict,
             winner: originalIds.get(partial.winner)!,
             top: partial.top.map((hit) => ({ ...hit, id: originalIds.get(hit.id)! })),
             usage: { input_tokens: inputTokens, output_tokens: outputTokens },
@@ -157,7 +162,10 @@ async function rankOne(query: string, candidates: InternalCandidate[], topK: num
     .sort((a, b) => b.probability - a.probability);
   const top = ranked.slice(0, Math.min(topK, ranked.length));
   const autoAccept = getConfig().autoAccept;
-  const answered = exists >= autoAccept && confidenceSupportsAuto(best.confidence, best.probabilities, autoAccept);
+  // A partial verdict must never coexist with action auto, even when the
+  // environment lowers auto_accept below the documented "answered" floor.
+  const answeredAt = Math.max(0.75, autoAccept);
+  const answered = exists >= answeredAt && confidenceSupportsAuto(best.confidence, best.probabilities, autoAccept);
   return {
     model: result.model,
     usage: result.usage,
@@ -165,7 +173,7 @@ async function rankOne(query: string, candidates: InternalCandidate[], topK: num
     coverage: result.coverage,
     action: answered ? ("auto" as const) : ("review" as const),
     exists,
-    exists_verdict: existsVerdict(exists),
+    exists_verdict: existsVerdict(exists, autoAccept),
     winner: best.choice,
     winner_confidence: best.confidence,
     top,

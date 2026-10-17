@@ -33,11 +33,12 @@ test("packed package installs offline and runs its shipped CLI and MCP", { timeo
     const paths = new Set<string>(packed.files.map((file: { path: string }) => file.path));
     for (const path of [
       "dist/index.js", "docs/install.md", "docs/configuration.md", "docs/architecture.md",
-      "docs/tools.md", "AGENTS.md", ".env.example", "scripts/checkout-d-drive.ps1",
+      "docs/tools.md", "evals/README.md", "AGENTS.md", ".env.example", "scripts/checkout-d-drive.ps1",
       "skills/jev-mcp/SKILL.md", "examples/codex.config.toml", "examples/cursor.mcp.json",
       "skills/jev-mcp/references/tools.md", "skills/jev-mcp/references/setup.md", "skills/jev-mcp/LICENSE",
       "skills/jev-mcp/references/typesafe.md", "skills/jev-mcp/references/evidence.md", "skills/jev-mcp/scripts/evidence.mjs",
     ]) assert.ok(paths.has(path), `Package must include ${path}`);
+    assert.equal(paths.has("scripts/notify-jev-mcp-event.py"), false, "Internal webhook scripts must not ship in npm tarball");
 
     const installation = join(directory, "installed with spaces");
     mkdirSync(installation);

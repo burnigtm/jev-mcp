@@ -22,7 +22,7 @@ Always pass `TYPESAFE_API_KEY` in the MCP `env` block. Some hosts strip inherite
 
 1. Copy [`examples/cursor.mcp.json`](../examples/cursor.mcp.json) to `.cursor/mcp.json` in the project (or Cursor’s user MCP settings).
 2. Set `args` to the **absolute** path of `dist/index.js` on this machine.
-3. Set `env.TYPESAFE_API_KEY`.
+3. Keep `env.TYPESAFE_API_KEY` as `${env:TYPESAFE_API_KEY}` and launch Cursor with the key exported in its environment; do not paste a live key into a tracked file.
 4. Install the complete [`skills/jev-mcp/`](../skills/jev-mcp/SKILL.md) folder at `.agents/skills/jev-mcp/` in the project. Keep `references/`, `scripts/` and `LICENSE`; copying only `SKILL.md` omits its contracts and evidence helper. Codex supports the same shared discovery location.
 5. Restart MCP. Settings → MCP should show `jev` as connected.
 6. Ask: “Call `jev_coding_loop` on this task and last test output.”
@@ -36,12 +36,14 @@ Windows example:
       "command": "node",
       "args": ["D:\\jev-mcp\\dist\\index.js"],
       "env": {
-        "TYPESAFE_API_KEY": "ts_..."
+        "TYPESAFE_API_KEY": "${env:TYPESAFE_API_KEY}"
       }
     }
   }
 }
 ```
+
+`examples/cursor.mcp.json` and `examples/codex.config.toml` use the same forwarding form. The repository ignores local `.cursor/mcp.json`, `.codex/config.toml`, `.task-evidence/`, and `.jev-connection.json` so evidence and host credentials do not get committed accidentally.
 
 ## Codex
 

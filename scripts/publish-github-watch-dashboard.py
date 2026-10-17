@@ -12,6 +12,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib.safe_http import open_no_redirect  # noqa: E402
+
 REPO = "burnigtm/jev-mcp"
 BRANCH = "cursor-watch"
 DEFAULT_PATHS = ("docs/github-watch.md", "docs/github-watch.html")
@@ -36,7 +39,7 @@ def request(method: str, url: str, data: dict | None = None) -> tuple[int, dict 
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with open_no_redirect(req, 30) as resp:
             raw = resp.read().decode("utf-8", "replace")
             parsed = json.loads(raw) if raw else None
             return resp.status, parsed, raw

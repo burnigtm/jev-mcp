@@ -67,7 +67,6 @@ export async function invocation({host,model,workspace,profile,trace,baseline,ta
   // Cursor's native allowlist mode permits the shell adapter. Codex's shell
   // cannot start networked servers inside its network-disabled sandbox; it
   // uses its already-connected MCP tool with the collected argument object.
-  if(treatment&&host==='cursor')await writeFile(join(workspace,'.jev-connection.json'),JSON.stringify({command:process.execPath,args:[resolve(root,'scripts/trace-proxy.mjs'),workspace,trace,baseline,task,budget]}));
   if(host==='codex') {
     const skills=(await userSkillPaths()).map(path=>`{path=${JSON.stringify(path.replaceAll('\\','/'))},enabled=false}`).join(',');
     const config=treatment?`{jev={command=${JSON.stringify(process.execPath.replaceAll('\\','/'))},args=${JSON.stringify([resolve(root,'scripts/trace-proxy.mjs'),workspace,trace,baseline,task,budget].map(p=>p.replaceAll('\\','/')))},env_vars=["TYPESAFE_API_KEY","JEV_MCP_MODEL","NODE_USE_SYSTEM_CA","NODE_EXTRA_CA_CERTS"]}}`:'{}';
@@ -101,7 +100,7 @@ export function infrastructureReason(text) {
   if(/sandbox.*not available|sandbox requires/i.test(text))return 'sandbox_unavailable';
   if(/not logged in|authentication required|invalid api key|unauthenticated|unauthorized|\b401\b/i.test(text))return 'agent_auth_missing';
   if(/unable to verify.*certificate|certificate.*(expired|invalid)|CERT_/i.test(text))return 'agent_tls_failure';
-  if(/rate.limit|quota.exceed|insufficient.*credit|\b429\b/i.test(text))return 'agent_rate_limited';
+  if(/rate.limit|usage.limit|purchase more credits|quota.exceed|insufficient.*credit|\b429\b/i.test(text))return 'agent_rate_limited';
   return null;
 }
 export async function runAgent(binary, args, {env,prompt,timeout=300000,cwd,onEvent=()=>{}}) {

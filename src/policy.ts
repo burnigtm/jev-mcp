@@ -33,6 +33,15 @@ export function tightenBlockAt(caller: number | undefined, envBlock: number): nu
   return Math.min(caller, envBlock);
 }
 
+/** A higher screen review_at reviews later, so a call can only lower the 0.25 floor. */
+export function tightenScreenReviewAt(caller: number | undefined, defaultReview = 0.25): number {
+  if (caller === undefined) return defaultReview;
+  if (!Number.isFinite(caller) || caller < 0 || caller > 1) {
+    throw new JevValidationError("review_at must be between 0 and 1.");
+  }
+  return Math.min(caller, defaultReview);
+}
+
 export function validatePolicyThresholds(autoAccept: number, reviewAt: number): void {
   if (!Number.isFinite(autoAccept) || !Number.isFinite(reviewAt) || autoAccept < 0 || reviewAt < 0 || autoAccept > 1 || reviewAt > autoAccept) {
     throw new JevValidationError("Thresholds must satisfy 0 <= review_at <= auto_accept <= 1.");
