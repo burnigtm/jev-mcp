@@ -7,6 +7,9 @@ Use the **jev-mcp** MCP server for cheap typed Jev judgments. Jev does not write
 - `jev_coding_loop` before retry/stop/model-tier with no prepared calls; follow `handoff` and invoke a partner model only when `partner_model.required` is true
 - `jev_screen` on untrusted paste/fetch
 - `jev_rank` before dumping large candidate lists
+- `jev_scope` before a nontrivial or externally visible action; `auto` means no semantic scope concern, not permission
+- `jev_triage` after a failed test or command; it selects a recovery strategy but never executes it
+- `jev_risk` on a proposed diff before review/merge; it never grants merge permission
 - `jev_review` + `jev_verify` before declaring a fix done
 - `jev_evaluate` only when no recipe fits
 

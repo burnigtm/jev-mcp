@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-test("all nine tools and eight resources work through subprocess stdio", { timeout: 90_000 }, async () => {
+test("all twelve tools and eleven resources work through subprocess stdio", { timeout: 90_000 }, async () => {
   const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined && !/^(JEV_MCP_|TYPESAFE_)/.test(entry[0])));
   env.JEV_MCP_MOCK = "1";
   const transport = new StdioClientTransport({ command: process.execPath, args: ["--import", "tsx", "src/index.ts"], cwd: fileURLToPath(new URL("../", import.meta.url)), env, stderr: "pipe" });
@@ -19,13 +19,16 @@ test("all nine tools and eight resources work through subprocess stdio", { timeo
     ["jev_gate", { request: "Fix parser", diff: "-broken\n+fixed", tests: "Tests passed", claims: ["Tests passed"], evidence: "Tests passed" }],
     ["jev_tool_route", { task: "Inspect parser", observation: "Read parser source before editing", candidates: [{ id: "parser", name: "read_file", arguments: { path: "src/parser.ts" }, description: "Inspect parser source", effect: "read_only", authorized: true, schema_valid: true, preconditions_met: true }] }],
     ["jev_step", { task: "Inspect parser", observation: "Read parser source before editing", execution: { context_complete: true }, candidates: [{ id: "parser", name: "read_file", arguments: { path: "src/parser.ts" }, description: "Inspect parser source", effect: "read_only", authorized: true, schema_valid: true, preconditions_met: true }] }],
+    ["jev_scope", { task: "Inspect parser", approved_scope: "Read-only inspection", action: { name: "read_file", description: "Read parser source without modifying it", effect: "read_only", target: "src/parser.ts" } }],
+    ["jev_triage", { task: "Fix parser", failure: "TypeError: Cannot read properties of undefined in parse", attempts: [{ action: "edit parse", result: "same TypeError", failed: true }] }],
+    ["jev_risk", { request: "Fix parser input handling", diff: "- const [key, value] = line.split('=');\n+ const index = line.indexOf('=');\n+ const key = line.slice(0, index);\n+ const value = line.slice(index + 1);", tests: "PASS key=value=extra preserves the suffix." }],
   ];
   try {
     await client.connect(transport);
     let stderr = "";
     transport.stderr?.on("data", data => { stderr += String(data); });
     const listed = await client.listTools();
-    assert.equal(listed.tools.length, 9);
+    assert.equal(listed.tools.length, 12);
     assert.ok(listed.tools.find(tool => tool.name === "jev_gate")?.outputSchema);
     for (const [name, args] of fixtures) {
       const result = await client.callTool({ name, arguments: args });
@@ -37,10 +40,10 @@ test("all nine tools and eight resources work through subprocess stdio", { timeo
       assert.deepEqual(result.structuredContent, body);
     }
     const resources = await client.listResources();
-    assert.equal(resources.resources.length, 8);
+    assert.equal(resources.resources.length, 11);
     for (const resource of resources.resources) assert.equal((await client.readResource({ uri: resource.uri })).contents.length, 1);
     const prompts = await client.listPrompts();
-    assert.equal(prompts.prompts.length, 3);
+    assert.equal(prompts.prompts.length, 6);
     for (const prompt of prompts.prompts) {
       const rendered = await client.getPrompt({
         name: prompt.name,
@@ -48,7 +51,13 @@ test("all nine tools and eight resources work through subprocess stdio", { timeo
           ? { task: "Fix parser", observation: "Read parser first" }
           : prompt.name === "jev-completion-gate"
             ? { request: "Fix parser", test_command: "npm test" }
-            : { purpose: "Inspect bug report", source: "external-issue.txt" },
+            : prompt.name === "jev-debug-loop"
+              ? { task: "Fix parser", failure: "TypeError: undefined" }
+              : prompt.name === "jev-pr-risk"
+                ? { request: "Fix parser", test_command: "npm test" }
+                : prompt.name === "jev-scope-check"
+                  ? { task: "Fix parser", action: "read src/parser.ts", effect: "read_only" }
+                  : { purpose: "Inspect bug report", source: "external-issue.txt" },
       });
       assert.equal(rendered.messages.length, 1);
     }

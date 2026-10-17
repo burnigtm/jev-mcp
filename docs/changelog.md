@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+### Scope, failure triage, and security risk tools
+
+- Added `jev_scope`, `jev_triage`, and `jev_risk` with `scope`, `triage`, and `risk` question packs. The server now exposes **12 tools, 11 packs, and 6 prompts**.
+- `jev_scope` checks semantic scope, declared-effect consistency, fresh-confirmation need, and risk; external/destructive/unknown effects can never be `auto`. `auto` is not authorization.
+- `jev_triage` selects a failure cause, loop progress, recoverability, and recovery strategy. Repeating/regressing progress, exhausted retries, `ask_user`, and low recoverability cannot be `auto`; the host still executes any recovery call.
+- `jev_risk` judges authorization, validation, secret-exposure, data-loss, concurrency, dependency, and external-effect concerns plus severity. Critical/uncertain flags cannot be `auto`; it is never merge permission.
+- Moved the deterministic injection backstop into shared `untrusted.ts` and applied it to the new tools' untrusted state. Added document-safe sanitization that preserves newlines for logs/diffs.
+- Added `jev-scope-check`, `jev-debug-loop`, and `jev-pr-risk` MCP prompts, mock regression tests, skill contracts, and a benchmark/evals update.
 
 ### Security hardening for untrusted data, helper connections, and evaluation
 

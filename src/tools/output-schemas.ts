@@ -114,6 +114,107 @@ const rankCoverageSchema = z.object({
   }),
 });
 
+const choiceOutputSchema = z.object({
+  choice: z.string(),
+  confidence: probabilitySchema,
+  probabilities: z.record(z.string(), probabilitySchema),
+});
+
+const scoreOutputSchema = z.object({
+  score: z.number().min(0).max(2),
+  confidence: probabilitySchema,
+  probabilities: z.record(z.string(), probabilitySchema),
+  legend: z.record(z.string(), z.unknown()),
+});
+
+export const scopeReasonSchema = z.enum([
+  "accepted",
+  "in_scope",
+  "out_of_scope",
+  "scope_uncertain",
+  "effect_mismatch",
+  "effect_uncertain",
+  "confirmation_required",
+  "confirmation_uncertain",
+  "external_effect",
+  "destructive_effect",
+  "unknown_effect",
+  "risk_review",
+  "risk_uncertain",
+  "injection_suspected",
+  "incomplete_context",
+  "review_required",
+]);
+
+export const scopeOutputSchema = z.object({
+  ...baseToolOutputShape,
+  scope: z.object({
+    in_scope: probabilitySchema,
+    effect_match: probabilitySchema,
+    needs_confirmation: probabilitySchema,
+  }),
+  risk: scoreOutputSchema,
+  reason_codes: z.array(scopeReasonSchema).min(1),
+  thresholds: z.object({ auto_accept: probabilitySchema, review_at: probabilitySchema }),
+});
+
+export const triageReasonSchema = z.enum([
+  "accepted",
+  "cause_uncertain",
+  "cause_unknown",
+  "progress_repeating",
+  "progress_regressing",
+  "not_recoverable",
+  "retry_budget_exhausted",
+  "human_decision_required",
+  "strategy_uncertain",
+  "strategy_escalate",
+  "injection_suspected",
+  "incomplete_context",
+  "review_required",
+]);
+
+export const triageOutputSchema = z.object({
+  ...baseToolOutputShape,
+  cause: z.object({
+    id: z.string(),
+    confidence: probabilitySchema,
+    probabilities: z.record(z.string(), probabilitySchema),
+  }),
+  progress: choiceOutputSchema.extend({
+    choice: z.enum(["advancing", "repeating", "regressing", "complete"]),
+  }),
+  recoverable: probabilitySchema,
+  strategy: choiceOutputSchema.extend({
+    choice: z.enum(["retry", "change_approach", "gather_context", "ask_user", "stop", "escalate"]),
+  }),
+  reason_codes: z.array(triageReasonSchema).min(1),
+  thresholds: z.object({ auto_accept: probabilitySchema, review_at: probabilitySchema }),
+});
+
+export const riskReasonSchema = z.enum([
+  "accepted",
+  "authorization_concern",
+  "validation_concern",
+  "secret_exposure",
+  "data_loss",
+  "concurrency_concern",
+  "dependency_concern",
+  "external_effect",
+  "severity_review",
+  "injection_suspected",
+  "incomplete_context",
+  "review_required",
+]);
+
+export const riskOutputSchema = z.object({
+  ...baseToolOutputShape,
+  flags: z.record(z.string(), probabilitySchema),
+  severity: scoreOutputSchema,
+  reason_codes: z.array(riskReasonSchema).min(1),
+  thresholds: z.object({ auto_accept: probabilitySchema, review_at: probabilitySchema }),
+});
+
 export const rankOutputSchema = z.object({
   ...baseToolOutputShape,
   coverage: rankCoverageSchema,

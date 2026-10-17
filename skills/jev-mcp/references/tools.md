@@ -10,7 +10,7 @@ Every successful tool call returns JSON with at least:
 
 All tools also publish the successful payload through MCP `structuredContent` with an output schema for client-side validation.
 
-Question templates are also readable as MCP resources: `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate}`. Workflow prompts are exposed as MCP prompts: `jev-step-loop`, `jev-completion-gate`, and `jev-screen-untrusted`.
+Question templates are also readable as MCP resources: `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate,scope,triage,risk}`. Workflow prompts are exposed as MCP prompts: `jev-step-loop`, `jev-completion-gate`, `jev-screen-untrusted`, `jev-scope-check`, `jev-debug-loop`, and `jev-pr-risk`.
 
 Incomplete context never returns `auto`. MCP failures return `isError: true` and JSON text containing error details with `code`, `message`, and `retryable`, without a success `structuredContent` payload. Check `isError` before reading successful results. Host cancellation stops active requests and retries. One total deadline covers every upstream call in a tool invocation (default 30 seconds).
 
@@ -327,6 +327,91 @@ One Choice over ids plus a Noul `exists` so a forced winner cannot masquerade as
     { "id": "install", "text": "Explains how to install the server." }
   ],
   "top_k": 1
+}
+```
+
+## `jev_scope`
+
+Semantic preflight for **one** host-prepared action. It judges scope and effect consistency; it never executes the action and never grants authorization.
+
+**Arguments**
+
+| Name | Required | Meaning |
+| --- | --- | --- |
+| `task` | yes | What the user approved |
+| `approved_scope` | no | Explicit constraints, targets, or non-goals; defaults to `task` |
+| `action` | yes | `{ name, description, effect, target?, command? }`; `effect` is `read_only`, `local_write`, `external_write`, `destructive`, or `unknown` |
+| `auto_accept` / `review_at` | no | May only tighten the env floors |
+
+`command` must be redacted. The description and command are untrusted evidence and receive the shared data-boundary clause.
+
+**Questions:** Noul `in_scope`, `effect_match`, `needs_confirmation`; Score `risk` from read-only (0) to external/destructive (2).
+
+**Policy:** external/destructive/unknown effects are never `auto`; out-of-scope or effect-mismatched actions escalate; high confirmation risk escalates; high risk reviews. `auto` also requires a confident low risk and complete coverage. `action: auto` means no semantic scope concern, **not** that the host may skip authorization.
+
+```json
+{
+  "task": "Inspect the parser without changing it",
+  "approved_scope": "Read-only access to src/parser.ts and its tests",
+  "action": {
+    "name": "read_file",
+    "description": "Read src/parser.ts to inspect the failing branch",
+    "effect": "read_only",
+    "target": "src/parser.ts"
+  }
+}
+```
+
+## `jev_triage`
+
+Turn a failure into a cause, a progress classification, and a recovery strategy. It never executes a retry or changes code.
+
+**Arguments**
+
+| Name | Required | Meaning |
+| --- | --- | --- |
+| `task` | yes | What the agent is trying to do |
+| `failure` | yes | Failing test, compiler, or command output |
+| `causes` | no | Up to 16 host-supplied `{ id, description }` candidates; defaults to a generic taxonomy |
+| `attempts` | no | Up to 12 recent `{ action, result?, failed? }` attempts |
+| `history` | no | Up to 12 recent `{ action, observation }` pairs for loop detection |
+| `auto_accept` / `review_at` | no | May only tighten the env floors |
+
+**Questions:** Choice `cause` over synthetic cause labels plus `unknown`; Choice `progress` (`advancing`, `repeating`, `regressing`, `complete`); Noul `recoverable`; Choice `strategy` (`retry`, `change_approach`, `gather_context`, `ask_user`, `stop`, `escalate`).
+
+**Policy:** uncertain cause or strategy reviews/escalates; repeating or regressing progress reviews; a retry after two or more failed attempts reviews; `ask_user` reviews; `escalate` escalates. `auto` requires a confident cause and strategy, clean progress, enough recoverability, a legal retry budget, and complete coverage. The host prepares and routes any recovery call with `jev_step`.
+
+```json
+{
+  "task": "Fix the parser's handling of empty input",
+  "failure": "TypeError: Cannot read properties of undefined at parse (parser.ts:14)",
+  "causes": [
+    { "id": "missing-default", "description": "The input is not defaulted before splitting" },
+    { "id": "wrong-callsite", "description": "A caller passes an invalid empty value" }
+  ],
+  "history": [
+    { "action": "read parser.ts", "observation": "empty input reaches split without a guard" },
+    { "action": "edit parse", "observation": "same TypeError" }
+  ]
+}
+```
+
+## `jev_risk`
+
+Security-focused patch triage. It complements `jev_review` (correctness, spec match, test gap, blast radius).
+
+**Arguments:** `request` and `diff` required; `tests`, `files: [{ path, change? }]`, and `dependencies: string[]` optional. `diff`/`tests` are untrusted evidence.
+
+**Questions:** Noul concern flags for `authorization`, `input_validation`, `secret_exposure`, `data_loss`, `concurrency`, `dependency`, `external_effect`; Score `severity`.
+
+**Policy:** any critical flag (`authorization`, `secret_exposure`, `data_loss`) at/above `auto_accept` escalates; other flags or an uncertainty band review; high severity reviews/escalates. `auto` requires every flag to be confidently absent, low coherent severity, and complete coverage. `auto` is evidence, never merge permission.
+
+```json
+{
+  "request": "Fix parser input handling without changing the public API",
+  "diff": "- const [key, value] = line.split('=');\n+ const index = line.indexOf('=');\n+ const key = line.slice(0, index);\n+ const value = line.slice(index + 1);",
+  "tests": "PASS parser key=value=extra preserves the suffix.",
+  "files": [{ "path": "src/parser.ts", "change": "modified" }]
 }
 ```
 
