@@ -2,9 +2,20 @@
 
 ## Unreleased
 
+### Security hardening for untrusted data, helper connections, and evaluation
+
+- Every state-bearing question pack now carries a shared data-boundary clause; `jev_rank` keeps its query in state, strips bidi/control characters from projected IDs, names, and argument keys, and never lets a partial `exists` verdict coexist with `action: auto`. `jev_screen` adds a deterministic high-signal injection-pattern backstop. Prompt injection remains a residual model risk; screening is advisory.
+- Custom base URLs now reject localhost/`.local`/`.internal`/single-label/trailing-dot names, zone identifiers, and the missing reserved/NAT64/6to4 ranges; the official host must use its default port. `doctor` prints only the URL origin. Unknown internal errors no longer relay raw messages.
+- The bundled evidence helper rejects symlink escapes, caps reads, isolates its test subprocess home, writes owner-only evidence with a self-ignoring `.task-evidence/.gitignore`, and refuses a workspace-local connection unless `--trust-connection` is explicit.
+- Agent evaluation entrypoints require `JEV_EVAL_ISOLATED=1`, and `processEnv` no longer forwards `NODE_OPTIONS`. Python webhook/dashboard calls reject redirects so credentials cannot be replayed to another origin. CI checkouts no longer persist credentials; the notify workflow only runs for trusted PR authors; examples forward keys through the environment and generated evidence/connection files are ignored.
+- `runToolRoute`/`runStep` report `truncated: true` for clipped candidate descriptions; `jev_verify` adds `all_claims_verified`; noul criteria and `__proto__` question/option IDs are rejected explicitly; tiny budgets keep a true state prefix instead of fabricated marker text; rank validates `top_k` for direct callers.
+
 ### Portable skill and real-task evaluations
 
 - The standalone skill ZIP contains its own tool contracts, setup and TypeSafe references, dependency-free evidence helper and MIT license. All nine request examples are checked against actual schemas and executable MCP calls; archive bytes and checksums are reproducible.
+- Added MCP prompts (`jev-step-loop`, `jev-completion-gate`, `jev-screen-untrusted`) alongside the nine tools and eight pack resources.
+- Upgraded `evidence.mjs` diff collection to produce multi-hunk unified patches with configurable surrounding context (`--context 12` by default) so enclosing function signatures and invariants remain visible to Jev review, and to forward all `TYPESAFE_*` and `JEV_MCP_*` configuration variables when invoking `judge` or `screen`.
+- Fixed IPv6 URL parsing and non-public address checks in `src/config.ts`, `jev_step` omitted-candidate coding-loop handoffs, `jev_screen` per-call `review_at` tightening, `jev_verify` `review_at` threshold wiring, CLI `eval` policy `action` output and dash-prefixed `--state` values, PowerShell checkout path normalization, and GitHub watch snapshot event merging.
 - Added independent historical-policy, pagination and hostile-report parser tasks, bounded Codex/Cursor paired evaluation runners, redacted stdio observation and JSON/Markdown reports. Hidden behavioral graders and protected-file checks are independent of agent claims.
 - Live semantic evaluations are explicit commands. Ordinary tests never spend an inherited API key; mock transport performance remains a separate benchmark. CI validates the skill and uploads its archive and checksum.
 - Prepared-call routing judges the information the server actually receives, rather than trying to validate deliberately withheld argument values. Review questions refer directly to request, diff and tests and distinguish code scope from separate delivery steps. Confidence and approval floors remain unchanged.
@@ -106,7 +117,7 @@ See [tool arguments and outputs](tools.md) for the gate contract and examples.
 - Existing tools remain available; `jev_gate` and `jev_tool_route` are additive. Coding-loop `model_tier` remains a conditional recommendation; clients deciding whether to invoke a generative partner should use `partner_model.required` and `handoff`. Omitting `execution.context_complete` prevents an automatic partner request.
 - Consumers must handle stricter review or escalation results when context is incomplete or a stop decision is risky. Tool-route eligibility flags are host assertions, not server-side checks of a tool registry; the host remains responsible for actual validation and execution.
 - Token budgets use a character-based estimate, not an exact provider tokenizer. Inspect `coverage` and `truncated`; ranking identifies estimates that describe only its final upstream request.
-- Existing tool errors expose structured error details. Gate failures instead set `isError` and return the error object as JSON text, without `structuredContent`, so MCP clients do not validate an error against the gate's success schema.
+- All nine tool errors set `isError` and return the typed error object as JSON text without `structuredContent`, so MCP clients do not validate an error against the tool's success schema.
 - No dependency versions or package version were changed. Mock mode remains suitable only for tests and demonstrations.
 
 ### Validation

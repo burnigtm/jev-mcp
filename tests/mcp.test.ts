@@ -39,6 +39,18 @@ test("MCP lists nine tools and eight packs", async () => {
     ]);
     const resources = await client.listResources();
     assert.equal(resources.resources.length, 8);
+    const prompts = await client.listPrompts();
+    assert.deepEqual(prompts.prompts.map(prompt => prompt.name).sort(), [
+      "jev-completion-gate",
+      "jev-screen-untrusted",
+      "jev-step-loop",
+    ]);
+    const stepPrompt = await client.getPrompt({
+      name: "jev-step-loop",
+      arguments: { task: "Fix pagination", observation: "Tests failing" },
+    });
+    assert.equal(stepPrompt.messages.length, 1);
+    assert.match((stepPrompt.messages[0]?.content as { text?: string })?.text ?? "", /jev_step/);
     const pack = await client.readResource({ uri: "jev://packs/coding-loop" });
     assert.ok(pack.contents[0] && "text" in pack.contents[0]);
     const called = await client.callTool({

@@ -70,6 +70,7 @@ export const reviewOutputSchema = z.object({
 
 export const verifyOutputSchema = z.object({
   ...baseToolOutputShape,
+  all_claims_verified: z.boolean(),
   summary: z.object({
     verified: z.number().int().nonnegative(),
     contradicted: z.number().int().nonnegative(),
@@ -83,7 +84,7 @@ export const verifyOutputSchema = z.object({
     probabilities: z.record(z.string(), probabilitySchema),
     action: actionSchema,
   })),
-  thresholds: z.object({ auto_accept: probabilitySchema }),
+  thresholds: z.object({ auto_accept: probabilitySchema, review_at: probabilitySchema }),
 });
 
 export const screenOutputSchema = z.object({

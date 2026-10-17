@@ -67,10 +67,11 @@ export async function invocation({host,model,workspace,profile,trace,baseline,ta
   // Cursor's native allowlist mode permits the shell adapter. Codex's shell
   // cannot start networked servers inside its network-disabled sandbox; it
   // uses its already-connected MCP tool with the collected argument object.
-  if(treatment&&host==='cursor')await writeFile(join(workspace,'.jev-connection.json'),JSON.stringify({command:process.execPath,args:[resolve(root,'scripts/trace-proxy.mjs'),workspace,trace,baseline,task,budget]}));
+  // The per-server env allowlists must include the isolation marker, because
+  // the MCP client does not inherit arbitrary parent variables.
   if(host==='codex') {
     const skills=(await userSkillPaths()).map(path=>`{path=${JSON.stringify(path.replaceAll('\\','/'))},enabled=false}`).join(',');
-    const config=treatment?`{jev={command=${JSON.stringify(process.execPath.replaceAll('\\','/'))},args=${JSON.stringify([resolve(root,'scripts/trace-proxy.mjs'),workspace,trace,baseline,task,budget].map(p=>p.replaceAll('\\','/')))},env_vars=["TYPESAFE_API_KEY","JEV_MCP_MODEL","NODE_USE_SYSTEM_CA","NODE_EXTRA_CA_CERTS"]}}`:'{}';
+    const config=treatment?`{jev={command=${JSON.stringify(process.execPath.replaceAll('\\','/'))},args=${JSON.stringify([resolve(root,'scripts/trace-proxy.mjs'),workspace,trace,baseline,task,budget].map(p=>p.replaceAll('\\','/')))},env_vars=["TYPESAFE_API_KEY","JEV_MCP_MODEL","NODE_USE_SYSTEM_CA","NODE_EXTRA_CA_CERTS","JEV_EVAL_ISOLATED"]}}`:'{}';
     const args=[
       'exec','--json','--ephemeral','--ignore-user-config','--ignore-rules',
       '--skip-git-repo-check','--sandbox','workspace-write','-C',workspace,'-m',model,
@@ -87,7 +88,7 @@ export async function invocation({host,model,workspace,profile,trace,baseline,ta
   env.CURSOR_API_KEY=process.env.CURSOR_API_KEY;
   if(process.env.NODE_USE_SYSTEM_CA==='1') env.NODE_OPTIONS='--use-system-ca';
   await mkdir(join(workspace,'.cursor'),{recursive:true});
-  await writeFile(join(workspace,'.cursor','mcp.json'),JSON.stringify({mcpServers:treatment?{jev:{command:process.execPath,args:[resolve(root,'scripts/trace-proxy.mjs'),workspace,trace,baseline,task,budget],env:{TYPESAFE_API_KEY:'${env:TYPESAFE_API_KEY}',JEV_MCP_MODEL:'${env:JEV_MCP_MODEL}',NODE_USE_SYSTEM_CA:'${env:NODE_USE_SYSTEM_CA}'}}}:{}}));
+  await writeFile(join(workspace,'.cursor','mcp.json'),JSON.stringify({mcpServers:treatment?{jev:{command:process.execPath,args:[resolve(root,'scripts/trace-proxy.mjs'),workspace,trace,baseline,task,budget],env:{TYPESAFE_API_KEY:'${env:TYPESAFE_API_KEY}',JEV_MCP_MODEL:'${env:JEV_MCP_MODEL}',NODE_USE_SYSTEM_CA:'${env:NODE_USE_SYSTEM_CA}',JEV_EVAL_ISOLATED:'${env:JEV_EVAL_ISOLATED}'}}}:{}}));
   await mkdir(env.CURSOR_CONFIG_DIR,{recursive:true});
   await writeFile(join(env.CURSOR_CONFIG_DIR,'cli-config.json'),JSON.stringify({version:1,permissions:{allow:['Shell(node)','Read(**)','Write(src/**)','Write(tests/*.test.mjs)',...(treatment?['Mcp(jev:*)']:[])],deny:['WebFetch(*)','Shell(git)','Shell(gh)','Shell(curl)','Shell(powershell)','Shell(pwsh)']}}));
   return {env,args:['--print','--force','--trust','--sandbox',process.platform==='win32'?'disabled':'enabled','--output-format','stream-json','--workspace',workspace,'--model',model,...(treatment?['--approve-mcps']:[])]};
@@ -101,7 +102,7 @@ export function infrastructureReason(text) {
   if(/sandbox.*not available|sandbox requires/i.test(text))return 'sandbox_unavailable';
   if(/not logged in|authentication required|invalid api key|unauthenticated|unauthorized|\b401\b/i.test(text))return 'agent_auth_missing';
   if(/unable to verify.*certificate|certificate.*(expired|invalid)|CERT_/i.test(text))return 'agent_tls_failure';
-  if(/rate.limit|quota.exceed|insufficient.*credit|\b429\b/i.test(text))return 'agent_rate_limited';
+  if(/rate.limit|usage.limit|purchase more credits|quota.exceed|insufficient.*credit|\b429\b/i.test(text))return 'agent_rate_limited';
   return null;
 }
 export async function runAgent(binary, args, {env,prompt,timeout=300000,cwd,onEvent=()=>{}}) {

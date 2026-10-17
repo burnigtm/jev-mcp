@@ -139,6 +139,27 @@ test("accepted calls preserve arbitrary candidate IDs and exact arguments withou
   });
 });
 
+test("judge projection strips control metadata while preserving executable values", async () => {
+  let sent: Payload | undefined;
+  const id = "call\u0000\u202Eevil";
+  const name = "read\u0000file";
+  await withApi((payload, response) => {
+    sent = payload;
+    send(response, judgment(payload));
+  }, async () => {
+    const description = "Read\u202Ethe file";
+    const result = await runToolRoute(input([candidate({ id, name, description, arguments: { "\u0000key": "value" } })]));
+    assert.equal(result.call?.candidate_id, id);
+    assert.equal(result.call?.name, name);
+    assert.deepEqual(result.call?.arguments, { "\u0000key": "value" });
+    const judged = (sent?.state as { candidates: Array<Record<string, unknown>> }).candidates[0]!;
+    assert.equal(String(judged.id).includes("\u0000"), false);
+    assert.equal(String(judged.name).includes("\u0000"), false);
+    assert.equal(String(judged.description).includes("\u202E"), false);
+    assert.equal(JSON.stringify(judged.argument_shape).includes("\u0000"), false);
+  });
+});
+
 test("only candidates with all trusted eligibility facts reach the provider", async () => {
   const candidates = [
     candidate({ id: "unauthorized", authorized: false }),
@@ -297,6 +318,7 @@ test("a clipped candidate description is incomplete coverage and cannot dispatch
     assert.equal(calls(), 1);
     assert.equal(result.call, null);
     assert.equal(result.action, "review");
+    assert.equal(result.truncated, true);
     assert.equal(result.coverage.complete, false);
     assert.ok(result.reason_codes.includes("incomplete_context"));
     assert.equal(result.partner_model.required, false);
@@ -305,6 +327,21 @@ test("a clipped candidate description is incomplete coverage and cannot dispatch
     const judged = (sent?.state as { candidates: Array<{ description: string }> }).candidates[0];
     assert.ok(judged);
     assert.ok(judged.description.length <= 2_000);
+  });
+});
+
+test("clipped id, name, or argument key is incomplete coverage and cannot dispatch", async () => {
+  await withApi((payload, response) => send(response, judgment(payload)), async () => {
+    const result = await runToolRoute(input([candidate({
+      id: "i".repeat(300),
+      name: "n".repeat(200),
+      arguments: { ["k".repeat(80)]: "value" },
+    })]));
+    assert.equal(result.call, null);
+    assert.equal(result.action, "review");
+    assert.equal(result.truncated, true);
+    assert.equal(result.coverage.complete, false);
+    assert.ok(result.reason_codes.includes("incomplete_context"));
   });
 });
 

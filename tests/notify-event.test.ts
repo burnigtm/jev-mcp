@@ -283,6 +283,18 @@ test("watch dashboard pins the newest pull request and keeps a snapshot when Git
   const again = readFileSync(out, "utf8");
   assert.match(again, /GitHub list unavailable/);
   assert.match(again, /#7 Fix jev-mcp audit findings/);
+
+  const mergedOnSnapshot = await run(["--out", out, "--html", html, "--previous", out], {
+    EVENT_NAME: "pull_request_target",
+    EVENT_ACTION: "closed",
+    PR_NUMBER: "3",
+    PR_MERGED: "true",
+    PR_TITLE: "Older change (merged via event)",
+    GITHUB_REF_NAME: "main",
+    GITHUB_SHA: "7cafc402cbd776cae55902415d84482971df17d4",
+  });
+  assert.equal(mergedOnSnapshot.status, 0, mergedOnSnapshot.stderr);
+  assert.match(readFileSync(out, "utf8"), /Older change \(merged via event\)/);
   rmSync(rootDir, { recursive: true, force: true });
 });
 
@@ -323,6 +335,37 @@ test("notify script rejects any API host other than the pinned Cursor API", asyn
     assert.match(result.stderr, /CURSOR_API_BASE/);
     assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(fixtureKey));
     assert.doesNotMatch(`${result.stdout}${result.stderr}`, /user:secret|token=1/);
+  }
+});
+
+test("notify script does not forward credentials across a redirect", async () => {
+  let targetRequests = 0;
+  const target = createServer((_req, res) => {
+    targetRequests += 1;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end("{}");
+  });
+  await new Promise<void>((resolve) => target.listen(0, "127.0.0.1", resolve));
+  const targetAddress = target.address();
+  assert.ok(targetAddress && typeof targetAddress === "object");
+  const redirect = createServer((_req, res) => {
+    res.writeHead(302, { Location: `http://127.0.0.1:${targetAddress.port}/collect` });
+    res.end();
+  });
+  await new Promise<void>((resolve) => redirect.listen(0, "127.0.0.1", resolve));
+  const redirectAddress = redirect.address();
+  assert.ok(redirectAddress && typeof redirectAddress === "object");
+  try {
+    const result = await runNotify({
+      CURSOR_API_KEY: fixtureKey,
+      DEFAULT_AGENT_ID: "bc-test-agent",
+      CURSOR_API_BASE: `http://127.0.0.1:${redirectAddress.port}`,
+    });
+    assert.equal(result.status, 1);
+    assert.equal(targetRequests, 0);
+  } finally {
+    await new Promise<void>((resolve) => target.close(() => resolve()));
+    await new Promise<void>((resolve) => redirect.close(() => resolve()));
   }
 });
 

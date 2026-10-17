@@ -134,6 +134,19 @@ test("score output must agree with the expected value of its distribution", asyn
   }), async () => {
     await assert.rejects(systemOne({ state: "x", questions: { risk: { type: "score", instructions: "Risk?", criteria: ["low", "high"] } } }), error => errorDetails(error).code === "INVALID_RESPONSE");
   });
+  await withApi((_payload, response) => send(response, {
+    model: "fixture", usage: { input_tokens: 1, output_tokens: 1 },
+    answers: { risk: { type: "score", score: 1.56, confidence: 0.33, legend: { "0": "low", "1": "mid", "2": "high" }, probabilities: { "0": 0.85, "1": 0.14, "2": 0.02 } } },
+  }), async () => {
+    await assert.rejects(systemOne({ state: "x", questions: { risk: { type: "score", instructions: "Risk?", criteria: ["low", "mid", "high"] } } }), error => errorDetails(error).code === "INVALID_RESPONSE");
+  });
+  await withApi((_payload, response) => send(response, {
+    model: "fixture", usage: { input_tokens: 1, output_tokens: 1 },
+    answers: { risk: { type: "score", score: 0.18, confidence: 0.74, legend: { "0": "low", "1": "mid", "2": "high" }, probabilities: { "0": 0.85, "1": 0.14, "2": 0.02 } } },
+  }), async () => {
+    const valid = await systemOne({ state: "x", questions: { risk: { type: "score", instructions: "Risk?", criteria: ["low", "mid", "high"] } } });
+    assert.equal(valid.answers.risk.type, "score");
+  });
 });
 
 test("oversized question rejection happens before any network call", async () => {
@@ -236,6 +249,15 @@ test("provider input_tokens above the budget keep evaluate from auto", async () 
     assert.equal(result.coverage.complete, false);
     assert.equal(result.truncated, true);
     assert.notEqual(result.action, "auto");
+  });
+});
+
+test("unknown internal errors do not relay their raw message", () => {
+  const details = errorDetails(new TypeError("secret /home/user/token"));
+  assert.deepEqual(details, {
+    code: "INTERNAL_ERROR",
+    message: "An internal error occurred. No decision was accepted.",
+    retryable: false,
   });
 });
 

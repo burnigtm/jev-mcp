@@ -16,9 +16,9 @@ A local stdio MCP server that gives Cursor, Codex, and other MCP clients typed [
 | `jev_rank` | Rank candidates supplied by the host |
 | `jev_evaluate` | Ask custom, atomic typed questions |
 
-Results include typed answers, token usage, and an `action`: `auto`, `review`, or `escalate`. Confidence measures model certainty, not factual truth. Incomplete context never permits `auto`; reduce the input and submit it again for a complete judgment.
+Results include typed answers, token usage, and an `action`: `auto`, `review`, or `escalate`. Confidence measures model certainty, not factual truth. Incomplete context never permits `auto`; reduce the input and submit it again for a complete judgment. Questions that receive untrusted text carry a data-boundary instruction, and `jev_screen` adds a deterministic high-signal injection backstop. Those are defense-in-depth: screening is advisory, not a sanitizer or permission to follow external text.
 
-Question packs are MCP resources at `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate}`.
+Question packs are MCP resources at `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate}`. Workflow templates are MCP prompts at `jev-step-loop`, `jev-completion-gate`, and `jev-screen-untrusted`.
 
 ## Coding with fewer partner-model turns
 
@@ -94,7 +94,7 @@ State plus questions must fit the estimated 64,000-token total budget and the 32
 
 Rank accepts unique candidate IDs and at most 5,000 supplied candidates, with at most 250 options per upstream call. Larger lists use repeated reduction rounds; each candidate text is capped at 2,000 characters. Verify and gate accept at most 1,000 claims. It ranks supplied candidates and does not index your repository. Arithmetic and date calculations belong in host code.
 
-All nine tools expose an MCP output schema and return the same successful payload through both `structuredContent` and the JSON text content. Tool-route and fused-step judgments receive sanitized candidate descriptions and argument shapes; raw host arguments are retained only for the selected, locally validated call.
+All nine tools expose an MCP output schema and return the same successful payload through both `structuredContent` and the JSON text content. Tool-route and fused-step judgments receive control-stripped candidate IDs/names, sanitized descriptions, and argument shapes; raw host arguments are retained only for the selected, locally validated call. `jev_verify` also reports `all_claims_verified`, which is stricter than its per-item classification action.
 
 ## Development
 

@@ -1,4 +1,5 @@
 import type { Questions } from "@typesafe-ai/sdk";
+import { withUntrustedDataClause } from "./safety.js";
 
 export function screenQuestions(hasPurpose: boolean): Questions {
   const questions: Questions = {
@@ -30,5 +31,5 @@ export function screenQuestions(hasPurpose: boolean): Questions {
       },
     };
   }
-  return questions;
+  return withUntrustedDataClause(questions);
 }

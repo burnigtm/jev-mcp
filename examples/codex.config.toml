@@ -5,8 +5,7 @@
 command = "node"
 args = ["dist/index.js"]
 
-[mcp_servers.jev.env]
-TYPESAFE_API_KEY = "ts_..."
+env_vars = ["TYPESAFE_API_KEY"]
 
 # Equivalent CLI:
 #   npm run build

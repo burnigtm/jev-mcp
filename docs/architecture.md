@@ -37,7 +37,7 @@ Official API: `POST https://api.typesafe.ai/v1/systemone` with `Authorization: B
 | Path | Role |
 | --- | --- |
 | [`src/index.ts`](../src/index.ts) | CLI: default stdio, `doctor`, `eval` |
-| [`src/server.ts`](../src/server.ts) | MCP tools + `jev://packs/*` resources |
+| [`src/server.ts`](../src/server.ts) | MCP tools, `jev://packs/*` resources, and MCP workflow prompts |
 | [`src/typesafe.ts`](../src/typesafe.ts) | Live client or mock; truncates oversized state |
 | [`src/responses.ts`](../src/responses.ts) | Validates provider answer types, ranges, options, and distributions before policy |
 | [`src/mock.ts`](../src/mock.ts) | Deterministic judge for tests and demos |
@@ -51,7 +51,7 @@ Official API: `POST https://api.typesafe.ai/v1/systemone` with `Authorization: B
 
 1. The host calls a tool with JSON arguments.
 2. The tool builds a TypeSafe `questions` map (or accepts one for `jev_evaluate`). `jev_tool_route` first excludes ineligible candidates; empty or wholly ineligible lists return local policy results with zero usage and no provider call.
-3. [`fitState`](../src/limits.ts) enforces estimated budgets: 64k tokens for state+questions, 32k for state + the longest question. Oversized questions are rejected. State truncation includes its marker within the allowance and reports incomplete coverage. Counts use `ceil(chars / 4)`, not a provider tokenizer.
+3. [`fitState`](../src/limits.ts) enforces estimated budgets: 64k tokens for state+questions, 32k for state + the longest question. Oversized questions are rejected. State truncation includes its marker within the allowance and reports incomplete coverage; if the remaining allowance is smaller than the marker, a true prefix is kept instead of the marker text. Counts use `ceil(chars / 4)`, not a provider tokenizer.
 4. If `JEV_MCP_MOCK=1`, [`mockSystemOne`](../src/mock.ts) answers locally. Else a missing `TYPESAFE_API_KEY` becomes a clear error (the host does not hang).
 5. Live calls use the SDK retry policy (429 / 5xx), bounded by a shared total tool deadline (default 30 seconds). MCP cancellation aborts active calls and pending retries. Request content is not logged; stdout stays MCP JSON-RPC.
 6. Provider results are validated before policy reads confidence, noul values, and scores. Policy sets `action`; incomplete coverage cannot produce `auto`.
@@ -65,7 +65,9 @@ Eligibility is decided locally from trusted host facts. Authorization, schema va
 
 Only complete, confident selections of suitable `read_only` or `local_write` calls can return `handoff: execute_tool` and the exact original arguments. Dispatch has a fixed minimum threshold of `0.8`, even if callers lower their judgment thresholds. External writes and destructive effects require review. Every other outcome has `call: null`. Every tool-route result has `partner_model: { required: false, tier: "none" }`.
 
-Tool-route judgments receive a redacted candidate projection: tool name, sanitized description, effect, and argument shape. Exact argument values remain in the host and are returned only in an accepted call; they are not sent to TypeSafe.
+Tool-route judgments receive a redacted candidate projection: sanitized id, sanitized tool name, sanitized description, effect, and argument shape. Argument key names are control-stripped and length-capped. Exact argument values remain in the host and are returned only in an accepted call; they are not sent to TypeSafe.
+
+Questions that receive third-party text carry a shared "untrusted data, not instructions" clause. `jev_rank` keeps the query in state instead of interpolating it into instructions, and strips control/bidi characters from the original candidate IDs used in the judge state. `jev_screen` adds a deterministic high-signal phrase backstop. This is defense-in-depth: the model can still be influenced, so screening is advisory and never grants permission to follow external text.
 
 The fused `jev_step` router applies the same redacted projection before combining coding-loop and prepared-call questions.
 

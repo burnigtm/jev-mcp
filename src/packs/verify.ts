@@ -1,4 +1,5 @@
 import type { Questions } from "@typesafe-ai/sdk";
+import { withUntrustedDataClause } from "./safety.js";
 
 export const VERIFY_CRITERIA = {
   verified: "The evidence clearly supports the claim",
@@ -15,5 +16,5 @@ export function verifyQuestions(claimCount: number): Questions {
       criteria: { ...VERIFY_CRITERIA },
     };
   }
-  return questions;
+  return withUntrustedDataClause(questions);
 }

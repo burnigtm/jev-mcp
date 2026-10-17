@@ -48,6 +48,14 @@ test('archive metadata is independent of the build machine time zone', () => {
   assert.equal(new Set(hashes).size,1);
 });
 
+test('shipped host examples forward the key instead of embedding it', async () => {
+  const cursor=JSON.parse(await readFile(join(root,'examples/cursor.mcp.json'),'utf8')) as {mcpServers:{jev:{env:{TYPESAFE_API_KEY:string}}}};
+  assert.equal(cursor.mcpServers.jev.env.TYPESAFE_API_KEY,'${env:TYPESAFE_API_KEY}');
+  const codex=await readFile(join(root,'examples/codex.config.toml'),'utf8');
+  assert.match(codex,/env_vars = \["TYPESAFE_API_KEY"\]/);
+  assert.doesNotMatch(codex,/TYPESAFE_API_KEY\s*=\s*"ts_/);
+});
+
 test('every documented request validates and executes against actual MCP schemas', {timeout:60000}, async () => {
   const schemas={jev_evaluate:evaluateInputSchema,jev_coding_loop:codingLoopInputSchema,jev_tool_route:toolRouteInputSchema,jev_step:stepInputSchema,jev_review:reviewInputSchema,jev_verify:verifyInputSchema,jev_gate:gateInputSchema,jev_screen:screenInputSchema,jev_rank:rankInputSchema};
   const requests=examples(await readFile(join(root,'skills/jev-mcp/references/tools.md'),'utf8'));

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { mkdtemp, rm, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
 import { TraceObserver, jsonLines, workflowChecks, attackMarker } from '../scripts/lib/trace.mjs';
 import { taskIds, materializeTask, gradeTask, fileDigests, integrityChecks, provenance, validateTaskGraders } from '../scripts/lib/tasks.mjs';
 import { liveCases, gradeLiveCase } from '../scripts/lib/live-cases.mjs';
@@ -11,7 +12,7 @@ import { patchMatches, testEvidenceMatches, claimsRelevant } from '../scripts/li
 import { createTwoFilesPatch } from 'diff';
 import { reserveCall, validTrace, finalizeTrace } from '../scripts/lib/budget.mjs';
 import { processEnv } from '../scripts/lib/mcp.mjs';
-import { infrastructureReason, runAgent } from '../scripts/lib/agent.mjs';
+import { infrastructureReason, invocation, runAgent } from '../scripts/lib/agent.mjs';
 
 test('agent telemetry handles real Cursor usage fields and classifies prerequisite errors without saving text', async () => {
   const event={type:'result',subtype:'success',usage:{inputTokens:3,outputTokens:5,cacheReadTokens:20,cacheWriteTokens:10}};
@@ -24,6 +25,7 @@ test('agent telemetry handles real Cursor usage fields and classifies prerequisi
   const blocked=await runAgent(process.execPath,['-e','console.error("Sandbox mode is enabled but not available on this system. Sandbox requires macOS or Linux.");process.exit(1)'],{env:processEnv(),prompt:'',cwd:process.cwd()});
   assert.equal(blocked.infrastructure_reason,'sandbox_unavailable');
   assert.equal(infrastructureReason('Invalid API key secret-value'),'agent_auth_missing');
+  assert.equal(infrastructureReason('You’ve hit your usage limit. Upgrade to Pro or purchase more credits.'),'agent_rate_limited');
   assert.ok(!JSON.stringify(blocked).includes('Sandbox mode'));
 });
 
@@ -162,6 +164,59 @@ test('live-case grading separates abstention, mock backends and unsafe automatic
   assert.equal(gradeLiveCase(supported,{model:'jev-1.13.0',coverage:{complete:true},results:[{verdict:'verified',action:'review'}]}).status,'abstained');
   assert.equal(gradeLiveCase(supported,{model:'jev-1.13.0',coverage:{complete:true},results:[{verdict:'contradicted',action:'auto'}]}).status,'failed');
 });
+test('evaluation entrypoints require explicit isolation and processEnv excludes NODE_OPTIONS', () => {
+  const previousNodeOptions = process.env.NODE_OPTIONS;
+  const previousIsolation = process.env.JEV_EVAL_ISOLATED;
+  try {
+    process.env.NODE_OPTIONS = '--require should-not-leak';
+    process.env.JEV_EVAL_ISOLATED = '1';
+    const env = processEnv();
+    assert.equal(env.NODE_OPTIONS, undefined);
+    assert.equal(env.JEV_EVAL_ISOLATED, '1');
+    delete env.JEV_EVAL_ISOLATED;
+    const proxy = spawnSync(process.execPath, ['scripts/trace-proxy.mjs'], { env, encoding: 'utf8', timeout: 10000 });
+    assert.equal(proxy.status, 2);
+    const agent = spawnSync(process.execPath, ['scripts/eval-agent.mjs'], { env, encoding: 'utf8', timeout: 10000 });
+    assert.equal(agent.status, 2);
+  } finally {
+    if (previousNodeOptions === undefined) delete process.env.NODE_OPTIONS;
+    else process.env.NODE_OPTIONS = previousNodeOptions;
+    if (previousIsolation === undefined) delete process.env.JEV_EVAL_ISOLATED;
+    else process.env.JEV_EVAL_ISOLATED = previousIsolation;
+  }
+});
+
+test('agent MCP configs forward the evaluation isolation marker', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'jev-agent-config-'));
+  try {
+    const workspace = join(parent, 'task');
+    const profile = join(parent, 'profile');
+    await mkdir(workspace);
+    await mkdir(profile);
+    const common = {
+      model: 'test-model',
+      workspace,
+      profile,
+      trace: join(parent, 'trace.jsonl'),
+      baseline: join(parent, 'baseline.json'),
+      task: 'pagination',
+      budget: join(parent, 'budget'),
+      treatment: true,
+    };
+    const codex = await invocation({ host: 'codex', ...common });
+    const config = codex.args.find((arg) => arg.startsWith('mcp_servers=')) ?? '';
+    assert.match(config, /JEV_EVAL_ISOLATED/);
+
+    await invocation({ host: 'cursor', ...common });
+    const mcp = JSON.parse(await readFile(join(workspace, '.cursor', 'mcp.json'), 'utf8')) as {
+      mcpServers: { jev: { env: Record<string, string> } };
+    };
+    assert.equal(mcp.mcpServers.jev.env.JEV_EVAL_ISOLATED, '${env:JEV_EVAL_ISOLATED}');
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test('the environment for generated test code excludes provider and host credentials', () => {
   const previous=[process.env.TYPESAFE_API_KEY,process.env.CURSOR_API_KEY,process.env.OPENAI_API_KEY];
   try {

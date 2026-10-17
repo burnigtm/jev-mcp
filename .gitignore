@@ -3,6 +3,12 @@ dist/
 .env
 .env.*
 !.env.example
+.cursor/mcp.json
+.codex/config.toml
+.jev-connection.json
+.task-evidence/
+__pycache__/
+*.pyc
 *.log
 coverage/
 artifacts/

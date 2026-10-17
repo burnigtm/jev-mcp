@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {mkdtemp,rm,writeFile,readFile,mkdir} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile,readFile,mkdir,stat,symlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
@@ -37,23 +37,93 @@ test('extracted dependency-free helper produces attested evidence and calls the 
     assert.deepEqual(attest(workspace,baseline,'pagination',args),{diff_matches:true,evidence_matches:true,claims_relevant:true});
     assert.equal(gradeTask('pagination',workspace).passed,148);
     assert.equal(run(['snapshot']).status,1,'the original snapshot cannot be replaced after editing');
-    await writeFile(join(workspace,'.jev-connection.json'),JSON.stringify({command:process.execPath,args:serverArgs}));
-    const judged=run(['judge','--connection','.jev-connection.json'],{JEV_MCP_MOCK:'1'});
+    const connection=join(parent,'host-connection.json');
+    await writeFile(connection,JSON.stringify({command:process.execPath,args:serverArgs}));
+    const judged=run(['judge','--connection',connection],{JEV_MCP_MOCK:'1'});
     assert.equal(judged.status,0,judged.stderr);assert.match(JSON.parse(judged.stdout).model,/mock/);
     assert.ok(!JSON.stringify(args).includes('private-test-sentinel'));
+    assert.equal(await readFile(join(workspace,'.task-evidence/.gitignore'),'utf8'),'*\n');
+    if(process.platform!=='win32') {
+      assert.equal((await stat(join(workspace,'.task-evidence/gate.json'))).mode & 0o777,0o600);
+      const secret=join(parent,'secret.txt');
+      await writeFile(secret,'do-not-send-this-secret');
+      await symlink(secret,join(workspace,'external-issue.txt'));
+      const screened=run(['screen','--connection',connection,'--text-file','external-issue.txt'],{JEV_MCP_MOCK:'1'});
+      assert.equal(screened.status,1);
+      assert.ok(!screened.stdout.includes('do-not-send-this-secret'));
+    }
+    await writeFile(join(workspace,'.jev-connection.json'),JSON.stringify({command:process.execPath,args:serverArgs}));
+    const refused=run(['judge','--connection','.jev-connection.json'],{JEV_MCP_MOCK:'1'});
+    assert.equal(refused.status,1);
+    assert.match(refused.stderr,/untrusted_connection/);
+    const trusted=run(['judge','--connection','.jev-connection.json','--trust-connection'],{JEV_MCP_MOCK:'1'});
+    assert.equal(trusted.status,0,trusted.stderr);
+    if(process.platform!=='win32') {
+      const linkedRoot=join(parent,'task-link');
+      await symlink(workspace,linkedRoot,'dir');
+      const viaRealPath=run(['judge','--root',linkedRoot,'--connection',join(workspace,'.jev-connection.json')],{JEV_MCP_MOCK:'1'});
+      assert.equal(viaRealPath.status,1);
+      assert.match(viaRealPath.stderr,/untrusted_connection/);
+    }
     await writeFile(join(workspace,'tests/failing.test.mjs'),`throw new Error('deliberate test failure');\n`);
     assert.equal(run(['collect','--request-file','requirements.txt','--',process.execPath,'--test','--test-reporter=tap']).status,1);
     assert.match(JSON.parse(await readFile(join(workspace,'.task-evidence/gate.json'),'utf8')).tests,/# fail 1/);
   } finally {await rm(parent,{recursive:true,force:true});}
 });
 
-test('generated patches apply exactly for additions, deletions, line endings and missing final newlines',()=>{
+test('snapshot skips sensitive files and rejects top-level symlinks', {timeout:15000}, async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'jev-evidence-filter-'));
+  let outsideDir: string | undefined;
+  try {
+    await mkdir(join(dir,'src'),{recursive:true});await mkdir(join(dir,'tests'),{recursive:true});
+    await writeFile(join(dir,'src/main.mjs'),'export const x = 1;\n');
+    await writeFile(join(dir,'.env'),'SECRET=never\n');
+    await mkdir(join(dir,'.git'),{recursive:true});await writeFile(join(dir,'.git/config'),'[remote]\n');
+    await writeFile(join(dir,'tests/fixture.pem'),'not-a-real-key\n');
+    const helper=join(root,'skills/jev-mcp/scripts/evidence.mjs');
+    const run=(args:string[])=>spawnSync(process.execPath,[helper,...args],{cwd:dir,env:processEnv(),encoding:'utf8',timeout:15000});
+    const snapshot=run(['snapshot','--paths','.']);
+    assert.equal(snapshot.status,0,snapshot.stderr);
+    const saved=JSON.parse(await readFile(join(dir,'.task-evidence/before.json'),'utf8')) as {files:Record<string,string>};
+    assert.ok(Object.hasOwn(saved.files,'src/main.mjs'));
+    assert.equal(Object.hasOwn(saved.files,'.env'),false);
+    assert.equal(Object.hasOwn(saved.files,'.git/config'),false);
+    assert.equal(Object.hasOwn(saved.files,'tests/fixture.pem'),false);
+    if(process.platform!=='win32') {
+      outsideDir=await mkdtemp(join(tmpdir(),'jev-evidence-outside-'));
+      const outside=join(outsideDir,'outside.txt');
+      await writeFile(outside,'outside\n');
+      await symlink(outside,join(dir,'linked.txt'));
+      const linked=run(['snapshot','--paths','linked.txt']);
+      assert.equal(linked.status,1);
+      assert.match(linked.stderr,/symlink/);
+    }
+  } finally {
+    await rm(dir,{recursive:true,force:true});
+    if(outsideDir)await rm(outsideDir,{recursive:true,force:true});
+  }
+});
+
+test('generated patches apply exactly for additions, deletions, line endings, multi-hunk edits and configurable context',()=>{
   for(const [a,b]of [['one\ntwo\nthree\n','one\nchanged\nthree\n'],['one\r\ntwo\r\n','one\r\nthree\r\n'],['one','two'],['one\n','one'],['one','one\n'],['','added\n'],['gone\n','']]) {
     const patch=unifiedPatch({'src/main.mjs':a},{'src/main.mjs':b});
     assert.equal(applyPatch(a.replaceAll('\r\n','\n'),patch),b.replaceAll('\r\n','\n'));
   }
   assert.equal(patchMatches({}, {'tests/new.test.mjs':'test();\n'},unifiedPatch({}, {'tests/new.test.mjs':'test();\n'})),true);
   assert.equal(patchMatches({'tests/old.test.mjs':'old();\n'}, {},unifiedPatch({'tests/old.test.mjs':'old();\n'},{})),true);
+
+  const lines=Array.from({length:40},(_,i)=>`const line_${i} = ${i};`);
+  const beforeText=lines.join('\n')+'\n';
+  const modified=[...lines];
+  modified[2]='const line_2 = "first edit";';
+  modified[35]='const line_35 = "second edit";';
+  const afterText=modified.join('\n')+'\n';
+  const multiHunk=unifiedPatch({'src/main.mjs':beforeText},{'src/main.mjs':afterText},3);
+  assert.equal((multiHunk.match(/^@@ /gm)??[]).length,2,'distant edits emit separate hunks when context is small');
+  assert.equal(patchMatches({'src/main.mjs':beforeText},{'src/main.mjs':afterText},multiHunk),true);
+  const wideContext=unifiedPatch({'src/main.mjs':beforeText},{'src/main.mjs':afterText},20);
+  assert.equal((wideContext.match(/^@@ /gm)??[]).length,1,'wider context merges nearby hunks so enclosing functions stay visible');
+  assert.equal(patchMatches({'src/main.mjs':beforeText},{'src/main.mjs':afterText},wideContext),true);
 });
 
 test('the helper refuses bad schemas and missing servers without hanging or leaking diagnostics', {timeout:15000},async()=>{

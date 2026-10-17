@@ -92,6 +92,16 @@ test("rank uses filenames and symbols in original IDs even when texts do not mat
   assertRequestsFit();
 });
 
+test("rank validates top_k for direct callers before requesting", async () => {
+  for (const top_k of [0, -1, 1.5, Number.NaN]) {
+    await assert.rejects(
+      runRank({ query: "keys", candidates: [{ id: "a", text: "a" }, { id: "b", text: "b" }], top_k } as never),
+      /top_k/,
+    );
+  }
+  assert.equal(requests.length, 0);
+});
+
 test("rank rejects actual duplicate IDs before making a request", async () => {
   await assert.rejects(
     runRank({ query: "keys", candidates: [{ id: "a", text: "one" }, { id: "a", text: "two" }] }),
@@ -201,6 +211,29 @@ test("rank auto uses only the final round and a concentrated best choice", async
   assert.equal(tournament.exists_verdict, "partial");
   assert.equal(tournament.action, "review");
   assert.ok(requests.length > 1);
+});
+
+test("rank never returns auto with a partial exists verdict", async () => {
+  const previous = process.env.JEV_MCP_AUTO_ACCEPT;
+  process.env.JEV_MCP_AUTO_ACCEPT = "0.7";
+  mock.method(TypeSafeClient.prototype, "systemOne", async (request: Request) => {
+    requests.push(request);
+    const result = mockSystemOne(request);
+    const exists = result.answers.exists;
+    if (exists.type === "noul") exists.noul = 0.7;
+    return result;
+  });
+  try {
+    const result = await runRank({
+      query: "rotate API keys",
+      candidates: [{ id: "a", text: "rotate API keys" }, { id: "b", text: "unrelated invoices" }],
+    });
+    assert.equal(result.exists_verdict, "partial");
+    assert.notEqual(result.action, "auto");
+  } finally {
+    if (previous === undefined) delete process.env.JEV_MCP_AUTO_ACCEPT;
+    else process.env.JEV_MCP_AUTO_ACCEPT = previous;
+  }
 });
 
 test("a high exists score with a flat best choice stays in review", async () => {
