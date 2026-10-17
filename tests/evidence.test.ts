@@ -58,10 +58,50 @@ test('extracted dependency-free helper produces attested evidence and calls the 
     assert.match(refused.stderr,/untrusted_connection/);
     const trusted=run(['judge','--connection','.jev-connection.json','--trust-connection'],{JEV_MCP_MOCK:'1'});
     assert.equal(trusted.status,0,trusted.stderr);
+    if(process.platform!=='win32') {
+      const linkedRoot=join(parent,'task-link');
+      await symlink(workspace,linkedRoot,'dir');
+      const viaRealPath=run(['judge','--root',linkedRoot,'--connection',join(workspace,'.jev-connection.json')],{JEV_MCP_MOCK:'1'});
+      assert.equal(viaRealPath.status,1);
+      assert.match(viaRealPath.stderr,/untrusted_connection/);
+    }
     await writeFile(join(workspace,'tests/failing.test.mjs'),`throw new Error('deliberate test failure');\n`);
     assert.equal(run(['collect','--request-file','requirements.txt','--',process.execPath,'--test','--test-reporter=tap']).status,1);
     assert.match(JSON.parse(await readFile(join(workspace,'.task-evidence/gate.json'),'utf8')).tests,/# fail 1/);
   } finally {await rm(parent,{recursive:true,force:true});}
+});
+
+test('snapshot skips sensitive files and rejects top-level symlinks', {timeout:15000}, async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'jev-evidence-filter-'));
+  let outsideDir: string | undefined;
+  try {
+    await mkdir(join(dir,'src'),{recursive:true});await mkdir(join(dir,'tests'),{recursive:true});
+    await writeFile(join(dir,'src/main.mjs'),'export const x = 1;\n');
+    await writeFile(join(dir,'.env'),'SECRET=never\n');
+    await mkdir(join(dir,'.git'),{recursive:true});await writeFile(join(dir,'.git/config'),'[remote]\n');
+    await writeFile(join(dir,'tests/fixture.pem'),'not-a-real-key\n');
+    const helper=join(root,'skills/jev-mcp/scripts/evidence.mjs');
+    const run=(args:string[])=>spawnSync(process.execPath,[helper,...args],{cwd:dir,env:processEnv(),encoding:'utf8',timeout:15000});
+    const snapshot=run(['snapshot','--paths','.']);
+    assert.equal(snapshot.status,0,snapshot.stderr);
+    const saved=JSON.parse(await readFile(join(dir,'.task-evidence/before.json'),'utf8')) as {files:Record<string,string>};
+    assert.ok(Object.hasOwn(saved.files,'src/main.mjs'));
+    assert.equal(Object.hasOwn(saved.files,'.env'),false);
+    assert.equal(Object.hasOwn(saved.files,'.git/config'),false);
+    assert.equal(Object.hasOwn(saved.files,'tests/fixture.pem'),false);
+    if(process.platform!=='win32') {
+      outsideDir=await mkdtemp(join(tmpdir(),'jev-evidence-outside-'));
+      const outside=join(outsideDir,'outside.txt');
+      await writeFile(outside,'outside\n');
+      await symlink(outside,join(dir,'linked.txt'));
+      const linked=run(['snapshot','--paths','linked.txt']);
+      assert.equal(linked.status,1);
+      assert.match(linked.stderr,/symlink/);
+    }
+  } finally {
+    await rm(dir,{recursive:true,force:true});
+    if(outsideDir)await rm(outsideDir,{recursive:true,force:true});
+  }
 });
 
 test('generated patches apply exactly for additions, deletions, line endings, multi-hunk edits and configurable context',()=>{

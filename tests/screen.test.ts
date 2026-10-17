@@ -45,6 +45,14 @@ test("a deterministic injection pattern prevents a mock pass or skip", async () 
   assert.notEqual(result.action, "auto");
 });
 
+test("a benign purpose mentioning developer mode does not trigger the text backstop", async () => {
+  const result = await runScreen({
+    text: "Ordinary browser documentation with useful installation and configuration detail.",
+    purpose: "Review browser developer mode documentation",
+  });
+  assert.notEqual(result.recommendation.action, "review");
+});
+
 test("screen block_at and review_at can only tighten the floor", async () => {
   const previous = process.env.JEV_MCP_BLOCK_AT;
   process.env.JEV_MCP_BLOCK_AT = "0.75";

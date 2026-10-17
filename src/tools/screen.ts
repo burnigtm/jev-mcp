@@ -47,7 +47,7 @@ export async function runScreen(input: ScreenInput, context?: ToolContext) {
     blockAt,
     reviewAt,
   });
-  const suspicious = containsInjectionInstruction(input.text) || (hasPurpose && containsInjectionInstruction(input.purpose ?? ""));
+  const suspicious = containsInjectionInstruction(input.text);
   const judgedDecision = suspicious && (judgedRecommendation === "pass" || judgedRecommendation === "skip")
     ? "review"
     : judgedRecommendation;

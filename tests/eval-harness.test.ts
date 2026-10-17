@@ -12,7 +12,7 @@ import { patchMatches, testEvidenceMatches, claimsRelevant } from '../scripts/li
 import { createTwoFilesPatch } from 'diff';
 import { reserveCall, validTrace, finalizeTrace } from '../scripts/lib/budget.mjs';
 import { processEnv } from '../scripts/lib/mcp.mjs';
-import { infrastructureReason, runAgent } from '../scripts/lib/agent.mjs';
+import { infrastructureReason, invocation, runAgent } from '../scripts/lib/agent.mjs';
 
 test('agent telemetry handles real Cursor usage fields and classifies prerequisite errors without saving text', async () => {
   const event={type:'result',subtype:'success',usage:{inputTokens:3,outputTokens:5,cacheReadTokens:20,cacheWriteTokens:10}};
@@ -183,6 +183,37 @@ test('evaluation entrypoints require explicit isolation and processEnv excludes 
     else process.env.NODE_OPTIONS = previousNodeOptions;
     if (previousIsolation === undefined) delete process.env.JEV_EVAL_ISOLATED;
     else process.env.JEV_EVAL_ISOLATED = previousIsolation;
+  }
+});
+
+test('agent MCP configs forward the evaluation isolation marker', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'jev-agent-config-'));
+  try {
+    const workspace = join(parent, 'task');
+    const profile = join(parent, 'profile');
+    await mkdir(workspace);
+    await mkdir(profile);
+    const common = {
+      model: 'test-model',
+      workspace,
+      profile,
+      trace: join(parent, 'trace.jsonl'),
+      baseline: join(parent, 'baseline.json'),
+      task: 'pagination',
+      budget: join(parent, 'budget'),
+      treatment: true,
+    };
+    const codex = await invocation({ host: 'codex', ...common });
+    const config = codex.args.find((arg) => arg.startsWith('mcp_servers=')) ?? '';
+    assert.match(config, /JEV_EVAL_ISOLATED/);
+
+    await invocation({ host: 'cursor', ...common });
+    const mcp = JSON.parse(await readFile(join(workspace, '.cursor', 'mcp.json'), 'utf8')) as {
+      mcpServers: { jev: { env: Record<string, string> } };
+    };
+    assert.equal(mcp.mcpServers.jev.env.JEV_EVAL_ISOLATED, '${env:JEV_EVAL_ISOLATED}');
+  } finally {
+    await rm(parent, { recursive: true, force: true });
   }
 });
 

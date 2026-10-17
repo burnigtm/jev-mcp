@@ -95,7 +95,7 @@ function baseUrlEnv(): string {
   if (!hostname) throw new JevConfigError("TYPESAFE_BASE_URL must be an absolute HTTP(S) API root URL.");
   if (url.protocol === "https:" && hostname === "api.typesafe.ai") {
     if (url.port) {
-      throw new JevConfigError("TYPESAFE_BASE_URL must use the default port for https://api.typesafe.ai unless JEV_MCP_ALLOW_CUSTOM_BASE_URL=1.");
+      throw new JevConfigError("TYPESAFE_BASE_URL must use the default port for https://api.typesafe.ai.");
     }
     return normalizedOrigin(url);
   }
@@ -163,8 +163,6 @@ function isPublicHostname(hostname: string): boolean {
   ) {
     return false;
   }
-  const mapped = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
-  if (mapped) return isIP(mapped[1] ?? "") === 4 && isPublicHostname(mapped[1] ?? "");
   const kind = isIP(normalized);
   if (kind === 4) return !nonPublic.check(normalized, "ipv4");
   if (kind === 6) return !nonPublic.check(normalized, "ipv6");

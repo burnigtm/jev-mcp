@@ -25,8 +25,8 @@ import {
 } from "./coding-loop.js";
 import {
   argumentsSchema,
+  candidateProjectionClipped,
   coverageSchema,
-  descriptionClipped,
   ineligibility,
   probability,
   reasonSchema,
@@ -136,7 +136,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
       model: input.model,
     }, scoped);
 
-    const clipped = eligible.some(candidate => descriptionClipped(candidate.description));
+    const clipped = eligible.some(candidateProjectionClipped);
     const incomplete = result.truncated || !result.coverage.complete || clipped;
     const answers = readCodingLoopAnswers(result);
     let policyAction = codingLoopAction({

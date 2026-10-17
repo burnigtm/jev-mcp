@@ -6,7 +6,7 @@ import { toolRouteQuestions } from "../packs/tool-route.js";
 import { distributionSupportsConfidence, tightenJudgmentThresholds, type PolicyAction } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, withToolContext, type ToolContext } from "../typesafe.js";
-import { MAX_JUDGE_ID_CHARS, MAX_JUDGE_KEY_CHARS, MAX_JUDGE_NAME_CHARS, sanitizeJudgeText } from "../untrusted.js";
+import { judgeTextClipped, MAX_JUDGE_ID_CHARS, MAX_JUDGE_KEY_CHARS, MAX_JUDGE_NAME_CHARS, normalizedJudgeText, sanitizeJudgeText } from "../untrusted.js";
 
 // Zod records intentionally strip __proto__. Reject it before any parsing can
 // silently change a call that the host already validated and authorized.
@@ -119,17 +119,29 @@ function argumentShape(value: unknown, depth = 0): unknown {
   return { type: typeof value };
 }
 
-function normalizedDescription(description: string): string {
-  return description.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
-}
-
 function sanitizeDescription(description: string): string {
-  return truncateText(normalizedDescription(description), MAX_CANDIDATE_CHARS);
+  return truncateText(normalizedJudgeText(description), MAX_CANDIDATE_CHARS);
 }
 
 /** A clipped description is incomplete coverage for that candidate. */
 export function descriptionClipped(description: string): boolean {
-  return normalizedDescription(description).length > MAX_CANDIDATE_CHARS;
+  return judgeTextClipped(description, MAX_CANDIDATE_CHARS);
+}
+
+function argumentKeysClipped(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(argumentKeysClipped);
+  return Object.entries(value as Record<string, unknown>).some(([key, child]) =>
+    judgeTextClipped(key, MAX_JUDGE_KEY_CHARS) || argumentKeysClipped(child),
+  );
+}
+
+/** Any clipped candidate metadata makes the judgment incomplete coverage. */
+export function candidateProjectionClipped(candidate: ToolCandidate): boolean {
+  return descriptionClipped(candidate.description)
+    || judgeTextClipped(candidate.id, MAX_JUDGE_ID_CHARS)
+    || judgeTextClipped(candidate.name, MAX_JUDGE_NAME_CHARS)
+    || argumentKeysClipped(candidate.arguments);
 }
 
 export function projectCandidateForJudgment(candidate: ToolCandidate): JudgeCandidate {
@@ -184,7 +196,7 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
     const candidate = candidates[index];
     const suitability = candidate ? asNoul(result.answers[`suitable_${index}`]).noul : null;
     const reasons: Reason[] = [];
-    const clipped = candidates.some(candidate => descriptionClipped(candidate.description));
+    const clipped = candidates.some(candidateProjectionClipped);
     const incomplete = result.truncated || !result.coverage.complete || clipped;
     if (incomplete) reasons.push("incomplete_context");
     if (selected.confidence < dispatchAt || !distributionSupportsConfidence(selected.probabilities, dispatchAt)) reasons.push("selection_uncertain");
