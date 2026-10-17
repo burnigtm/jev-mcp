@@ -154,6 +154,110 @@ export function codingLoopAction(input: {
   return "review";
 }
 
+export type ActionEffect = "read_only" | "local_write" | "external_write" | "destructive" | "unknown";
+export type TriageProgress = "advancing" | "repeating" | "regressing" | "complete";
+export type TriageStrategy = "retry" | "change_approach" | "gather_context" | "ask_user" | "stop" | "escalate";
+
+/** A Noul is "confidently false" only when its yes-probability is low enough. */
+export function probabilitySupportsAbsence(probability: number, threshold: number): boolean {
+  return probability <= 1 - threshold + 1e-9;
+}
+
+/**
+ * Semantic preflight for one host-prepared action. This never grants
+ * authorization; it only decides whether the action needs review/escalation.
+ */
+export function scopeAction(input: {
+  effect: ActionEffect;
+  inScope: number;
+  effectMatch: number;
+  needsConfirmation: number;
+  riskScore: number;
+  riskConfidence: number;
+  riskProbabilities: Record<string, number>;
+  autoAccept?: number;
+  reviewAt?: number;
+}): PolicyAction {
+  const autoAccept = input.autoAccept ?? DEFAULT_AUTO_ACCEPT;
+  const reviewAt = input.reviewAt ?? DEFAULT_REVIEW_AT;
+  validatePolicyThresholds(autoAccept, reviewAt);
+  if (input.inScope < reviewAt || input.effectMatch < reviewAt) return "escalate";
+  if (input.needsConfirmation >= autoAccept) return "escalate";
+  if (input.effect === "external_write" || input.effect === "destructive" || input.effect === "unknown") return "review";
+  if (input.riskScore >= 1.5) return "review";
+  if (input.inScope < autoAccept || input.effectMatch < autoAccept || input.needsConfirmation >= reviewAt) return "review";
+  if (!probabilitySupportsAbsence(input.needsConfirmation, autoAccept)) return "review";
+  if (!confidenceSupportsAuto(input.riskConfidence, input.riskProbabilities, autoAccept)) return "review";
+  return input.riskScore < 1.2 ? "auto" : "review";
+}
+
+/** Failure/loop triage. The host still chooses and executes any recovery call. */
+export function triageAction(input: {
+  causeConfidence: number;
+  causeProbabilities: Record<string, number>;
+  strategy: TriageStrategy;
+  strategyConfidence: number;
+  strategyProbabilities: Record<string, number>;
+  progress: TriageProgress;
+  recoverable: number;
+  failedAttempts: number;
+  autoAccept?: number;
+  reviewAt?: number;
+}): PolicyAction {
+  const autoAccept = input.autoAccept ?? DEFAULT_AUTO_ACCEPT;
+  const reviewAt = input.reviewAt ?? DEFAULT_REVIEW_AT;
+  validatePolicyThresholds(autoAccept, reviewAt);
+  if (input.causeConfidence < reviewAt) return "escalate";
+  if (input.causeConfidence < autoAccept) return "review";
+  if (input.strategyConfidence < reviewAt) return "escalate";
+  if (input.strategyConfidence < autoAccept) return "review";
+  if (input.strategy === "escalate") return "escalate";
+  if (input.strategy === "ask_user") return "review";
+  if (input.progress === "repeating" || input.progress === "regressing") return "review";
+  if (input.progress === "complete" && input.strategy !== "stop") return "review";
+  if (input.strategy === "stop" && input.progress !== "complete") return "review";
+  if (input.recoverable < reviewAt) return "escalate";
+  if (input.recoverable < autoAccept) return "review";
+  if (input.strategy === "retry" && input.failedAttempts >= 2) return "review";
+  if (
+    !confidenceSupportsAuto(input.causeConfidence, input.causeProbabilities, autoAccept)
+    || !confidenceSupportsAuto(input.strategyConfidence, input.strategyProbabilities, autoAccept)
+  ) {
+    return "review";
+  }
+  return "auto";
+}
+
+export const CRITICAL_RISK_FLAGS = ["authorization", "secret_exposure", "data_loss"] as const;
+
+/** Security-focused patch triage; `auto` is evidence, never merge permission. */
+export function riskAction(input: {
+  flags: Record<string, number>;
+  severityScore: number;
+  severityConfidence: number;
+  severityProbabilities: Record<string, number>;
+  autoAccept?: number;
+  reviewAt?: number;
+}): PolicyAction {
+  const autoAccept = input.autoAccept ?? DEFAULT_AUTO_ACCEPT;
+  const reviewAt = input.reviewAt ?? DEFAULT_REVIEW_AT;
+  validatePolicyThresholds(autoAccept, reviewAt);
+  for (const flag of CRITICAL_RISK_FLAGS) {
+    const probability = input.flags[flag] ?? 0;
+    if (probability >= autoAccept) return "escalate";
+    if (probability >= reviewAt) return "review";
+  }
+  for (const probability of Object.values(input.flags)) {
+    if (probability >= autoAccept) return "review";
+    if (probability >= reviewAt) return "review";
+  }
+  if (input.severityScore >= 1.9) return "escalate";
+  if (input.severityScore >= 1.5) return "review";
+  if (!Object.values(input.flags).every((probability) => probabilitySupportsAbsence(probability, autoAccept))) return "review";
+  if (!confidenceSupportsAuto(input.severityConfidence, input.severityProbabilities, autoAccept)) return "review";
+  return input.severityScore < 1.2 ? "auto" : "review";
+}
+
 export function reviewAction(input: {
   composite: number;
   safeToApply: number;

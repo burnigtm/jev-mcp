@@ -5,6 +5,7 @@ import { screenAction, screenRecommendation, tightenBlockAt, tightenScreenReview
 import { asNoul } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 import { JevValidationError } from "../errors.js";
+import { containsInjectionInstruction } from "../untrusted.js";
 
 export const screenInputSchema = z.object({
   text: z.string().describe("Fetched or pasted text before the agent reads it"),
@@ -15,13 +16,6 @@ export const screenInputSchema = z.object({
 });
 
 export type ScreenInput = z.infer<typeof screenInputSchema>;
-
-/** High-signal phrases that survive paraphrasing; a deterministic backstop only. */
-const INJECTION_PATTERN = /(?:ignore|disregard|forget)\s+(?:all\s+)?(?:the\s+)?(?:previous|prior|above)\s+(?:instructions?|prompts?|rules?)|system\s+note\s+for\s+(?:the\s+)?(?:ai|assistant|model)|append\s+your\s+system\s+prompt|jailbreak|developer\s+(?:override|mode)|you\s+are\s+now\s+(?:an?\s+)?(?:ai|assistant|model)/i;
-
-function containsInjectionInstruction(text: string): boolean {
-  return INJECTION_PATTERN.test(text.replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, ""));
-}
 
 export async function runScreen(input: ScreenInput, context?: ToolContext) {
   const config = getConfig();

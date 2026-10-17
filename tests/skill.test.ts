@@ -14,6 +14,9 @@ import { verifyInputSchema } from '../src/tools/verify.ts';
 import { gateInputSchema } from '../src/tools/gate.ts';
 import { screenInputSchema } from '../src/tools/screen.ts';
 import { rankInputSchema } from '../src/tools/rank.ts';
+import { scopeInputSchema } from '../src/tools/scope.ts';
+import { triageInputSchema } from '../src/tools/triage.ts';
+import { riskInputSchema } from '../src/tools/risk.ts';
 import { spawnSync } from 'node:child_process';
 
 test('standalone ZIP is reproducible, licensed and valid after isolated extraction', async () => {
@@ -57,7 +60,7 @@ test('shipped host examples forward the key instead of embedding it', async () =
 });
 
 test('every documented request validates and executes against actual MCP schemas', {timeout:60000}, async () => {
-  const schemas={jev_evaluate:evaluateInputSchema,jev_coding_loop:codingLoopInputSchema,jev_tool_route:toolRouteInputSchema,jev_step:stepInputSchema,jev_review:reviewInputSchema,jev_verify:verifyInputSchema,jev_gate:gateInputSchema,jev_screen:screenInputSchema,jev_rank:rankInputSchema};
+  const schemas={jev_evaluate:evaluateInputSchema,jev_coding_loop:codingLoopInputSchema,jev_tool_route:toolRouteInputSchema,jev_step:stepInputSchema,jev_review:reviewInputSchema,jev_verify:verifyInputSchema,jev_gate:gateInputSchema,jev_screen:screenInputSchema,jev_rank:rankInputSchema,jev_scope:scopeInputSchema,jev_triage:triageInputSchema,jev_risk:riskInputSchema};
   const requests=examples(await readFile(join(root,'skills/jev-mcp/references/tools.md'),'utf8'));
   assert.deepEqual([...new Set(requests.map(r=>r.name))].sort(),Object.keys(schemas).sort());
   const server=await connectServer({args:['--import','tsx','src/index.ts'],env:processEnv({JEV_MCP_MOCK:'1'})});

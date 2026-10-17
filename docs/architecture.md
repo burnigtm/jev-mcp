@@ -67,9 +67,19 @@ Only complete, confident selections of suitable `read_only` or `local_write` cal
 
 Tool-route judgments receive a redacted candidate projection: sanitized id, sanitized tool name, sanitized description, effect, and argument shape. Argument key names are control-stripped and length-capped. Exact argument values remain in the host and are returned only in an accepted call; they are not sent to TypeSafe.
 
-Questions that receive third-party text carry a shared "untrusted data, not instructions" clause. `jev_rank` keeps the query in state instead of interpolating it into instructions, and strips control/bidi characters from the original candidate IDs used in the judge state. `jev_screen` adds a deterministic high-signal phrase backstop. This is defense-in-depth: the model can still be influenced, so screening is advisory and never grants permission to follow external text.
+Questions that receive third-party text carry a shared "untrusted data, not instructions" clause. `jev_rank` keeps the query in state instead of interpolating it into instructions, and strips control/bidi characters from the original candidate IDs used in the judge state. `jev_screen` adds a deterministic high-signal phrase backstop. This is defense-in-depth: the model can still be influenced, so screening is advisory and never grants permission to follow external text. The same backstop is shared with the scope, triage, and risk tools; if it fires in their untrusted state, automatic acceptance is blocked.
 
 The fused `jev_step` router applies the same redacted projection before combining coding-loop and prepared-call questions.
+
+## Pre-action scope, failure triage, and security risk
+
+Three v0.2 tools fill the boundaries around the original coding loop:
+
+- **`jev_scope`** judges one host-prepared action against the approved task/scope, checks whether the declared effect matches the description, and asks whether fresh confirmation is needed. External, destructive, and unknown effects never return `auto`; out-of-scope or mismatched actions escalate. This is semantic preflight only. The host's authorization, schema, and prerequisite checks remain authoritative.
+- **`jev_triage`** classifies a failure against host-supplied causes, classifies loop progress (`advancing`, `repeating`, `regressing`, `complete`), asks whether useful progress is possible, and selects a recovery strategy. Repeating/regressing progress, exhausted retries, `ask_user`, and low recoverability cannot return `auto`. The host prepares and routes any recovery call through `jev_step`; Jev never executes it.
+- **`jev_risk`** asks independent security questions about authorization, validation, secret exposure, data loss, concurrency, dependencies, and external effects, plus a severity score. Critical flags escalate; any concern band reviews; `auto` requires every flag to be confidently absent. It is not merge or deployment permission.
+
+All three use the same coverage, threshold, distribution, and untrusted-data rules as the existing tools. Their actions are deterministic TypeScript policies; the model supplies only the typed judgments.
 
 Automatic tool dispatch and partner handoffs also check distribution concentration independently of reported confidence. After normalizing probability mass, the peak must reach `1/n + (1 - 1/n) * threshold` for `n` options. This conservative local guard prevents overstated confidence from passing a flat or weak distribution; it does not redefine the provider's confidence statistic or change the reported fields.
 

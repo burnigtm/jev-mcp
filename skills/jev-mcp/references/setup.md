@@ -54,4 +54,4 @@ For Windows JSON paths, use forward slashes or doubled backslashes. Restart the 
 
 ## First use and failures
 
-Ask the agent to inspect a coding task using the `jev-mcp` skill. A successful connection exposes nine `jev_*` tools. Use `jev_step` to route a genuine next-step choice and inspect its typed result. Installing a skill does not grant tool access. Missing keys, timeouts, provider errors, incomplete coverage, and uncertain decisions are not approvals. Preserve the user's existing authorization while collecting missing evidence.
+Ask the agent to inspect a coding task using the `jev-mcp` skill. A successful connection exposes twelve `jev_*` tools. Use `jev_step` to route a genuine next-step choice and inspect its typed result. Installing a skill does not grant tool access. Missing keys, timeouts, provider errors, incomplete coverage, and uncertain decisions are not approvals. Preserve the user's existing authorization while collecting missing evidence.

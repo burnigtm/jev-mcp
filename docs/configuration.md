@@ -20,6 +20,7 @@ Per-call overrides can only tighten the environment floors:
 
 - `auto_accept` becomes `max(caller, env)`. `review_at` becomes `max(caller, env)` and must still be `<= auto_accept`. A caller pair with `review_at > auto_accept` is still rejected.
 - `jev_coding_loop`, `jev_review`, `jev_verify`, `jev_gate`: `auto_accept`, `review_at`
+- `jev_scope`, `jev_triage`, `jev_risk`: `auto_accept`, `review_at`
 - `jev_step`, `jev_tool_route`: `auto_accept`, `review_at` (executable dispatch keeps its `max(0.8, auto_accept)` floor)
 - `jev_screen`: `block_at` becomes `min(caller, env)` and `review_at` becomes `min(caller, 0.25)`, so a call can only tighten screen thresholds (`block_at: 1` cannot loosen `0.75`, and `review_at: 0.7` cannot loosen `0.25`). `review_at` cannot exceed `block_at`
 - All tools: `model`
@@ -27,6 +28,8 @@ Per-call overrides can only tighten the environment floors:
 `jev_evaluate` uses the environment confidence thresholds. Configurable confidence bands must satisfy `0 <= review_at <= auto_accept <= 1`; invalid environment values are configuration errors rather than silent fallbacks. `TYPESAFE_BASE_URL` is normalized to origin plus path. Userinfo, query strings, fragments, obfuscated numeric hosts, and non-public IPv4/IPv6 addresses (private, link-local, loopback on HTTPS, metadata, reserved, NAT64/6to4, and Teredo) are rejected. For custom HTTPS, `localhost`/`.localhost`, `.local`, `.internal`, `.home.arpa`, `.localdomain`, single-label names, trailing-dot forms, and zone identifiers are also rejected; `api.typesafe.ai` must use its default port. HTTP is allowed for IPv4/IPv6 loopback (`127.0.0.0/8`, `::1`, `localhost`). Hostnames are not resolved locally, so a custom endpoint remains operator-trusted and DNS rebinding is a documented residual risk. The screen review threshold cannot exceed its block threshold, and `JEV_MCP_BLOCK_AT` must be at least the default screen review threshold of `0.25`.
 
 Review and gate `auto` also requires each raw score to clear a floor on the 0–2 scale: correctness and spec match at least 1, test gap and blast radius at most 1. The weighted composite alone is not enough.
+
+`jev_scope` never returns `auto` for `external_write`, `destructive`, or `unknown` effects. `jev_triage` never returns `auto` for repeating/regressing progress, an exhausted retry budget, `ask_user`, or low recoverability. `jev_risk` escalates a critical flag at or above `auto_accept` and reviews any concern in the uncertainty band; `auto` requires every flag to be confidently absent. These tools are advisory and never execute actions or grant authorization.
 
 No key and no mock: tools return `CONFIG_ERROR`. The timeout must be a positive integer no greater than `2147483647`; invalid values are configuration errors.
 
@@ -36,7 +39,7 @@ No key and no mock: tools return `CONFIG_ERROR`. The timeout must be a positive 
 
 The server does not log request state, diffs, claims, or API keys. The diagnostic `base_url` is only the URL origin: credentials, paths, query parameters, and fragments are omitted.
 
-MCP failures use `isError: true` and an error with `code`, `message`, and `retryable`. All nine tools return `{ "error": ... }` in JSON text and omit `structuredContent` on errors so MCP clients do not validate error payloads against tool success schemas. Codes include `CONFIG_ERROR`, `INVALID_INPUT`, `INPUT_TOO_LARGE`, `INVALID_RESPONSE`, `TIMEOUT`, `CANCELLED`, and `API_ERROR`. Timeouts are retryable; cancelled calls are not. The server does not manufacture a successful verdict after a transport or validation failure.
+MCP failures use `isError: true` and an error with `code`, `message`, and `retryable`. All twelve tools return `{ "error": ... }` in JSON text and omit `structuredContent` on errors so MCP clients do not validate error payloads against tool success schemas. Codes include `CONFIG_ERROR`, `INVALID_INPUT`, `INPUT_TOO_LARGE`, `INVALID_RESPONSE`, `TIMEOUT`, `CANCELLED`, and `API_ERROR`. Timeouts are retryable; cancelled calls are not. The server does not manufacture a successful verdict after a transport or validation failure.
 
 ## Policy constants
 
