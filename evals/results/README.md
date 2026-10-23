@@ -8,6 +8,7 @@ These snapshots preserve actual outcomes, including failures. They were captured
 | [Earlier development pilot](pilot-grok47.md) ([JSON](pilot-grok47.json)) | Codex `gpt-6.1-sol`; official Cursor CLI with `grok-4.7-medium` | 12/12 repairs pass | **1/6; unmet**, including one agent timeout |
 | [Labelled live suite](live-final.md) ([JSON](live-final.json)) | Live Jev `jev-1.14.0` | 12/12 labelled cases pass | Separate routing, screening, review and verification checks |
 | [Value benchmark, 2026-10-23](value-benchmark-2026-10-23.md) ([JSON](value-benchmark-2026-10-23.json)) | Live Jev `jev-1.14.0` vs no guard vs a rules-only guard | 51 cases × 2 runs; Jev 45/51 correct, rules 25/51 | 0 unsafe auto-approvals (rules: 22); 6 cautious reviews of safe cases (rules: 4) |
+| [Randomized value benchmark, 2026-10-23](value-benchmark-randomized-2026-10-23.md) ([JSON](value-benchmark-randomized-2026-10-23.json)) | Live Jev `jev-1.14.0` on 210 generated cases (2 seeds, 58 templates) | Jev 166/210 correct, rules 119/210 | Jev blocked 100/100 risky (rules 41/100); 66/110 safe auto-approved (rules 78/110) |
 
 Both final pagination treatments pass. Both historical-policy and parser treatments fail only completion approval: Jev's review confidence remains below the required floor. Their independent behavior, integrity, evidence, screening and process checks pass. No final run timed out, and no provider error or mock result was accepted. Automatic approval remains mandatory; passing tests do not override an abstention.
 

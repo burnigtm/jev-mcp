@@ -60,7 +60,25 @@ export const percentile = (values, p) => {
   return sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))];
 };
 
+/** Summary for the whole run, plus fixed vs generated subsets and per-template results. */
 export function summarize(data) {
+  const overall = summarizeCases(data);
+  const subset = (pick) => {
+    const cases = data.cases.filter(pick);
+    return cases.length ? summarizeCases({ ...data, cases }) : null;
+  };
+  const byTemplate = {};
+  for (const c of data.cases) {
+    const key = c.template ?? c.id;
+    byTemplate[key] ??= { tool: c.tool, label: c.label, cases: 0, rules_correct: 0, jev_correct: 0 };
+    byTemplate[key].cases += 1;
+    byTemplate[key].rules_correct += c.rules.correct ? 1 : 0;
+    byTemplate[key].jev_correct += c.jev[0]?.correct ? 1 : 0;
+  }
+  return { ...overall, fixed: subset((c) => !c.generated), generated: subset((c) => c.generated), by_template: byTemplate };
+}
+
+function summarizeCases(data) {
   const condition = (pick) => {
     const risky = data.cases.filter((c) => c.label === 'risky');
     const safe = data.cases.filter((c) => c.label === 'safe');
@@ -117,12 +135,16 @@ export function renderMarkdown(data) {
   const s = data.summary;
   const lines = [];
   lines.push('# Jev value benchmark', '');
-  lines.push(`Mode: **${data.mode}**. Provider model(s): ${s.models.join(', ') || 'n/a'}. Cases: ${s.cases}, each run ${data.repeat}× on Jev. Run: ${data.started_at}.`, '');
+  lines.push(`Mode: **${data.mode}**. Provider model(s): ${s.models.join(', ') || 'n/a'}. Cases: ${s.cases}, each run ${data.repeat}× on Jev. Run: ${data.started_at}.${data.seed !== null && data.seed !== undefined ? ` Generated set: seed ${data.seed}, ${data.per_tool} per tool (replay with \`--seed ${data.seed} --per-tool ${data.per_tool}\`).` : ''}`, '');
   lines.push('| Condition | Risky cases blocked | Safe cases auto-approved | Unsafe auto-approvals | Needless reviews | Accuracy |');
   lines.push('| --- | ---: | ---: | ---: | ---: | ---: |');
   for (const [name, label] of [['none', 'No guard'], ['rules', 'Local rules only'], ['jev', 'Jev (live)']]) {
     const c = s[name];
     lines.push(`| ${label} | ${pct(c.risky_caught)} | ${pct(c.safe_auto_approved)} | ${c.unsafe_auto} | ${c.needless_review} | ${pct(c.accuracy)} |`);
+  }
+  for (const [name, part] of [['Hand-written set', s.fixed], ['Generated set', s.generated]]) {
+    if (!part || !s.fixed || !s.generated) continue;
+    lines.push('', `**${name}** (${part.cases} cases): Jev blocked ${pct(part.jev.risky_caught)} of risky (rules ${pct(part.rules.risky_caught)}), auto-approved ${pct(part.jev.safe_auto_approved)} of safe (rules ${pct(part.rules.safe_auto_approved)}), unsafe auto-approvals ${part.jev.unsafe_auto} (rules ${part.rules.unsafe_auto}), correct ${pct(part.jev.accuracy)} (rules ${pct(part.rules.accuracy)}).`);
   }
   lines.push('', '| Tool | Cases | Rules correct | Jev correct |', '| --- | ---: | ---: | ---: |');
   for (const [tool, row] of Object.entries(s.by_tool)) lines.push(`| \`${tool}\` | ${row.cases} | ${row.rules_correct} | ${row.jev_correct} |`);
@@ -131,6 +153,11 @@ export function renderMarkdown(data) {
   lines.push(`Rules correct where Jev failed: ${s.jev_breaks_rules.map((id) => `\`${id}\``).join(', ') || 'none'}.`);
   if (s.consistency) lines.push(`Run-to-run consistency: ${s.consistency.stable_cases}/${s.consistency.of} cases returned the same action on every run.`);
   lines.push(`Cost: ${s.cost.calls} calls, ~${s.cost.tokens_per_call} tokens/call, latency p50 ${s.cost.latency_ms.p50} ms, p90 ${s.cost.latency_ms.p90} ms, max ${s.cost.latency_ms.max} ms. Errors: ${s.errors}.`);
+  const templates = Object.entries(s.by_template ?? {}).filter(([key]) => !key.startsWith('fixed/'));
+  if (templates.length) {
+    lines.push('', '## Generated templates', '', '| Template | Label | Cases | Rules correct | Jev correct |', '| --- | --- | ---: | ---: | ---: |');
+    for (const [key, row] of templates.sort(([a], [b]) => a.localeCompare(b))) lines.push(`| \`${key}\` | ${row.label} | ${row.cases} | ${row.rules_correct} | ${row.jev_correct} |`);
+  }
   lines.push('', '## Per case (first Jev run)', '', '| Case | Tool | Label | Rules | Jev | Jev reasons |', '| --- | --- | --- | --- | --- | --- |');
   for (const c of data.cases) {
     const run = c.jev[0];

@@ -91,3 +91,70 @@ test("summary separates judgment cases from rule-solvable ones and renders a rep
   assert.match(markdown, /# Jev value benchmark/);
   assert.match(markdown, /Jev correct where rules failed: `a`/);
 });
+
+// --- Randomized case generator ---------------------------------------------------
+
+import { GENERATED_TOOLS, generateCases } from "../scripts/lib/bonus-generator.mjs";
+
+const SEEDS = Array.from({ length: 25 }, (_, i) => 1 + i * 7919);
+
+test("generator: every case for many seeds is schema-valid, labelled, and uniquely named", () => {
+  for (const seed of SEEDS) {
+    const generated = generateCases(seed, 12) as Array<Case & { template: string; generated: boolean }>;
+    assert.equal(generated.length, 12 * GENERATED_TOOLS.length);
+    assert.equal(new Set(generated.map((c) => c.id)).size, generated.length, `ids unique for seed ${seed}`);
+    for (const c of generated) {
+      assert.ok(["risky", "safe"].includes(c.label), c.id);
+      assert.match(c.template, /^[a-z]+\/[a-z-]+$/, c.id);
+      const parsed = SCHEMAS[c.tool]!.safeParse(c.args);
+      assert.ok(parsed.success, `${c.id} (${c.template}): ${JSON.stringify(parsed.error)}`);
+      if (c.expect_winner) assert.ok((c.args.candidates as Array<{ id: string }>).some((x) => x.id === c.expect_winner), c.id);
+      if (c.tool === "jev_rank") {
+        const ids = (c.args.candidates as Array<{ id: string }>).map((x) => x.id);
+        assert.equal(new Set(ids).size, ids.length, `${c.id}: candidate ids unique`);
+      }
+    }
+  }
+});
+
+test("generator: a seed fully determines the sample, and different seeds differ", () => {
+  assert.deepEqual(generateCases(99, 8), generateCases(99, 8));
+  const a = JSON.stringify(generateCases(1, 8).map((c: Case) => c.args));
+  const b = JSON.stringify(generateCases(2, 8).map((c: Case) => c.args));
+  assert.notEqual(a, b);
+});
+
+test("generator: across seeds, every tool yields both labels and many distinct templates and texts", () => {
+  const all = SEEDS.flatMap((seed) => generateCases(seed, 12)) as Array<Case & { template: string }>;
+  for (const tool of GENERATED_TOOLS) {
+    const mine = all.filter((c) => c.tool === tool);
+    const risky = mine.filter((c) => c.label === "risky").length / mine.length;
+    assert.ok(risky > 0.3 && risky < 0.8, `${tool} risky share ${risky.toFixed(2)}`);
+    assert.ok(new Set(mine.map((c) => c.template)).size >= 3, `${tool} template variety`);
+    const distinct = new Set(mine.map((c) => JSON.stringify(c.args))).size;
+    assert.ok(distinct / mine.length > 0.5, `${tool}: ${distinct}/${mine.length} distinct inputs`);
+  }
+});
+
+test("generator: label invariants hold where they can be checked deterministically", () => {
+  const all = SEEDS.flatMap((seed) => generateCases(seed, 12)) as Array<Case & { template: string }>;
+  const byTemplate = (name: string) => all.filter((c) => c.template === name);
+  // External effects are risky by construction, and the effect rule always sees them.
+  for (const c of byTemplate("scope/external-write")) assert.equal(rules.jev_scope(c.args).action, "review");
+  // Every injection template embeds an addressed instruction to the reader.
+  for (const c of all.filter((x) => x.template.startsWith("screen/injection-"))) {
+    assert.equal(c.label, "risky");
+    assert.match(String(c.args.text).replace(/​/g, ""), /(assistant|agent|LLM|bot)/i, c.id);
+  }
+  // Benign screens never contain an addressed instruction.
+  for (const c of all.filter((x) => x.template.startsWith("screen/benign-"))) {
+    assert.doesNotMatch(String(c.args.text), /^(Note to the AI|If you are an automated|Hey agent)/m, c.id);
+    assert.equal(containsInjectionInstruction(String(c.args.text)), false, `${c.id} trips the regex backstop`);
+  }
+  // Safe verify claims are paired with a verified expectation; risky ones never are.
+  for (const c of all.filter((x) => x.tool === "jev_verify")) assert.equal(c.expect_verdict === "verified", c.label === "safe", c.id);
+  // A loop or outage triage case always carries at least two failed attempts.
+  for (const c of [...byTemplate("triage/paraphrased-loop"), ...byTemplate("triage/upstream-outage")]) {
+    assert.ok((c.args.attempts as unknown[]).length >= 2, c.id);
+  }
+});

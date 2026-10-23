@@ -16,14 +16,19 @@ import { dirname, resolve } from 'node:path';
 import { connectServer, liveEnv, processEnv } from './lib/mcp.mjs';
 import { bonusCases } from './lib/bonus-cases.mjs';
 import { correct, createRules, renderMarkdown, summarize } from './lib/bonus.mjs';
+import { generateCases } from './lib/bonus-generator.mjs';
 import { root } from './lib/skill.mjs';
 
-const { values } = parseArgs({ options: {
+const { values } = parseArgs({ allowNegative: true, options: {
   mock: { type: 'boolean', default: false },
   repeat: { type: 'string', default: '2' },
   report: { type: 'string', default: 'artifacts/bonus.json' },
   markdown: { type: 'string', default: 'artifacts/bonus.md' },
   only: { type: 'string' },
+  set: { type: 'string', default: 'all' },
+  seed: { type: 'string' },
+  'per-tool': { type: 'string', default: '10' },
+  experiments: { type: 'boolean', default: true },
 } });
 const repeat = Math.max(1, Math.min(5, Number(values.repeat) || 1));
 const { containsInjectionInstruction } = await import(new URL('../dist/untrusted.js', import.meta.url));
@@ -56,12 +61,24 @@ function serverEnv(extra = {}) {
 
 // --- Main suite ----------------------------------------------------------------
 
-const cases = values.only ? bonusCases.filter((testCase) => testCase.id.includes(values.only)) : bonusCases;
+// A fresh seed gives cases no earlier run has seen; the report records it so the run can be replayed.
+const seed = values.seed === undefined ? Math.floor(Math.random() * 2 ** 31) : Number(values.seed);
+if (!Number.isSafeInteger(seed) || seed < 0) throw new Error('--seed must be a non-negative integer');
+const perTool = Math.max(1, Math.min(50, Number(values['per-tool']) || 10));
+if (!['fixed', 'generated', 'all'].includes(values.set)) throw new Error('--set must be fixed, generated, or all');
+const selected = [
+  ...(values.set === 'generated' ? [] : bonusCases.map((testCase) => ({ ...testCase, template: `fixed/${testCase.id}` }))),
+  ...(values.set === 'fixed' ? [] : generateCases(seed, perTool)),
+];
+const cases = values.only ? selected.filter((testCase) => testCase.id.includes(values.only)) : selected;
 const report = {
   mode: values.mock ? 'mock (harness dry run; not a measurement)' : 'live',
   requested_model: process.env.JEV_MCP_MODEL || 'jev-latest',
   started_at: new Date().toISOString(),
   repeat,
+  set: values.set,
+  seed: values.set === 'fixed' ? null : seed,
+  per_tool: values.set === 'fixed' ? null : perTool,
   cases: [],
   experiments: {},
 };
@@ -85,7 +102,7 @@ try {
     }
     const baseline = rules[testCase.tool](testCase.args);
     report.cases.push({
-      id: testCase.id, tool: testCase.tool, label: testCase.label,
+      id: testCase.id, tool: testCase.tool, label: testCase.label, template: testCase.template, generated: Boolean(testCase.generated),
       rules: { ...baseline, correct: correct(testCase, baseline) },
       none: { action: 'auto', correct: testCase.label === 'safe' },
       jev: runs.map((run) => (run.decision ? { ...run, correct: correct(testCase, run.decision) } : run)),
@@ -99,7 +116,7 @@ try {
 
 // --- Experiment: response cache on repeated identical calls ----------------------
 
-{
+if (values.experiments) {
   const sample = cases.filter((testCase) => ['jev_review', 'jev_risk', 'jev_screen', 'jev_scope'].includes(testCase.tool)).slice(0, 8);
   const cached = await connectServer({ env: serverEnv({ JEV_MCP_CACHE_TTL_MS: '600000' }) });
   const pairs = [];
@@ -124,7 +141,7 @@ try {
 
 // --- Experiment: fused risk-aware gate vs separate gate + risk calls -------------
 
-{
+if (values.experiments) {
   const gateCases = [
     { id: 'clean-fix', args: {
       request: 'Fix pageCount so the final partial page is included.',
