@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- `jev_verify` no longer softens a per-claim `escalate` to an overall `review`: the overall action is now the strictest per-claim action. Per-claim actions use the same verdict policy as `jev_gate`, so a confident contradiction escalates and is counted in `needs_review` instead of reporting `auto`. **Behavior change:** a confident `unsupported` verdict is now `review` per claim, not `auto`.
+- `jev_screen` accepts a stricter per-call `block_at` below `0.25` by lowering `review_at` with it, instead of rejecting the call.
+- A per-call `review_at` above the env `auto_accept` raises `auto_accept` with it instead of failing; an explicitly inverted caller pair is still rejected.
+- `jev_tool_route` reports `thresholds.dispatch_at` like `jev_step`; `jev_coding_loop` rejects an empty `task`; mock mode validates each response once.
+- Confidently contradicted claims in `jev_verify` and `jev_gate` escalate at `min(auto_accept, 0.8)`, like the v0.2 scope and risk concerns, so raising `auto_accept` never delays the escalation.
+- Truncation below the marker length no longer emits a lone UTF-16 high surrogate.
+
+### Test suite
+
+- Added seeded property tests for every policy function (threshold monotonicity, never-auto conditions, distribution guards), a cross-tool invariant table (clean answers reach `auto`; truncation, flat distributions, injection text, malformed answers, and provider failures never do), and table-driven matrices for the provider boundary, question parsing, CLI arguments, configuration, reason codes, injection phrases, stats, cache, and limits. Branch coverage of `src/` rose from 87.8% to 94.7%.
+
+### Response cache, stats, and token budget
+
+- Opt-in cache of validated provider results (`JEV_MCP_CACHE_TTL_MS`, `JEV_MCP_CACHE_MAX_ENTRIES`). Hits report zero usage; every tool still applies its policy, thresholds, and coverage checks to cached answers. Cancelled requests are never cached.
+- `JEV_MCP_TOKEN_BUDGET` caps provider tokens per process and fails closed with the new `BUDGET_EXHAUSTED` error code before any request.
+- New `jev://stats` resource with per-tool calls, actions, error codes, latency, and tokens, plus provider requests, cache hits, and remaining budget. It never records tool inputs or outputs. The server now exposes 12 tools, 12 resources, and 6 prompts.
+- All tools register through one helper that shares the deadline scope, error envelope, and stats recording.
+
+### Security-aware gate
+
+- `jev_gate` accepts `risk: true` with optional `files` and `dependencies`: patch review, claim verification, and the `jev_risk` security flags run in one Jev request. The response adds a `security` report and the `security_review` / `security_escalated` reason codes. Without `risk`, requests and responses are unchanged.
+
+### Deterministic loop detection
+
+- `jev_triage` fingerprints failed attempts and history after masking timestamps, durations, hex IDs, temp paths, and numbers. Repeated fingerprints, or the same failure across two or more failed attempts, add `loop: { detected, repeats, kind }` and `loop_detected` and block `auto` even when Jev reports `advancing`.
+
 ## 0.2.0
 
 ### Scope, failure triage, and security risk tools

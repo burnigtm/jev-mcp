@@ -189,7 +189,7 @@ The response has an MCP output schema and matching JSON text and `structuredCont
 - `call: { candidate_id, name, arguments }` only with `action: auto` and `handoff: execute_tool`. Every other result has `call: null`.
 - `partner_model: { required: false, tier: "none" }` for every result.
 - `selection: { id, confidence, suitability }`, or `null` when no Jev request was needed. A non-auto selection is diagnostic, never an executable dispatch.
-- `blocked_candidates` with exclusion reasons, overall `reason_codes`, effective `thresholds`, coverage, model, and usage.
+- `blocked_candidates` with exclusion reasons, overall `reason_codes`, effective `thresholds` (`auto_accept` reports the dispatch floor for compatibility; `dispatch_at` reports it explicitly, matching `jev_step`), coverage, model, and usage.
 
 For provider privacy, the judgment state contains only each eligible candidate's control-stripped id, control-stripped tool name, sanitized description, effect, and argument shape (key names control-stripped). Exact argument values are retained for the returned call but are not transmitted to TypeSafe.
 
@@ -239,9 +239,11 @@ Check factual claims against evidence you already have (PR text, docs, logs, dif
 
 Per claim: `verified` | `contradicted` | `unsupported`, full probabilities, confidence, and a per-item action. Confidence below `review_at` produces a per-item `escalate`; confidence between `review_at` and `auto_accept` produces `review`.
 
-The response includes summary counts and an overall `action`. A contradiction with per-item `auto` escalates the overall result. Otherwise, any non-auto per-item action or contradiction makes the overall result `review`; remaining results permit `auto` only with complete context.
+Per-item actions use the same verdict policy as `jev_gate`: a contradiction at or above `min(auto_accept, 0.8)` escalates, and any `unsupported` or moderate `contradicted` verdict needs at least `review`. Only a confident `verified` claim can be `auto`.
 
-For standalone verification, a confident `unsupported` verdict can have `action: auto`: this accepts the classification, not the claim. The additive `all_claims_verified` field is `true` only when every claim is `verified`, every per-item action is `auto`, and coverage is complete. Use that field, or `jev_gate`, when you need an overall completion approval.
+The response includes summary counts (`needs_review` counts every non-auto item) and an overall `action`, which is the strictest per-item action: one escalated claim escalates the whole verification. Results permit `auto` only with complete context.
+
+The additive `all_claims_verified` field is `true` only when every claim is `verified`, every per-item action is `auto`, and coverage is complete. Use that field, or `jev_gate`, when you need an overall completion approval.
 
 ```json
 {
@@ -254,7 +256,9 @@ For standalone verification, a confident `unsupported` verdict can have `action:
 
 Review a patch and verify its completion claims in **one upstream request**. The host supplies the artifacts; this tool does not run tests or apply changes.
 
-Required inputs: `request`, `diff`, nonempty `claims`, and `evidence` (text or `[{id, text}, ...]`). Optional inputs: `tests`, `model`, `auto_accept` (default `0.8`), and `review_at` (default `0.5`).
+Required inputs: `request`, `diff`, nonempty `claims`, and `evidence` (text or `[{id, text}, ...]`). Optional inputs: `tests`, `model`, `auto_accept` (default `0.8`), `review_at` (default `0.5`), and the security options `risk`, `files`, and `dependencies`.
+
+**Security-aware gate.** With `"risk": true`, the same single request also carries the `jev_risk` flags and severity score, judged over `diff`, `tests`, `files` (`[{ path, change? }]`), and `dependencies`. The response gains a `security` report (`action`, `flags`, `severity`, `reason_codes`, `thresholds`) and the overall action becomes the strictest of review, verification, and security. A critical flag (`authorization`, `secret_exposure`, `data_loss`) at or above `auto_accept` escalates the gate. Without `risk`, the request and response are unchanged.
 
 ```json
 {
@@ -272,15 +276,15 @@ The response includes `review`, `verification` (per-claim results and counts), o
 
 - `auto`: complete context, accepted review, and every claim verified at or above `auto_accept`.
 - `review`: unsupported claims, moderate uncertainty or contradictions, or incomplete context, unless another check escalates.
-- `escalate`: unsafe or uncertain review, a claim below `review_at`, or a contradiction at or above `auto_accept`.
+- `escalate`: unsafe or uncertain review, a claim below `review_at`, a contradiction at or above `min(auto_accept, 0.8)`, or (with `risk: true`) a security escalation.
 
-Reason codes are deterministic: `accepted`, `incomplete_context`, `review_escalated`, `review_required`, `claims_contradicted`, `claims_unsupported`, `claim_confidence_low`, `claim_confidence_below_auto_accept`, and `confidence_incoherent`. Operational failures return `isError: true` with JSON text `{ "error": { "code", "message", "retryable" } }` and no `structuredContent`, so clients do not validate an error against the gate's success schema. Failures never produce approval.
+Reason codes are deterministic: `accepted`, `incomplete_context`, `review_escalated`, `review_required`, `claims_contradicted`, `claims_unsupported`, `claim_confidence_low`, `claim_confidence_below_auto_accept`, `confidence_incoherent`, and, with `risk: true`, `security_review` and `security_escalated`. Operational failures return `isError: true` with JSON text `{ "error": { "code", "message", "retryable" } }` and no `structuredContent`, so clients do not validate an error against the gate's success schema. Failures never produce approval.
 
 ## `jev_screen`
 
 Judge **untrusted** paste/fetch **before** the agent reads it. Skip first-party repo files. Pattern: [LLM guardrails](https://docs.typesafe.ai/cookbooks/llm_guardrails.md).
 
-**Arguments:** `text`, optional `purpose`, optional `block_at` (default `0.75`; a call can only lower the env floor), optional `review_at` (default `0.25`; a call can only lower the `0.25` floor).
+**Arguments:** `text`, optional `purpose`, optional `block_at` (default `0.75`; a call can only lower the env floor), optional `review_at` (default `0.25`; a call can only lower the `0.25` floor). A `block_at` below `0.25` lowers `review_at` with it, so tightening never fails.
 
 Noul `injection`, `substance`, and `relevance` (only if `purpose` is set).
 
@@ -347,7 +351,7 @@ Semantic preflight for **one** host-prepared action. It judges scope and effect 
 
 **Questions:** Noul `in_scope`, `effect_match`, `needs_confirmation`; Score `risk` from read-only (0) to external/destructive (2).
 
-**Policy:** external/destructive/unknown effects are never `auto`; out-of-scope or effect-mismatched actions escalate; high confirmation risk escalates; high risk reviews. `auto` also requires a confident low risk and complete coverage. `action: auto` means no semantic scope concern, **not** that the host may skip authorization.
+**Policy:** external/destructive/unknown effects are never `auto`; out-of-scope or effect-mismatched actions escalate; `needs_confirmation` at or above `min(auto_accept, 0.8)` escalates; high risk reviews. `auto` also requires a confident low risk and complete coverage. `action: auto` means no semantic scope concern, **not** that the host may skip authorization.
 
 ```json
 {
@@ -379,7 +383,9 @@ Turn a failure into a cause, a progress classification, and a recovery strategy.
 
 **Questions:** Choice `cause` over synthetic cause labels plus `unknown`; Choice `progress` (`advancing`, `repeating`, `regressing`, `complete`); Noul `recoverable`; Choice `strategy` (`retry`, `change_approach`, `gather_context`, `ask_user`, `stop`, `escalate`).
 
-**Policy:** uncertain cause or strategy reviews/escalates; repeating or regressing progress reviews; a retry after two or more failed attempts reviews; `ask_user` reviews; `escalate` escalates. `auto` requires a confident cause and strategy, clean progress, enough recoverability, a legal retry budget, and complete coverage. The host prepares and routes any recovery call with `jev_step`.
+**Policy:** escalations are decided first: cause or strategy confidence below `review_at`, a recommended `escalate`, or recoverability below `review_at` escalate. Then moderate cause or strategy confidence reviews; repeating or regressing progress reviews; a retry after two or more failed attempts reviews; `ask_user` reviews; `escalate` escalates.
+
+**Deterministic loop detector.** Independently of the model, the server fingerprints each failed attempt (`action` + `result`) and history entry (`action` + `observation`) after masking timestamps, durations, hex IDs, temp paths, and numbers. The same fingerprint twice, or the current `failure` matching the result of two or more failed attempts, sets `loop: { detected: true, repeats, kind: "repeated_attempt" | "same_failure" }`, adds `loop_detected`, and blocks `auto` even when Jev reports `advancing`. The latest attempt producing the current failure alone is not a loop. The model's `progress` answer is reported unchanged. `auto` requires a confident cause and strategy, clean progress, enough recoverability, a legal retry budget, and complete coverage. The host prepares and routes any recovery call with `jev_step`.
 
 ```json
 {
@@ -404,7 +410,7 @@ Security-focused patch triage. It complements `jev_review` (correctness, spec ma
 
 **Questions:** Noul concern flags for `authorization`, `input_validation`, `secret_exposure`, `data_loss`, `concurrency`, `dependency`, `external_effect`; Score `severity`.
 
-**Policy:** any critical flag (`authorization`, `secret_exposure`, `data_loss`) at/above `auto_accept` escalates; other flags or an uncertainty band review; high severity reviews/escalates. `auto` requires every flag to be confidently absent, low coherent severity, and complete coverage. `auto` is evidence, never merge permission.
+**Policy:** any critical flag (`authorization`, `secret_exposure`, `data_loss`) at/above `min(auto_accept, 0.8)` escalates, checked across all critical flags and severity before any review result, so a moderate concern never masks a confident one; other flags or an uncertainty band review; high severity reviews/escalates. `auto` requires every flag to be confidently absent, low coherent severity, and complete coverage. `auto` is evidence, never merge permission.
 
 ```json
 {

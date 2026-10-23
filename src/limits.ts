@@ -33,12 +33,14 @@ export function truncateText(text: string, maxChars: number): string {
   if (limit < marker.length) {
     // The marker itself must never be presented as evaluated state. With too
     // little room for marker plus text, keep a true prefix instead.
-    return text.slice(0, limit);
+    return text.slice(0, surrogateSafeEnd(text, limit));
   }
-  let end = limit - marker.length;
-  // Never split a UTF-16 surrogate pair at the truncation boundary.
-  if (end > 0 && /[\uD800-\uDBFF]/.test(text[end - 1] ?? "")) end -= 1;
-  return `${text.slice(0, end)}${marker}`;
+  return `${text.slice(0, surrogateSafeEnd(text, limit - marker.length))}${marker}`;
+}
+
+/** Never split a UTF-16 surrogate pair at a truncation boundary. */
+function surrogateSafeEnd(text: string, end: number): number {
+  return end > 0 && /[\uD800-\uDBFF]/.test(text[end - 1] ?? "") ? end - 1 : end;
 }
 
 export function stringifyState(state: unknown): string {

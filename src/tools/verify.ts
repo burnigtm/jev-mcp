@@ -3,7 +3,7 @@ import { getConfig } from "../config.js";
 import { JevBudgetError } from "../errors.js";
 import { MAX_CLAIMS } from "../limits.js";
 import { verifyQuestions } from "../packs/verify.js";
-import { actionFromConfidence, confidenceSupportsAuto, requireCompleteContext, tightenJudgmentThresholds, validatePolicyThresholds } from "../policy.js";
+import { actionFromConfidence, confidenceSupportsAuto, escalationCutoff, requireCompleteContext, tightenJudgmentThresholds, validatePolicyThresholds, worstAction } from "../policy.js";
 import { asChoice } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import type { PolicyAction } from "../policy.js";
@@ -51,12 +51,8 @@ export async function runVerify(input: VerifyInput, context?: ToolContext) {
     && result.coverage.complete
     && results.every((item) => item.verdict === "verified" && item.action === "auto");
 
-  let action: PolicyAction = "auto";
-  if (results.some((item) => item.verdict === "contradicted" && item.action === "auto")) {
-    action = "escalate";
-  } else if (results.some((item) => item.action !== "auto") || summary.contradicted > 0) {
-    action = "review";
-  }
+  // Combining claims never softens the strictest per-claim judgment.
+  const action = worstAction(results.map((item) => item.action));
 
   return {
     model: result.model,
@@ -71,29 +67,46 @@ export async function runVerify(input: VerifyInput, context?: ToolContext) {
   };
 }
 
-/** Confidence-based projection; callers can apply stricter verdict-specific policy. */
+export type ClaimVerdict = "verified" | "contradicted" | "unsupported";
+
+/**
+ * Verdict-specific policy shared by jev_verify and jev_gate: low confidence
+ * escalates, a confident contradiction escalates, and any non-verified verdict
+ * needs review. A confident classification alone never approves a claim.
+ */
+export function claimAction(
+  item: { verdict: ClaimVerdict; confidence: number; probabilities: Record<string, number> },
+  autoAccept: number,
+  reviewAt: number,
+): PolicyAction {
+  let action = actionFromConfidence(item.confidence, autoAccept, reviewAt);
+  if (action === "auto" && !confidenceSupportsAuto(item.confidence, item.probabilities, autoAccept)) {
+    action = "review";
+  }
+  if (item.confidence < reviewAt || (item.verdict === "contradicted" && item.confidence >= escalationCutoff(autoAccept))) {
+    return "escalate";
+  }
+  if (item.verdict !== "verified") return worstAction([action, "review"]);
+  return action;
+}
+
 export function projectClaims(
   result: EvaluateResponse,
   claims: string[],
   autoAccept: number,
   reviewAt = Math.min(0.5, autoAccept),
 ) {
+  const incomplete = result.truncated || !result.coverage.complete;
   return claims.map((claim, index) => {
     const answer = asChoice(result.answers[`claim_${index}`]);
-    const verdict = answer.choice as "verified" | "contradicted" | "unsupported";
-    let action = actionFromConfidence(answer.confidence, autoAccept, reviewAt);
-    if (action === "auto" && !confidenceSupportsAuto(answer.confidence, answer.probabilities, autoAccept)) {
-      action = "review";
-    }
+    const verdict = answer.choice as ClaimVerdict;
+    const action = claimAction({ verdict, confidence: answer.confidence, probabilities: answer.probabilities }, autoAccept, reviewAt);
     return {
       claim,
       verdict,
       confidence: answer.confidence,
       probabilities: answer.probabilities,
-      action: requireCompleteContext(
-        action,
-        result.truncated || !result.coverage.complete,
-      ),
+      action: requireCompleteContext(action, incomplete),
     };
   });
 }

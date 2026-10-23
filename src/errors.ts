@@ -21,6 +21,13 @@ export class JevBudgetError extends JevValidationError {
   }
 }
 
+export class JevBudgetExhaustedError extends Error {
+  constructor(budget: number) {
+    super(`The process token budget (JEV_MCP_TOKEN_BUDGET=${budget}) is exhausted. No provider request was made.`);
+    this.name = "JevBudgetExhaustedError";
+  }
+}
+
 export class JevResponseError extends Error {
   constructor() {
     super("TypeSafe returned an invalid response. No decision was accepted.");
@@ -45,6 +52,7 @@ export class JevCancelledError extends Error {
 export function errorDetails(err: unknown): { code: string; message: string; retryable: boolean } {
   if (err instanceof JevBudgetError) return { code: "INPUT_TOO_LARGE", message: err.message, retryable: false };
   if (err instanceof JevValidationError) return { code: "INVALID_INPUT", message: err.message, retryable: false };
+  if (err instanceof JevBudgetExhaustedError) return { code: "BUDGET_EXHAUSTED", message: err.message, retryable: false };
   if (err instanceof JevConfigError) return { code: "CONFIG_ERROR", message: err.message, retryable: false };
   if (err instanceof JevResponseError) return { code: "INVALID_RESPONSE", message: err.message, retryable: false };
   if (err instanceof JevTimeoutError || err instanceof APITimeoutError) return { code: "TIMEOUT", message: "The tool request timed out. Reduce the request size or increase JEV_MCP_TIMEOUT_MS.", retryable: true };

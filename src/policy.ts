@@ -8,7 +8,11 @@ export const DEFAULT_REVIEW_AT = 0.5;
 export const DEFAULT_BLOCK_AT = 0.75;
 export const DEFAULT_SKIP_BELOW = 0.35;
 
-/** Per-call thresholds may only raise the env floors. An inverted caller pair still fails. */
+/**
+ * Per-call thresholds may only raise the env floors. A lone review_at above the
+ * env auto_accept raises auto_accept with it (also a tightening). An inverted
+ * caller pair still fails.
+ */
 export function tightenJudgmentThresholds(
   callerAuto: number | undefined,
   callerReview: number | undefined,
@@ -18,8 +22,10 @@ export function tightenJudgmentThresholds(
   if (callerAuto !== undefined && callerReview !== undefined) {
     validatePolicyThresholds(callerAuto, callerReview);
   }
-  const autoAccept = Math.max(callerAuto ?? envAuto, envAuto);
   const reviewAt = Math.max(callerReview ?? envReview, envReview);
+  const autoAccept = callerAuto === undefined
+    ? Math.max(envAuto, reviewAt)
+    : Math.max(callerAuto, envAuto);
   validatePolicyThresholds(autoAccept, reviewAt);
   return { autoAccept, reviewAt };
 }

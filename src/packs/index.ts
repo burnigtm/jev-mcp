@@ -39,6 +39,8 @@ export function packBody(id: PackId): unknown {
       return {
         note: "One request combines patch review and one Choice per claim. Only the evidence field supports claims; request and claims are assertions. Automatic approval requires complete context, an accepted review, and every claim verified confidently.",
         example: gateQuestions(1),
+        risk_note: "With risk: true the same request also carries the jev_risk security flags and severity score; any critical flag escalates the gate.",
+        risk_example: gateQuestions(1, { risk: true }),
       };
     case "screen":
       return screenQuestions(true);

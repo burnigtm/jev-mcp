@@ -15,17 +15,26 @@ For local CLI use on Node 20.6+, copy [`.env.example`](../.env.example) to `.env
 | `JEV_MCP_AUTO_ACCEPT` | `0.8` | Confidence floor for `auto` |
 | `JEV_MCP_REVIEW_AT` | `0.5` | Below this, coding-loop / review / evaluate `escalate` |
 | `JEV_MCP_BLOCK_AT` | `0.75` | Screen injection ≥ this → `block` |
+| `JEV_MCP_CACHE_TTL_MS` | `0` (off) | Cache validated provider results for this many milliseconds. Identical requests (same endpoint, model, evaluated state, and questions) are served with zero usage; tool policy still runs on every call |
+| `JEV_MCP_CACHE_MAX_ENTRIES` | `256` | Least-recently-used entries kept when the cache is on |
+| `JEV_MCP_TOKEN_BUDGET` | unlimited | Provider tokens (input + output) this server process may spend. Once spent, calls fail with `BUDGET_EXHAUSTED` before any provider request; cache hits are still served |
 
 Per-call overrides can only tighten the environment floors:
 
-- `auto_accept` becomes `max(caller, env)`. `review_at` becomes `max(caller, env)` and must still be `<= auto_accept`. A caller pair with `review_at > auto_accept` is still rejected.
+- `auto_accept` becomes `max(caller, env)`. `review_at` becomes `max(caller, env)`. When only `review_at` is supplied and it exceeds the env `auto_accept`, `auto_accept` rises to match. A caller pair with `review_at > auto_accept` is still rejected.
 - `jev_coding_loop`, `jev_review`, `jev_verify`, `jev_gate`: `auto_accept`, `review_at`
 - `jev_scope`, `jev_triage`, `jev_risk`: `auto_accept`, `review_at`
 - `jev_step`, `jev_tool_route`: `auto_accept`, `review_at` (executable dispatch keeps its `max(0.8, auto_accept)` floor)
-- `jev_screen`: `block_at` becomes `min(caller, env)` and `review_at` becomes `min(caller, 0.25)`, so a call can only tighten screen thresholds (`block_at: 1` cannot loosen `0.75`, and `review_at: 0.7` cannot loosen `0.25`). `review_at` cannot exceed `block_at`
+- `jev_screen`: `block_at` becomes `min(caller, env)` and `review_at` becomes `min(caller, 0.25)`, so a call can only tighten screen thresholds (`block_at: 1` cannot loosen `0.75`, and `review_at: 0.7` cannot loosen `0.25`). A `block_at` below `0.25` lowers `review_at` with it
 - All tools: `model`
 
+Judged *concerns* (scope `needs_confirmation`, critical `jev_risk` flags, confidently contradicted claims) escalate at `min(auto_accept, 0.8)`. Raising `auto_accept` above the default therefore never delays an escalation: tightening a call only makes it stricter.
+
 `jev_evaluate` uses the environment confidence thresholds. Configurable confidence bands must satisfy `0 <= review_at <= auto_accept <= 1`; invalid environment values are configuration errors rather than silent fallbacks. `TYPESAFE_BASE_URL` is normalized to origin plus path. Userinfo, query strings, fragments, obfuscated numeric hosts, and non-public IPv4/IPv6 addresses (private, link-local, loopback on HTTPS, metadata, reserved, NAT64/6to4, and Teredo) are rejected. For custom HTTPS, `localhost`/`.localhost`, `.local`, `.internal`, `.home.arpa`, `.localdomain`, single-label names, trailing-dot forms, and zone identifiers are also rejected; `api.typesafe.ai` must use its default port. HTTP is allowed for IPv4/IPv6 loopback (`127.0.0.0/8`, `::1`, `localhost`). Hostnames are not resolved locally, so a custom endpoint remains operator-trusted and DNS rebinding is a documented residual risk. The screen review threshold cannot exceed its block threshold, and `JEV_MCP_BLOCK_AT` must be at least the default screen review threshold of `0.25`.
+
+## Usage stats
+
+The `jev://stats` MCP resource reports in-process counters: calls, action mix, error codes, and p50/max latency per tool, plus provider requests, cache hits and misses, tokens spent, and the remaining `JEV_MCP_TOKEN_BUDGET`. It never contains tool inputs or outputs, and it resets when the server restarts.
 
 Review and gate `auto` also requires each raw score to clear a floor on the 0–2 scale: correctness and spec match at least 1, test gap and blast radius at most 1. The weighted composite alone is not enough.
 
