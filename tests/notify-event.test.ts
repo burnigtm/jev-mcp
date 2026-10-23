@@ -22,10 +22,12 @@ function runNotify(env: Record<string, string>, extra: { timeoutMs?: number } = 
     child.stderr.on("data", chunk => {
       stderr += String(chunk);
     });
+    // A cold python3 start on a fresh Windows runner has exceeded 10s (CI on
+    // 2026-09-21 and 2026-10-23). This guards against a hung script, not speed.
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
       reject(new Error(`notify script timed out\n${stdout}\n${stderr}`));
-    }, extra.timeoutMs ?? 10_000);
+    }, extra.timeoutMs ?? 30_000);
     child.on("error", error => {
       clearTimeout(timer);
       reject(error);
