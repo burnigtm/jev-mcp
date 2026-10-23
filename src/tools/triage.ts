@@ -53,7 +53,7 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
   }
   const causes = originalCauses.map((cause, index) => ({
     id: `cause_${index}`,
-    original_id: cause.id,
+    original_id: sanitizeJudgeText(cause.id, 128),
     description: sanitizeJudgeText(cause.description, 1_000),
   }));
   const failure = sanitizeUntrustedDocument(input.failure);
@@ -67,8 +67,9 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
     observation: sanitizeUntrustedDocument(entry.observation),
   }));
   const suspicious = containsInjectionInstruction(input.failure)
-    || attempts.some((attempt) => containsInjectionInstruction(attempt.result))
-    || history.some((entry) => containsInjectionInstruction(entry.observation));
+    || attempts.some((attempt) => containsInjectionInstruction(attempt.action) || containsInjectionInstruction(attempt.result))
+    || history.some((entry) => containsInjectionInstruction(entry.action) || containsInjectionInstruction(entry.observation))
+    || originalCauses.some((cause) => containsInjectionInstruction(cause.description));
 
   const result = await systemOne({
     state: {
