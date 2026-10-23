@@ -18,7 +18,7 @@ after(() => {
   }
 });
 
-test("MCP lists nine tools and eight packs", async () => {
+test("MCP lists twelve tools and eleven packs", async () => {
   const server = createJevServer();
   const client = new Client({ name: "test", version: "0.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -32,16 +32,22 @@ test("MCP lists nine tools and eight packs", async () => {
       "jev_gate",
       "jev_rank",
       "jev_review",
+      "jev_risk",
+      "jev_scope",
       "jev_screen",
       "jev_step",
       "jev_tool_route",
+      "jev_triage",
       "jev_verify",
     ]);
     const resources = await client.listResources();
-    assert.equal(resources.resources.length, 8);
+    assert.equal(resources.resources.length, 11);
     const prompts = await client.listPrompts();
     assert.deepEqual(prompts.prompts.map(prompt => prompt.name).sort(), [
       "jev-completion-gate",
+      "jev-debug-loop",
+      "jev-pr-risk",
+      "jev-scope-check",
       "jev-screen-untrusted",
       "jev-step-loop",
     ]);

@@ -2,12 +2,15 @@ import { codingLoopQuestions } from "./coding-loop.js";
 import { gateQuestions } from "./gate.js";
 import { rankQuestions } from "./rank.js";
 import { reviewQuestions } from "./review.js";
+import { riskQuestions } from "./risk.js";
+import { scopeQuestions } from "./scope.js";
 import { screenQuestions } from "./screen.js";
+import { DEFAULT_FAILURE_CAUSES, triageQuestions } from "./triage.js";
 import { VERIFY_CRITERIA, verifyQuestions } from "./verify.js";
 import { toolRouteQuestions } from "./tool-route.js";
 import { stepQuestions } from "./step.js";
 
-export const PACK_IDS = ["coding-loop", "review", "verify", "screen", "rank", "gate", "tool-route", "step"] as const;
+export const PACK_IDS = ["coding-loop", "review", "verify", "screen", "rank", "gate", "tool-route", "step", "scope", "triage", "risk"] as const;
 export type PackId = (typeof PACK_IDS)[number];
 
 export function packBody(id: PackId): unknown {
@@ -39,6 +42,12 @@ export function packBody(id: PackId): unknown {
       };
     case "screen":
       return screenQuestions(true);
+    case "scope":
+      return scopeQuestions();
+    case "triage":
+      return triageQuestions(DEFAULT_FAILURE_CAUSES);
+    case "risk":
+      return riskQuestions();
     case "rank":
       return {
         note: "Choice over candidate ids (max 250 per call) plus an exists Noul. Candidate texts are truncated to 2000 characters.",

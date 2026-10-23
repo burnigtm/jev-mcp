@@ -78,6 +78,9 @@ function fixtures() {
     ["jev_gate", { request: "Fix parser", diff: "-broken\\n+fixed", tests: "Tests passed", claims: ["Tests passed"], evidence: "Tests passed" }],
     ["jev_tool_route", { task: "Inspect parser", observation: "Read parser source before editing", candidates: [candidate("parser")] }],
     ["jev_step", { task: "Inspect parser", observation: "Read parser source before editing", execution: { context_complete: true }, candidates: [candidate("parser")] }],
+    ["jev_scope", { task: "Inspect parser", approved_scope: "Read-only inspection", action: { name: "read_file", description: "Read parser source without modifying it", effect: "read_only", target: "src/parser.ts" } }],
+    ["jev_triage", { task: "Fix parser", failure: "TypeError: Cannot read properties of undefined in parse", attempts: [{ action: "edit parse", result: "same TypeError", failed: true }] }],
+    ["jev_risk", { request: "Fix parser input handling", diff: "- const [key, value] = line.split('=');\n+ const index = line.indexOf('=');", tests: "PASS key=value=extra preserves the suffix." }],
   ];
 }
 
@@ -154,7 +157,7 @@ async function benchmark(options) {
     await client.connect(transport);
     const listed = await client.listTools();
     startupMs = performance.now() - started;
-    if (listed.tools.length !== 9) throw new Error(`Expected 9 tools, received ${listed.tools.length}`);
+    if (listed.tools.length !== 12) throw new Error(`Expected 12 tools, received ${listed.tools.length}`);
     const cases = fixtures();
     for (const [name, arguments_] of cases) {
       for (let i = 0; i < options.warmup; i += 1) await timedCall(client, name, arguments_);

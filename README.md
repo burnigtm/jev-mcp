@@ -14,11 +14,14 @@ A local stdio MCP server that gives Cursor, Codex, and other MCP clients typed [
 | `jev_gate` | Combine patch review and claim verification in one upstream call |
 | `jev_screen` | Screen untrusted content before the host reads it |
 | `jev_rank` | Rank candidates supplied by the host |
+| `jev_scope` | Check whether a prepared action is within the approved task/scope |
+| `jev_triage` | Classify a failure and select a recovery strategy |
+| `jev_risk` | Security-focused risk triage for a proposed patch |
 | `jev_evaluate` | Ask custom, atomic typed questions |
 
 Results include typed answers, token usage, and an `action`: `auto`, `review`, or `escalate`. Confidence measures model certainty, not factual truth. Incomplete context never permits `auto`; reduce the input and submit it again for a complete judgment. Questions that receive untrusted text carry a data-boundary instruction, and `jev_screen` adds a deterministic high-signal injection backstop. Those are defense-in-depth: screening is advisory, not a sanitizer or permission to follow external text.
 
-Question packs are MCP resources at `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate}`. Workflow templates are MCP prompts at `jev-step-loop`, `jev-completion-gate`, and `jev-screen-untrusted`.
+Question packs are MCP resources at `jev://packs/{coding-loop,tool-route,step,review,verify,screen,rank,gate,scope,triage,risk}`. Workflow templates are MCP prompts at `jev-step-loop`, `jev-completion-gate`, `jev-screen-untrusted`, `jev-scope-check`, `jev-debug-loop`, and `jev-pr-risk`.
 
 ## Coding with fewer partner-model turns
 
@@ -29,6 +32,12 @@ Let host code execute known steps and prepare exact tool calls from an existing 
 When a new plan or code may be needed, use `jev_coding_loop` with trusted `execution` facts. Its `handoff` distinguishes tool use, context gathering, review, user input, stopping, and a partner model. Invoke a generative partner only when `partner_model.required` is `true`; the legacy `model_tier` answer alone does not request a model turn. Uncertainty and escalation do not automatically spend a partner turn.
 
 The prepared-call router accepts at most 32 candidates. Empty or wholly ineligible lists return locally with zero Jev usage. Other routing calls use Jev; this reduces unnecessary generative handoffs by policy, but live quality and cost savings have not been measured. See [the tool contracts](docs/tools.md) and [host workflow](skills/jev-mcp/SKILL.md).
+
+## Safety and recovery checkpoints
+
+Use `jev_scope` before a nontrivial action whose semantic fit with the approved task matters. It checks scope, declared-effect consistency, fresh-confirmation need, and risk. External, destructive, and unknown effects never return `auto`; `auto` is not authorization.
+
+Use `jev_triage` after a failed test or command. It selects a failure cause, classifies loop progress, and selects a recovery strategy. It never retries or edits code; the host prepares recovery calls and routes them with `jev_step`. Use `jev_risk` before review and completion gating to add security concerns (authorization, validation, secrets, data loss, concurrency, dependencies, external effects). It never grants merge permission.
 
 ## Quick start
 
@@ -94,7 +103,9 @@ State plus questions must fit the estimated 64,000-token total budget and the 32
 
 Rank accepts unique candidate IDs and at most 5,000 supplied candidates, with at most 250 options per upstream call. Larger lists use repeated reduction rounds; each candidate text is capped at 2,000 characters. Verify and gate accept at most 1,000 claims. It ranks supplied candidates and does not index your repository. Arithmetic and date calculations belong in host code.
 
-All nine tools expose an MCP output schema and return the same successful payload through both `structuredContent` and the JSON text content. Tool-route and fused-step judgments receive control-stripped candidate IDs/names, sanitized descriptions, and argument shapes; raw host arguments are retained only for the selected, locally validated call. `jev_verify` also reports `all_claims_verified`, which is stricter than its per-item classification action.
+All twelve tools expose an MCP output schema and return the same successful payload through both `structuredContent` and the JSON text content. Tool-route and fused-step judgments receive control-stripped candidate IDs/names, sanitized descriptions, and argument shapes; raw host arguments are retained only for the selected, locally validated call. `jev_verify` also reports `all_claims_verified`, which is stricter than its per-item classification action.
+
+`jev_scope` never authorizes or executes an action: `auto` means no semantic scope concern, not permission. `jev_triage` selects a recovery strategy but does not retry, ask the user, or edit code. `jev_risk` is security evidence only and never grants merge or deployment permission. All three remain advisory and fail closed when coverage is incomplete.
 
 ## Development
 
@@ -110,7 +121,7 @@ npm run build:skill
 
 The regular suite never runs live evaluations, even when a key is inherited. Package smoke testing builds and packs the project, installs the tarball into an isolated directory with `npm --offline`, then exercises its shipped CLI and MCP server. `npm run benchmark` measures compiled MCP stdio transport in deterministic mock mode. Use `npm run benchmark:ci` for broad sanity budgets. Run `npm ci` first to populate the dependency cache. No test publishes the package.
 
-`npm run build:skill` creates a standalone versioned ZIP and checksum under ignored `artifacts/`. `npm run test:skill` checks independent extraction, contained references, all nine documented requests, task graders, and executable workflow replay. Explicit `npm run eval:live` and `npm run eval:agent -- --host all --paired --runs 1` measure live judgments and real coding tasks separately. Read [evaluation setup and interpretation](evals/README.md) for credentials, pinned models, CLI prerequisites and report meaning.
+`npm run build:skill` creates a standalone versioned ZIP and checksum under ignored `artifacts/`. `npm run test:skill` checks independent extraction, contained references, all twelve documented requests, task graders, and executable workflow replay. Explicit `npm run eval:live` and `npm run eval:agent -- --host all --paired --runs 1` measure live judgments and real coding tasks separately. Read [evaluation setup and interpretation](evals/README.md) for credentials, pinned models, CLI prerequisites and report meaning.
 
 `npm pack` and `npm publish` build automatically through `prepack`. CI checks Node 20 and 22 on Windows and Linux, including the offline packed-install smoke test.
 
@@ -120,7 +131,7 @@ The regular suite never runs live evaluations, even when a key is inherited. Pac
 | --- | --- |
 | [Changelog](docs/changelog.md) | Unreleased changes, compatibility notes, and validation |
 | [Architecture](docs/architecture.md) | Request path, policy, limits, and errors |
-| [Tools](docs/tools.md) | Arguments and outputs for all nine tools |
+| [Tools](docs/tools.md) | Arguments and outputs for all twelve tools |
 | [Install](docs/install.md) | Host configuration and Windows checkout |
 | [Configuration](docs/configuration.md) | Environment, thresholds, diagnostics, tests |
 | [Agent skill](skills/jev-mcp/SKILL.md) | Calling guidance for the host |

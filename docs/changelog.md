@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+### Scope, failure triage, and security risk tools
+
+- Added `jev_scope`, `jev_triage`, and `jev_risk` with `scope`, `triage`, and `risk` question packs. The server now exposes **12 tools, 11 packs, and 6 prompts**.
+- `jev_scope` checks semantic scope, declared-effect consistency, fresh-confirmation need, and risk; external/destructive/unknown effects can never be `auto`. `auto` is not authorization.
+- `jev_triage` selects a failure cause, loop progress, recoverability, and recovery strategy. Repeating/regressing progress, exhausted retries, `ask_user`, and low recoverability cannot be `auto`; the host still executes any recovery call.
+- `jev_risk` judges authorization, validation, secret-exposure, data-loss, concurrency, dependency, and external-effect concerns plus severity. Critical/uncertain flags cannot be `auto`; it is never merge permission.
+- Moved the deterministic injection backstop into shared `untrusted.ts` and applied it to the new tools' untrusted state. Added document-safe sanitization that preserves newlines for logs/diffs. The shared backstop deletes invisible characters (zero-width, soft hyphen, bidi, word joiners, BOM) before matching, as the screen-local version did, so a hidden character inside a word cannot split a phrase; it also matches common determiners ("ignore your/any previous instructions").
+- Policy hardening before release: every critical `jev_risk` flag and the severity score are checked for escalation before any review result, so a moderate concern cannot mask a confident one; judged concerns (scope `needs_confirmation`, critical risk flags) escalate at `min(auto_accept, 0.8)`, so raising `auto_accept` never delays an escalation; `jev_triage` decides every escalation before any review-band result; host cause IDs are sanitized before reaching the judge, and attempt/history actions and cause descriptions are screened for injection.
+- Added `jev-scope-check`, `jev-debug-loop`, and `jev-pr-risk` MCP prompts, mock regression tests, skill contracts, and a benchmark/evals update.
 
 ### Security hardening for untrusted data, helper connections, and evaluation
 

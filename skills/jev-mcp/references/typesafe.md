@@ -1,6 +1,6 @@
 # TypeSafe documentation for Jev integrations
 
-Checked against the live documentation on 2026-10-15. Start at the [documentation index](https://docs.typesafe.ai/llms.txt) when an API or model detail may have changed. This is a focused reference for this MCP server, not a copy of the upstream documentation. The server's [tool contracts](tools.md) remain authoritative for its nine MCP tools.
+Checked against the live documentation on 2026-10-15. Start at the [documentation index](https://docs.typesafe.ai/llms.txt) when an API or model detail may have changed. This is a focused reference for this MCP server, not a copy of the upstream documentation. The server's [tool contracts](tools.md) remain authoritative for its twelve MCP tools.
 
 ## Execution and questions
 

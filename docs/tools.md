@@ -26,5 +26,14 @@ The canonical, portable [Jev tool contracts](../skills/jev-mcp/references/tools.
 ## `jev_rank`
 [Candidate-ranking contract](../skills/jev-mcp/references/tools.md#jev_rank)
 
+## `jev_scope`
+[Action-scope contract](../skills/jev-mcp/references/tools.md#jev_scope)
+
+## `jev_triage`
+[Failure-triage contract](../skills/jev-mcp/references/tools.md#jev_triage)
+
+## `jev_risk`
+[Security-risk contract](../skills/jev-mcp/references/tools.md#jev_risk)
+
 ## `jev_evaluate`
 [Custom-evaluation contract](../skills/jev-mcp/references/tools.md#jev_evaluate)
