@@ -11,6 +11,11 @@
 - Confidently contradicted claims in `jev_verify` and `jev_gate` escalate at `min(auto_accept, 0.8)`, like the v0.2 scope and risk concerns, so raising `auto_accept` never delays the escalation.
 - Truncation below the marker length no longer emits a lone UTF-16 high surrogate.
 
+### Value benchmark
+
+- Added `npm run eval:bonus`: 51 labelled cases decided by no guard, a deterministic rules-only guard, and live Jev, plus measured cache and fused-gate experiments. The first live run (`jev-1.14.0`) is recorded in [evals/results](../evals/results/value-benchmark-2026-10-23.md): Jev blocked 29/29 risky cases against 7/29 for rules, with 0 unsafe auto-approvals and identical decisions across runs.
+- Fixed defects the benchmark exposed. `jev_triage` gains a `first_attempt` progress option, so a first failure is no longer judged `repeating`; choosing it alongside supplied attempts or history adds `progress_inconsistent`. The `jev_risk` validation question no longer flags patches that add or tighten checks. Residual reviews now name their cause with `severity_uncertain` and `recoverability_uncertain` instead of `review_required`.
+
 ### Test suite
 
 - Added seeded property tests for every policy function (threshold monotonicity, never-auto conditions, distribution guards), a cross-tool invariant table (clean answers reach `auto`; truncation, flat distributions, injection text, malformed answers, and provider failures never do), and table-driven matrices for the provider boundary, question parsing, CLI arguments, configuration, reason codes, injection phrases, stats, cache, and limits. Branch coverage of `src/` rose from 87.8% to 94.7%.

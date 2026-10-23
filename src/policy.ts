@@ -161,7 +161,7 @@ export function codingLoopAction(input: {
 }
 
 export type ActionEffect = "read_only" | "local_write" | "external_write" | "destructive" | "unknown";
-export type TriageProgress = "advancing" | "repeating" | "regressing" | "complete";
+export type TriageProgress = "first_attempt" | "advancing" | "repeating" | "regressing" | "complete";
 export type TriageStrategy = "retry" | "change_approach" | "gather_context" | "ask_user" | "stop" | "escalate";
 
 /**

@@ -32,8 +32,9 @@ export function triageQuestions(causes: readonly FailureCause[]): Questions {
     progress: {
       type: "choice",
       instructions:
-        "What is the trajectory of this debugging loop? `advancing` = each attempt adds information or narrows the problem; `repeating` = the same approach or failure recurs; `regressing` = the change makes the tree worse; `complete` = the task is resolved.",
+        "What is the trajectory of this debugging loop? `first_attempt` = no previous attempts or history are supplied, so there is no trajectory yet; `advancing` = each attempt adds information or narrows the problem; `repeating` = the same approach or failure recurs; `regressing` = the change makes the tree worse; `complete` = the task is resolved.",
       criteria: {
+        first_attempt: "No previous attempts or history are supplied; this is the first observed failure",
         advancing: "The history shows new information or a narrowed problem",
         repeating: "The same approach or failure is recurring without new information",
         regressing: "The tree or evidence is worse than before the attempts",

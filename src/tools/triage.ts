@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getConfig } from "../config.js";
 import { JevValidationError } from "../errors.js";
 import { DEFAULT_FAILURE_CAUSES, triageQuestions, type FailureCause } from "../packs/triage.js";
-import { requireCompleteContext, tightenJudgmentThresholds, triageAction, type PolicyAction } from "../policy.js";
+import { requireCompleteContext, tightenJudgmentThresholds, triageAction, type PolicyAction, type TriageProgress } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 import { containsInjectionInstruction, normalizedJudgeText, sanitizeJudgeText, sanitizeUntrustedDocument } from "../untrusted.js";
@@ -107,13 +107,15 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
     strategy: strategy.choice as "retry" | "change_approach" | "gather_context" | "ask_user" | "stop" | "escalate",
     strategyConfidence: strategy.confidence,
     strategyProbabilities: strategy.probabilities,
-    progress: progress.choice as "advancing" | "repeating" | "regressing" | "complete",
+    progress: progress.choice as TriageProgress,
     recoverable,
     failedAttempts,
     autoAccept,
     reviewAt,
   });
-  if (policy === "auto" && (suspicious || causeId === "unknown" || loop.detected)) policy = "review";
+  // "first_attempt" is only coherent when the host supplied no attempts or history.
+  const progressInconsistent = progress.choice === "first_attempt" && (attempts.length > 0 || history.length > 0);
+  if (policy === "auto" && (suspicious || causeId === "unknown" || loop.detected || progressInconsistent)) policy = "review";
   const actionPolicy = requireCompleteContext(policy, incomplete);
 
   const reasons: TriageReason[] = [];
@@ -122,11 +124,13 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
   if (progress.choice === "repeating") reasons.push("progress_repeating");
   if (progress.choice === "regressing") reasons.push("progress_regressing");
   if (recoverable < reviewAt) reasons.push("not_recoverable");
+  else if (recoverable < autoAccept) reasons.push("recoverability_uncertain");
   if (strategy.confidence < reviewAt) reasons.push("strategy_uncertain");
   if (strategy.choice === "ask_user") reasons.push("human_decision_required");
   if (strategy.choice === "escalate") reasons.push("strategy_escalate");
   if (strategy.choice === "retry" && failedAttempts >= 2) reasons.push("retry_budget_exhausted");
   if (loop.detected) reasons.push("loop_detected");
+  if (progressInconsistent) reasons.push("progress_inconsistent");
   if (suspicious) reasons.push("injection_suspected");
   if (incomplete) reasons.push("incomplete_context");
   if (actionPolicy === "auto") {

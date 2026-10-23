@@ -381,7 +381,7 @@ Turn a failure into a cause, a progress classification, and a recovery strategy.
 | `history` | no | Up to 12 recent `{ action, observation }` pairs for loop detection |
 | `auto_accept` / `review_at` | no | May only tighten the env floors |
 
-**Questions:** Choice `cause` over synthetic cause labels plus `unknown`; Choice `progress` (`advancing`, `repeating`, `regressing`, `complete`); Noul `recoverable`; Choice `strategy` (`retry`, `change_approach`, `gather_context`, `ask_user`, `stop`, `escalate`).
+**Questions:** Choice `cause` over synthetic cause labels plus `unknown`; Choice `progress` (`first_attempt`, `advancing`, `repeating`, `regressing`, `complete`; `first_attempt` with supplied attempts or history adds `progress_inconsistent` and blocks `auto`); Noul `recoverable`; Choice `strategy` (`retry`, `change_approach`, `gather_context`, `ask_user`, `stop`, `escalate`).
 
 **Policy:** escalations are decided first: cause or strategy confidence below `review_at`, a recommended `escalate`, or recoverability below `review_at` escalate. Then moderate cause or strategy confidence reviews; repeating or regressing progress reviews; a retry after two or more failed attempts reviews; `ask_user` reviews; `escalate` escalates.
 
