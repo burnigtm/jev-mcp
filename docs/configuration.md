@@ -36,7 +36,7 @@ Judged *concerns* (scope `needs_confirmation`, critical `jev_risk` flags, confid
 
 The `jev://stats` MCP resource reports in-process counters: calls, action mix, error codes, and p50/max latency per tool, plus provider requests, cache hits and misses, tokens spent, and the remaining `JEV_MCP_TOKEN_BUDGET`. It never contains tool inputs or outputs, and it resets when the server restarts.
 
-Review and gate `auto` also requires each raw score to clear a floor on the 0–2 scale: correctness and spec match at least 1, test gap and blast radius at most 1. The weighted composite alone is not enough.
+Review and gate `auto` also requires each raw score to clear a floor on the 0–2 scale: correctness and spec match at least 1, test gap and blast radius at most 1. The weighted composite alone is not enough. Correctness and spec match need confidence in their exact level; test gap, blast radius, and `jev_risk` severity need at least `auto_accept` of their probability mass inside the levels their floor accepts (0–1), i.e. `P(level 2) ≤ 1 − auto_accept`.
 
 `jev_scope` never returns `auto` for `external_write`, `destructive`, or `unknown` effects. `jev_triage` never returns `auto` for repeating/regressing progress, an exhausted retry budget, `ask_user`, or low recoverability. `jev_risk` escalates a critical flag at or above `auto_accept` and reviews any concern in the uncertainty band; `auto` requires every flag to be confidently absent. These tools are advisory and never execute actions or grant authorization.
 

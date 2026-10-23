@@ -263,7 +263,7 @@ test("scopeAction: risky effects are never auto, auto implies every fact cleared
 
 test("triageAction: non-progress, retry exhaustion, ask_user, and escalate never reach auto", () => {
   const strategies: TriageStrategy[] = ["retry", "change_approach", "gather_context", "ask_user", "stop", "escalate"];
-  const progresses: TriageProgress[] = ["advancing", "repeating", "regressing", "complete"];
+  const progresses: TriageProgress[] = ["first_attempt", "advancing", "repeating", "regressing", "complete"];
   const random = seeded(5);
   let autos = 0;
   for (let i = 0; i < SAMPLES * 3; i += 1) {

@@ -27,9 +27,9 @@ export function riskQuestions(): Questions {
     input_validation: {
       type: "noul",
       instructions:
-        "Does `diff` add, remove, or weaken validation or parsing at a boundary that accepts untrusted input? Consider injection, traversal, malformed JSON, and unchecked external data.",
+        "Does `diff` remove or weaken validation or parsing at a boundary that accepts untrusted input, or introduce new handling of untrusted input without validating it? Consider injection, traversal, malformed JSON, and unchecked external data. Adding or tightening a check is not a concern.",
       criteria: {
-        true: "A concrete validation or parsing concern is evident in the supplied diff",
+        true: "A concrete missing, removed, or weakened validation is evident in the supplied diff",
         false: "No validation or parsing concern is evident from the supplied evidence",
       },
     },

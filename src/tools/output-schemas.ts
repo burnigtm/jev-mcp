@@ -59,8 +59,27 @@ export const codingLoopOutputSchema = z.object({
   thresholds: z.object({ auto_accept: probabilitySchema, review_at: probabilitySchema, partner_auto_accept: probabilitySchema }),
 });
 
+export const reviewReasonSchema = z.enum([
+  "accepted",
+  "incomplete_context",
+  "unsafe_to_apply",
+  "safe_to_apply_uncertain",
+  "correctness_concern",
+  "correctness_uncertain",
+  "spec_mismatch",
+  "spec_match_uncertain",
+  "test_gap",
+  "test_gap_uncertain",
+  "blast_radius",
+  "blast_radius_uncertain",
+  "composite_low",
+  "review_required",
+]);
+export type ReviewReason = z.infer<typeof reviewReasonSchema>;
+
 export const reviewOutputSchema = z.object({
   ...baseToolOutputShape,
+  reason_codes: z.array(reviewReasonSchema).min(1),
   composite: probabilitySchema,
   safe_to_apply: probabilitySchema,
   scores: z.record(z.string(), z.object({ score: z.number(), confidence: probabilitySchema })),
@@ -165,6 +184,7 @@ export const triageReasonSchema = z.enum([
   "progress_repeating",
   "progress_regressing",
   "not_recoverable",
+  "recoverability_uncertain",
   "retry_budget_exhausted",
   "human_decision_required",
   "strategy_uncertain",
@@ -172,6 +192,7 @@ export const triageReasonSchema = z.enum([
   "injection_suspected",
   "incomplete_context",
   "loop_detected",
+  "progress_inconsistent",
   "review_required",
 ]);
 
@@ -183,7 +204,7 @@ export const triageOutputSchema = z.object({
     probabilities: z.record(z.string(), probabilitySchema),
   }),
   progress: choiceOutputSchema.extend({
-    choice: z.enum(["advancing", "repeating", "regressing", "complete"]),
+    choice: z.enum(["first_attempt", "advancing", "repeating", "regressing", "complete"]),
   }),
   recoverable: probabilitySchema,
   strategy: choiceOutputSchema.extend({
@@ -208,6 +229,8 @@ export const riskReasonSchema = z.enum([
   "dependency_concern",
   "external_effect",
   "severity_review",
+  "severity_uncertain",
+  "concern_uncertain",
   "injection_suspected",
   "incomplete_context",
   "review_required",

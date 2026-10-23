@@ -30,6 +30,7 @@
     "test:skill": "npm run build && node --import tsx --test tests/skill.test.ts tests/workflow.test.ts tests/eval-harness.test.ts tests/evidence.test.ts",
     "eval:live": "npm run build && node scripts/eval-live.mjs",
     "eval:agent": "npm run build && node scripts/eval-agent.mjs",
+    "eval:bonus": "npm run build && node scripts/eval-bonus.mjs",
     "build": "tsc",
     "prepack": "npm run build",
     "start": "node dist/index.js",

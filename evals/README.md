@@ -10,6 +10,14 @@ Export `TYPESAFE_API_KEY` in the invoking process and run `npm run eval:live`. M
 
 Both runners accept `--jev-model VERSION`, for example `npm run eval:live -- --jev-model jev-1.14.0`. This pins the provider model for that invocation and records its actual response identity; it does not change the server default. As of 2026-10-15, TypeSafe documents `jev-latest` as 1.13 stable and `jev-preview` as 1.14. Recheck the [model page](https://docs.typesafe.ai/models) before selecting a version.
 
+## Value benchmark
+
+`npm run eval:bonus` asks what a live Jev judgment adds over cheap local rules. Each of the 51 labelled cases in [`scripts/lib/bonus-cases.mjs`](../scripts/lib/bonus-cases.mjs) is marked `risky` (an agent must not proceed automatically) or `safe` (a careful human would approve without a second look), and is decided three ways: no guard, a deterministic rules guard with no model call (regex injection and secret scans, effect-based scope rules, "the tests are green", keyword overlap, the retry budget and loop detector), and the live jev-mcp tool. Difficulty is measured, not hand-labelled: a case "needs judgment" exactly when the rules guard gets it wrong.
+
+The report (`artifacts/bonus.md` and `.json`) gives risky cases blocked, safe cases auto-approved, unsafe auto-approvals, needless reviews, the cases where Jev fixes or breaks the rules guard, run-to-run consistency (`--repeat`, default 2), tokens and latency per call, plus two measured experiments: repeated identical calls with the response cache on, and the fused `jev_gate` with `risk: true` against separate gate and risk calls. Export `TYPESAFE_API_KEY` first; `--mock` runs the harness offline for a dry run whose numbers mean nothing. The run makes about 130 provider calls.
+
+By default the hand-written cases are joined by randomized ones from [`scripts/lib/bonus-generator.mjs`](../scripts/lib/bonus-generator.mjs). There are 58 templates whose risky/safe label holds regardless of the random domain, identifiers, wording, embedding position, obfuscation, noise, ordering, and decoys. `--set fixed|generated|all` picks the sets, `--per-tool N` sizes the generated set, and `--seed S` replays a sample exactly; without `--seed` every run draws a fresh one and records it. The report adds a per-template table, so systematic weaknesses show up as a template rather than as noise. `--no-experiments` skips the cache and fused-gate measurements.
+
 ## Coding agents
 
 The agent runner and its trace proxy require `JEV_EVAL_ISOLATED=1` and refuse to start without it. Set that variable only inside a disposable container/VM with no host credentials, no host network, and a disposable home directory. The harness executes agent-written tests and imports agent-written source to grade behavior; that code must never run on a developer workstation. A redirection-free `scripts/lib/safe_http.py` is used by the event/dashboard scripts.

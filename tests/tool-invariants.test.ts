@@ -16,6 +16,8 @@ import { runStep } from "../src/tools/step.ts";
 import { runToolRoute } from "../src/tools/tool-route.ts";
 import { runTriage } from "../src/tools/triage.ts";
 import { runVerify } from "../src/tools/verify.ts";
+import { riskQuestions } from "../src/packs/risk.ts";
+import { DEFAULT_FAILURE_CAUSES, triageQuestions } from "../src/packs/triage.ts";
 import { answerAll, envScope, responds, type AnswerSpec, type ApiRequest } from "./helpers/fixture.ts";
 
 /**
@@ -252,7 +254,7 @@ test("jev_risk: severity and an uncertain-but-clean result each explain themselv
   responds(() => ({}), "flat");
   const uncertain = await runRisk({ request: "Fix parser", diff: "-a\n+b" });
   assert.notEqual(uncertain.action, "auto");
-  assert.deepEqual(uncertain.reason_codes, ["review_required"], "a non-auto result always carries a reason");
+  assert.deepEqual(uncertain.reason_codes, ["severity_uncertain"], "an uncertain severity is named, not hidden behind review_required");
 });
 
 const SCOPE_CASES: Array<[string, AnswerSpec, string, string[]]> = [
@@ -325,4 +327,40 @@ test("jev_triage: retry after two failures is exhausted and cause probabilities 
   assert.deepEqual(Object.keys(result.cause.probabilities).sort(), ["bad-caller", "missing-guard", "unknown"]);
   assert.ok(result.reason_codes.includes("retry_budget_exhausted"));
   assert.notEqual(result.action, "auto");
+});
+
+// --- Defects found by the live value benchmark ---------------------------------
+
+test("jev_triage: a first failure with no history can reach auto via first_attempt", async () => {
+  responds(() => ({ cause: "cause_0", progress: "first_attempt", strategy: "gather_context", recoverable: 0.95 }));
+  const result = await runTriage({ task: "Fix the pager", failure: "AssertionError: expected [] to equal [21]" });
+  assert.equal(result.progress.choice, "first_attempt");
+  assert.equal(result.action, "auto");
+});
+
+test("jev_triage: first_attempt alongside real attempts or history is inconsistent and never auto", async () => {
+  responds(() => ({ cause: "cause_0", progress: "first_attempt", strategy: "change_approach", recoverable: 0.95 }));
+  for (const extra of [
+    { attempts: [{ action: "edit pager", result: "RangeError", failed: true }] },
+    { history: [{ action: "read pager", observation: "slice end is exclusive" }] },
+  ]) {
+    const result = await runTriage({ task: "Fix the pager", failure: "AssertionError", ...extra });
+    assert.notEqual(result.action, "auto");
+    assert.ok(result.reason_codes.includes("progress_inconsistent"));
+  }
+});
+
+test("jev_triage and jev_risk packs carry the corrected question wording", () => {
+  const progress = triageQuestions(DEFAULT_FAILURE_CAUSES).progress;
+  assert.ok(progress?.type === "choice" && "first_attempt" in progress.criteria);
+  const validation = riskQuestions().input_validation;
+  assert.match(validation!.instructions, /Adding or tightening a check is not a concern/);
+  assert.doesNotMatch(validation!.instructions, /add, remove, or weaken/);
+});
+
+test("jev_triage: recoverability just under auto_accept is named instead of review_required", async () => {
+  responds(() => ({ cause: "cause_0", progress: "first_attempt", strategy: "gather_context", recoverable: 0.79 }));
+  const result = await runTriage({ task: "Fix the pager", failure: "AssertionError" });
+  assert.equal(result.action, "review");
+  assert.deepEqual(result.reason_codes, ["recoverability_uncertain"]);
 });

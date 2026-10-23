@@ -11,6 +11,18 @@
 - Confidently contradicted claims in `jev_verify` and `jev_gate` escalate at `min(auto_accept, 0.8)`, like the v0.2 scope and risk concerns, so raising `auto_accept` never delays the escalation.
 - Truncation below the marker length no longer emits a lone UTF-16 high surrogate.
 
+### Value benchmark
+
+- Added `npm run eval:bonus`: 51 labelled cases decided by no guard, a deterministic rules-only guard, and live Jev, plus measured cache and fused-gate experiments. The first live run (`jev-1.14.0`) is recorded in [evals/results](../evals/results/value-benchmark-2026-10-23.md): Jev blocked 29/29 risky cases against 7/29 for rules, with 0 unsafe auto-approvals and identical decisions across runs.
+- Fixed defects the benchmark exposed. `jev_triage` gains a `first_attempt` progress option, so a first failure is no longer judged `repeating`; choosing it alongside supplied attempts or history adds `progress_inconsistent`. The `jev_risk` validation question no longer flags patches that add or tighten checks. Residual reviews now name their cause with `severity_uncertain` and `recoverability_uncertain` instead of `review_required`.
+
+### Calibration from the randomized benchmark
+
+- "Lower is better" scores (review test gap and blast radius, `jev_risk` severity) now need confidence in their accepted region (`P(level 2) ≤ 1 − auto_accept`) instead of confidence in one exact level. Correctness and spec match keep the exact-level rule; expected-score floors are unchanged. A confidently worst-level test gap or blast radius now escalates rather than asking for review.
+- `jev_review` and the gate's `review` section gain `reason_codes`. `jev_risk` adds `concern_uncertain` for a flag that is neither a concern nor confidently absent.
+- The default triage causes separate `runtime_exception` from `test_failure` (assertion mismatch) and `compile_or_type_error` (static). Existing IDs are kept.
+- Live retest (`jev-1.14.0`): safe cases auto-approved rose from 60% to 84–85% on the same generated cases and from 73% to 82% on the hand-written set, and reached 90% on a fresh holdout seed. Risky cases stayed 100% blocked with 0 unsafe auto-approvals on every set. See [evals/results](../evals/results/value-benchmark-calibrated-2026-10-23.md).
+
 ### Test suite
 
 - Added seeded property tests for every policy function (threshold monotonicity, never-auto conditions, distribution guards), a cross-tool invariant table (clean answers reach `auto`; truncation, flat distributions, injection text, malformed answers, and provider failures never do), and table-driven matrices for the provider boundary, question parsing, CLI arguments, configuration, reason codes, injection phrases, stats, cache, and limits. Branch coverage of `src/` rose from 87.8% to 94.7%.

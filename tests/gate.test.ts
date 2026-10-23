@@ -165,7 +165,10 @@ test("a perfect weighted review cannot auto when one dimension fails its floor",
   wideBlast.answers.test_gap = score(2);
   wideBlast.answers.blast_radius = score(2);
   const blastGate = projectGate(wideBlast, ["Claim"], 0.8, 0.5);
-  assert.equal(blastGate.review.action, "review");
+  // Confidently at the worst level of both "lower is better" scores: no mass in the
+  // accepted region, so the review escalates rather than merely asking for review.
+  assert.equal(blastGate.review.action, "escalate");
+  assert.deepEqual(blastGate.review.reason_codes, ["test_gap", "blast_radius"]);
   assert.notEqual(blastGate.action, "auto");
 });
 
