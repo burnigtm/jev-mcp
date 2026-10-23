@@ -62,9 +62,11 @@ Excluding five templates, Jev auto-approved **65 of the other 71 safe cases (92%
 
 These follow one pattern. The policy requires **high confidence in the exact score level**. But a diff alone often can't tell Jev whether the blast radius or severity is "none" or "bounded", and *both of those levels are acceptable* under the policy's own floors: blast radius ≤1, and severity below 1.2. Recoverability works the same way, as a yes/no probability judged against a high fixed bar.
 
-## Recommendations (not applied)
+## Recommendations
 
-Each of these changes when work is auto-approved, so it is your call:
+Applied and retested live in [value-benchmark-calibrated-2026-10-23.md](value-benchmark-calibrated-2026-10-23.md). Safe auto-approval rose from 60% to 84–85% on these same seeds and reached 90% on a holdout seed, with risky cases still 100% blocked.
+
+Each of these changes when work is auto-approved:
 
 1. **Judge the acceptable region, not the exact level, for "lower is better" scores** (blast radius, test gap, severity). For example, require `P(level 2) ≤ 1 − auto_accept` rather than confidence in a single level. That would keep blocking real high-impact patches while letting through cases like those in this sample, where the score is low and almost no probability sits at level 2. It needs its own property tests and a live re-run before adoption.
 2. **Split the default triage causes** into "runtime exception in the code under change" and "test assertion mismatch". That removes the `cause_uncertain` on runtime `TypeError`s.

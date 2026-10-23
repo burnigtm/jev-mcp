@@ -216,7 +216,9 @@ Call on a proposed diff **before** you declare the task done. Does not apply the
 
 Plus Noul `safe_to_apply`. Composite and min confidence decide `action`.
 
-Automatic approval also requires correctness and spec match at least 1, test gap and blast radius at most 1, and coherent score distributions.
+Automatic approval also requires correctness and spec match at least 1, test gap and blast radius at most 1, and confident judgments. Correctness and spec match must be confident in their exact level with a coherent distribution. Test gap and blast radius are "lower is better" scores whose floor already accepts levels 0 and 1, so they need confidence in that accepted region: at least `auto_accept` of the probability mass at levels 0–1, equivalently `P(level 2) ≤ 1 − auto_accept`. A judgment split between "none" and "bounded" is therefore still acceptable, while real mass on "critical path untested" or "wide blast radius" blocks `auto`, and a confident worst level escalates.
+
+`reason_codes` explain every result: `accepted`, `incomplete_context`, `unsafe_to_apply`, `safe_to_apply_uncertain`, `correctness_concern`, `correctness_uncertain`, `spec_mismatch`, `spec_match_uncertain`, `test_gap`, `test_gap_uncertain`, `blast_radius`, `blast_radius_uncertain`, `composite_low`, and `review_required` as a fallback. `jev_gate` reports the same codes in `review.reason_codes`.
 
 ```json
 {
@@ -376,7 +378,7 @@ Turn a failure into a cause, a progress classification, and a recovery strategy.
 | --- | --- | --- |
 | `task` | yes | What the agent is trying to do |
 | `failure` | yes | Failing test, compiler, or command output |
-| `causes` | no | Up to 16 host-supplied `{ id, description }` candidates; defaults to a generic taxonomy |
+| `causes` | no | Up to 16 host-supplied `{ id, description }` candidates; defaults to `test_failure` (assertion mismatch), `runtime_exception`, `compile_or_type_error` (static), `dependency_or_environment`, `flaky_or_nondeterministic`, and `config_or_data` |
 | `attempts` | no | Up to 12 recent `{ action, result?, failed? }` attempts |
 | `history` | no | Up to 12 recent `{ action, observation }` pairs for loop detection |
 | `auto_accept` / `review_at` | no | May only tighten the env floors |
@@ -410,7 +412,7 @@ Security-focused patch triage. It complements `jev_review` (correctness, spec ma
 
 **Questions:** Noul concern flags for `authorization`, `input_validation`, `secret_exposure`, `data_loss`, `concurrency`, `dependency`, `external_effect`; Score `severity`.
 
-**Policy:** any critical flag (`authorization`, `secret_exposure`, `data_loss`) at/above `min(auto_accept, 0.8)` escalates, checked across all critical flags and severity before any review result, so a moderate concern never masks a confident one; other flags or an uncertainty band review; high severity reviews/escalates. `auto` requires every flag to be confidently absent, low coherent severity, and complete coverage. `auto` is evidence, never merge permission.
+**Policy:** any critical flag (`authorization`, `secret_exposure`, `data_loss`) at/above `min(auto_accept, 0.8)` escalates, checked across all critical flags and severity before any review result, so a moderate concern never masks a confident one; other flags or an uncertainty band review; high severity reviews/escalates. `auto` requires every flag to be confidently absent, a severity score below 1.2 with at least `auto_accept` of its probability mass at levels 0–1, and complete coverage. Residual reviews are named: `severity_uncertain` when that severity region is not confident, `concern_uncertain` when a flag is below `review_at` but not confidently absent. `auto` is evidence, never merge permission.
 
 ```json
 {

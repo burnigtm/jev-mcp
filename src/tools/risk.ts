@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { riskQuestions, RISK_FLAGS } from "../packs/risk.js";
-import { confidenceSupportsAuto, requireCompleteContext, riskAction, tightenJudgmentThresholds, type PolicyAction } from "../policy.js";
+import { acceptableRegionConfidence, probabilitySupportsAbsence, requireCompleteContext, riskAction, tightenJudgmentThresholds, type PolicyAction } from "../policy.js";
 import { asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { containsInjectionInstruction, sanitizeJudgeText, sanitizeUntrustedDocument } from "../untrusted.js";
@@ -102,8 +102,10 @@ export function projectRisk(
   if ((flags.dependency ?? 0) >= reviewAt) reasons.push("dependency_concern");
   if ((flags.external_effect ?? 0) >= reviewAt) reasons.push("external_effect");
   if (severity.score >= 1.5) reasons.push("severity_review");
-  else if (!confidenceSupportsAuto(severity.confidence, severity.probabilities, autoAccept)) reasons.push("severity_uncertain");
+  else if (acceptableRegionConfidence(severity.probabilities, 1) < autoAccept) reasons.push("severity_uncertain");
   if (suspicious) reasons.push("injection_suspected");
+  // A flag below review_at that is not confidently absent still blocks auto; name it.
+  if (Object.values(flags).some((p) => p < reviewAt && !probabilitySupportsAbsence(p, autoAccept))) reasons.push("concern_uncertain");
   if (incomplete) reasons.push("incomplete_context");
   if (action === "auto") {
     reasons.length = 0;

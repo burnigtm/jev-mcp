@@ -6,7 +6,7 @@ import { MAX_CLAIMS } from "../limits.js";
 import { confidenceSupportsAuto, tightenJudgmentThresholds, worstAction } from "../policy.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { sanitizeUntrustedDocument } from "../untrusted.js";
-import { riskOutputSchema } from "./output-schemas.js";
+import { reviewReasonSchema, riskOutputSchema } from "./output-schemas.js";
 import { projectReview } from "./review.js";
 import { dependenciesSchema, fileSchema, projectRisk, riskInputSuspicious, sanitizeDependencies, sanitizeFiles } from "./risk.js";
 import { evidenceSchema, projectClaims, summarizeClaims } from "./verify.js";
@@ -67,6 +67,7 @@ export const gateOutputSchema = z.object({
   reason_codes: z.array(gateReasonCodeSchema).min(1),
   review: z.object({
     action: actionSchema,
+    reason_codes: z.array(reviewReasonSchema).min(1),
     composite: probabilitySchema,
     safe_to_apply: probabilitySchema,
     scores: z.object({

@@ -8,8 +8,9 @@ export type FailureCause = {
 
 /** Used when the host does not supply a domain-specific cause map. */
 export const DEFAULT_FAILURE_CAUSES: readonly FailureCause[] = [
-  { id: "test_failure", description: "A test assertion or expected behavior failed" },
-  { id: "compile_or_type_error", description: "The tree does not compile or a type error blocks execution" },
+  { id: "test_failure", description: "A test assertion compared an actual value with a different expected value" },
+  { id: "runtime_exception", description: "Code under change threw at runtime (TypeError, ReferenceError, RangeError, or similar)" },
+  { id: "compile_or_type_error", description: "The tree does not build: the compiler or static type checker reports an error" },
   { id: "dependency_or_environment", description: "A dependency, tool, or environment prerequisite is missing or incompatible" },
   { id: "flaky_or_nondeterministic", description: "The failure is intermittent, timing-dependent, or order-dependent" },
   { id: "config_or_data", description: "Configuration, fixtures, or input data do not match what the code expects" },

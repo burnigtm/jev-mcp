@@ -81,6 +81,23 @@ export function confidenceFromProbabilities(
   return (max - uniform) / (1 - uniform);
 }
 
+/**
+ * Confidence that a 0..n score lies at or below `maxLevel`: the normalized
+ * probability mass of the acceptable levels. For "lower is better" scores whose
+ * floor already accepts several levels (blast radius, test gap, severity), what
+ * matters is confidence in that region, not in one exact level: a judgment split
+ * between "none" and "bounded" is still confidently acceptable.
+ */
+export function acceptableRegionConfidence(probabilities: Record<string, number>, maxLevel: number): number {
+  let total = 0;
+  let acceptable = 0;
+  for (const [level, probability] of Object.entries(probabilities)) {
+    total += probability;
+    if (Number(level) <= maxLevel) acceptable += probability;
+  }
+  return total > 0 ? Math.min(1, acceptable / total) : 0;
+}
+
 /** Additional routing guard, not a reconstruction of the provider's confidence statistic. */
 export function distributionSupportsConfidence(probabilities: Record<string, number>, threshold: number): boolean {
   const values = Object.values(probabilities);
@@ -266,7 +283,9 @@ export function riskAction(input: {
   if (Object.values(input.flags).some((probability) => probability >= reviewAt)) return "review";
   if (input.severityScore >= 1.5) return "review";
   if (!Object.values(input.flags).every((probability) => probabilitySupportsAbsence(probability, autoAccept))) return "review";
-  if (!confidenceSupportsAuto(input.severityConfidence, input.severityProbabilities, autoAccept)) return "review";
+  // Levels 0 and 1 are the auto-eligible region (the 1.2 score floor already accepts
+  // bounded impact); level 2 is serious. Require confidence in that region.
+  if (acceptableRegionConfidence(input.severityProbabilities, 1) < autoAccept) return "review";
   return input.severityScore < 1.2 ? "auto" : "review";
 }
 
