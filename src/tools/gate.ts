@@ -3,9 +3,12 @@ import { getConfig } from "../config.js";
 import { JevBudgetError } from "../errors.js";
 import { gateQuestions } from "../packs/gate.js";
 import { MAX_CLAIMS } from "../limits.js";
-import { confidenceSupportsAuto, requireCompleteContext, tightenJudgmentThresholds, worstAction, type PolicyAction } from "../policy.js";
+import { confidenceSupportsAuto, tightenJudgmentThresholds, worstAction } from "../policy.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
+import { sanitizeUntrustedDocument } from "../untrusted.js";
+import { riskOutputSchema } from "./output-schemas.js";
 import { projectReview } from "./review.js";
+import { dependenciesSchema, fileSchema, projectRisk, riskInputSuspicious, sanitizeDependencies, sanitizeFiles } from "./risk.js";
 import { evidenceSchema, projectClaims, summarizeClaims } from "./verify.js";
 
 export const gateInputSchema = z.object({
@@ -14,6 +17,9 @@ export const gateInputSchema = z.object({
   claims: z.array(z.string().min(1)).min(1).max(MAX_CLAIMS).describe(`Completion claims to check against evidence; at most ${MAX_CLAIMS} per request`),
   evidence: evidenceSchema.describe("Sources that support the claims; include relevant diff or test logs here"),
   tests: z.string().optional().describe("Test output for the patch review"),
+  risk: z.boolean().optional().describe("Also run the jev_risk security flags in the same Jev request; default false"),
+  files: z.array(fileSchema).max(100).optional().describe("Changed files and change kinds for the security check (risk: true)"),
+  dependencies: dependenciesSchema.optional().describe("New or changed external dependencies for the security check (risk: true)"),
   auto_accept: z.number().min(0).max(1).optional(),
   review_at: z.number().min(0).max(1).optional(),
   model: z.string().optional(),
@@ -36,7 +42,11 @@ export const gateReasonCodeSchema = z.enum([
   "claim_confidence_low",
   "claim_confidence_below_auto_accept",
   "confidence_incoherent",
+  "security_review",
+  "security_escalated",
 ]);
+
+const securitySchema = riskOutputSchema.pick({ action: true, flags: true, severity: true, reason_codes: true, thresholds: true });
 
 export const gateOutputSchema = z.object({
   model: z.string(),
@@ -90,6 +100,7 @@ export const gateOutputSchema = z.object({
     })).min(1),
     thresholds: thresholdsSchema,
   }),
+  security: securitySchema.optional(),
 });
 
 export async function runGate(input: GateInput, context?: ToolContext) {
@@ -98,40 +109,42 @@ export async function runGate(input: GateInput, context?: ToolContext) {
   }
   const config = getConfig();
   const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
+  const risk = input.risk === true;
   const result = await systemOne({
     state: {
       request: input.request,
-      diff: input.diff,
-      tests: input.tests ?? "",
+      // Security mode strips hidden characters, matching the standalone jev_risk projection.
+      diff: risk ? sanitizeUntrustedDocument(input.diff) : input.diff,
+      tests: input.tests === undefined ? "" : risk ? sanitizeUntrustedDocument(input.tests) : input.tests,
       claims: input.claims,
       evidence: input.evidence,
+      ...(risk ? { files: sanitizeFiles(input.files), dependencies: sanitizeDependencies(input.dependencies) } : {}),
     },
-    questions: gateQuestions(input.claims.length),
+    questions: gateQuestions(input.claims.length, { risk }),
     model: input.model,
   }, context);
-  return projectGate(result, input.claims, autoAccept, reviewAt);
+  return projectGate(result, input.claims, autoAccept, reviewAt, risk ? { suspicious: riskInputSuspicious(input.diff, input.tests) } : undefined);
 }
 
 /** Deterministic policy after the single shared evaluation has completed. */
-export function projectGate(result: EvaluateResponse, claims: string[], autoAccept: number, reviewAt: number) {
+export function projectGate(
+  result: EvaluateResponse,
+  claims: string[],
+  autoAccept: number,
+  reviewAt: number,
+  risk?: { suspicious: boolean },
+) {
   const incomplete = result.truncated || !result.coverage.complete;
   const review = projectReview(result, autoAccept, reviewAt);
-  const results = projectClaims(result, claims, autoAccept, reviewAt).map((item) => {
-    let action: PolicyAction = item.action;
-    if (item.confidence < reviewAt || (item.verdict === "contradicted" && item.confidence >= autoAccept)) {
-      action = "escalate";
-    } else if (item.verdict !== "verified") {
-      action = "review";
-    }
-    return { ...item, action: requireCompleteContext(action, incomplete) };
-  });
+  const results = projectClaims(result, claims, autoAccept, reviewAt);
   const verification = {
     action: worstAction(results.map((item) => item.action)),
     summary: summarizeClaims(results),
     results,
     thresholds: { auto_accept: autoAccept, review_at: reviewAt },
   };
-  const action = worstAction([review.action, verification.action]);
+  const security = risk ? projectRisk(result, { autoAccept, reviewAt, suspicious: risk.suspicious, incomplete }) : undefined;
+  const action = worstAction([review.action, verification.action, ...(security ? [security.action] : [])]);
   const reasonCodes: Array<z.infer<typeof gateReasonCodeSchema>> = [];
   if (incomplete) reasonCodes.push("incomplete_context");
   if (review.action === "escalate") reasonCodes.push("review_escalated");
@@ -145,6 +158,8 @@ export function projectGate(result: EvaluateResponse, claims: string[], autoAcce
   if (results.some((item) => item.confidence >= autoAccept && !confidenceSupportsAuto(item.confidence, item.probabilities, autoAccept))) {
     reasonCodes.push("confidence_incoherent");
   }
+  if (security?.action === "escalate") reasonCodes.push("security_escalated");
+  if (security?.action === "review") reasonCodes.push("security_review");
   if (action === "auto") reasonCodes.push("accepted");
   return {
     model: result.model,
@@ -155,5 +170,6 @@ export function projectGate(result: EvaluateResponse, claims: string[], autoAcce
     reason_codes: reasonCodes,
     review,
     verification,
+    ...(security ? { security } : {}),
   };
 }

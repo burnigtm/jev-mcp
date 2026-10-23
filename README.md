@@ -97,6 +97,8 @@ An evaluation request contains `state` and a `questions` map:
 
 Diagnostics do not log request content or API keys. Calls have a 30-second total deadline by default, configurable with `JEV_MCP_TIMEOUT_MS`. API failures and invalid responses return typed errors rather than fabricated judgments.
 
+Repeated loop turns can be served from an opt-in result cache (`JEV_MCP_CACHE_TTL_MS`), a hard per-process spend cap is available with `JEV_MCP_TOKEN_BUDGET`, and the `jev://stats` resource reports calls, actions, latency, tokens, and cache hits per tool. See [configuration](docs/configuration.md).
+
 ## Limits and policy
 
 State plus questions must fit the estimated 64,000-token total budget and the 32,000-token state-plus-longest-question budget. State may be shortened; results expose incomplete coverage and cannot automatically accept a judgment based on omitted context. Questions alone that exceed the budget are rejected.

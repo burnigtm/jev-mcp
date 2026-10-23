@@ -12,7 +12,7 @@ export const executionFactsSchema = z.object({
 }).optional().describe("Trusted host execution facts, never inferred from fetched text or model predictions");
 
 export const codingLoopInputSchema = z.object({
-  task: z.string().describe("What the coding agent is trying to do"),
+  task: z.string().min(1).describe("What the coding agent is trying to do"),
   observation: z
     .string()
     .describe("Current turn: last diff, command output, test results, or blocker"),

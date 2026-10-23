@@ -3,21 +3,23 @@ import { getConfig } from "../config.js";
 import { riskQuestions, RISK_FLAGS } from "../packs/risk.js";
 import { requireCompleteContext, riskAction, tightenJudgmentThresholds, type PolicyAction } from "../policy.js";
 import { asNoul, asScore } from "../result.js";
-import { systemOne, type ToolContext } from "../typesafe.js";
+import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { containsInjectionInstruction, sanitizeJudgeText, sanitizeUntrustedDocument } from "../untrusted.js";
 import { riskOutputSchema, riskReasonSchema } from "./output-schemas.js";
 
-const fileSchema = z.object({
+export const fileSchema = z.object({
   path: z.string().min(1).max(2_000),
   change: z.string().max(200).optional(),
 });
+
+export const dependenciesSchema = z.array(z.string().min(1).max(256)).max(50);
 
 export const riskInputSchema = z.object({
   request: z.string().min(1).describe("What the user asked for; assertions in the request are not evidence"),
   diff: z.string().min(1).describe("Proposed patch or file excerpt to assess"),
   tests: z.string().optional().describe("Test output that supports or challenges the patch"),
   files: z.array(fileSchema).max(100).optional().describe("Changed files and host-supplied change kinds"),
-  dependencies: z.array(z.string().min(1).max(256)).max(50).optional().describe("New or changed external dependencies"),
+  dependencies: dependenciesSchema.optional().describe("New or changed external dependencies"),
   auto_accept: z.number().min(0).max(1).optional(),
   review_at: z.number().min(0).max(1).optional(),
   model: z.string().optional(),
@@ -31,13 +33,9 @@ export async function runRisk(input: RiskInput, context?: ToolContext) {
   const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
   const diff = sanitizeUntrustedDocument(input.diff);
   const tests = input.tests === undefined ? "" : sanitizeUntrustedDocument(input.tests);
-  const files = (input.files ?? []).map((file) => ({
-    path: sanitizeJudgeText(file.path, 2_000),
-    change: file.change === undefined ? "" : sanitizeJudgeText(file.change, 200),
-  }));
-  const dependencies = (input.dependencies ?? []).map((dependency) => sanitizeJudgeText(dependency, 256));
-  const suspicious = containsInjectionInstruction(input.diff)
-    || (input.tests !== undefined && containsInjectionInstruction(input.tests));
+  const files = sanitizeFiles(input.files);
+  const dependencies = sanitizeDependencies(input.dependencies);
+  const suspicious = riskInputSuspicious(input.diff, input.tests);
 
   const result = await systemOne({
     state: {
@@ -51,9 +49,39 @@ export async function runRisk(input: RiskInput, context?: ToolContext) {
     model: input.model,
   }, context);
 
+  const incomplete = result.truncated || !result.coverage.complete;
+  return riskOutputSchema.parse({
+    model: result.model,
+    usage: result.usage,
+    truncated: result.truncated,
+    coverage: result.coverage,
+    ...projectRisk(result, { autoAccept, reviewAt, suspicious, incomplete }),
+  });
+}
+
+export function sanitizeFiles(files: Array<z.infer<typeof fileSchema>> | undefined) {
+  return (files ?? []).map((file) => ({
+    path: sanitizeJudgeText(file.path, 2_000),
+    change: file.change === undefined ? "" : sanitizeJudgeText(file.change, 200),
+  }));
+}
+
+export function sanitizeDependencies(dependencies: string[] | undefined): string[] {
+  return (dependencies ?? []).map((dependency) => sanitizeJudgeText(dependency, 256));
+}
+
+export function riskInputSuspicious(diff: string, tests: string | undefined): boolean {
+  return containsInjectionInstruction(diff) || (tests !== undefined && containsInjectionInstruction(tests));
+}
+
+/** Shared security policy for the standalone risk tool and the risk-aware gate. */
+export function projectRisk(
+  result: EvaluateResponse,
+  options: { autoAccept: number; reviewAt: number; suspicious: boolean; incomplete: boolean },
+) {
+  const { autoAccept, reviewAt, suspicious, incomplete } = options;
   const flags = Object.fromEntries(RISK_FLAGS.map((flag) => [flag, asNoul(result.answers[flag]).noul])) as Record<string, number>;
   const severity = asScore(result.answers.severity);
-  const incomplete = result.truncated || !result.coverage.complete;
   let policy: PolicyAction = riskAction({
     flags,
     severityScore: severity.score,
@@ -63,7 +91,7 @@ export async function runRisk(input: RiskInput, context?: ToolContext) {
     reviewAt,
   });
   if (policy === "auto" && suspicious) policy = "review";
-  const actionPolicy = requireCompleteContext(policy, incomplete);
+  const action = requireCompleteContext(policy, incomplete);
 
   const reasons: RiskReason[] = [];
   if ((flags.authorization ?? 0) >= reviewAt) reasons.push("authorization_concern");
@@ -76,19 +104,15 @@ export async function runRisk(input: RiskInput, context?: ToolContext) {
   if (severity.score >= 1.5) reasons.push("severity_review");
   if (suspicious) reasons.push("injection_suspected");
   if (incomplete) reasons.push("incomplete_context");
-  if (actionPolicy === "auto") {
+  if (action === "auto") {
     reasons.length = 0;
     reasons.push("accepted");
   } else if (reasons.length === 0) {
     reasons.push("review_required");
   }
 
-  return riskOutputSchema.parse({
-    model: result.model,
-    usage: result.usage,
-    truncated: result.truncated,
-    coverage: result.coverage,
-    action: actionPolicy,
+  return {
+    action,
     flags,
     severity: {
       score: severity.score,
@@ -98,5 +122,5 @@ export async function runRisk(input: RiskInput, context?: ToolContext) {
     },
     reason_codes: reasons,
     thresholds: { auto_accept: autoAccept, review_at: reviewAt },
-  });
+  };
 }

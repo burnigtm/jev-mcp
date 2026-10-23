@@ -12,6 +12,11 @@ export type JevConfig = {
   reviewAt: number;
   blockAt: number;
   timeoutMs: number;
+  /** Provider-result cache lifetime; 0 disables the cache. */
+  cacheTtlMs: number;
+  cacheMaxEntries: number;
+  /** Total provider tokens this process may spend; undefined means unlimited. */
+  tokenBudget: number | undefined;
 };
 
 const nonPublic = new BlockList();
@@ -74,6 +79,21 @@ function timeoutEnv(): number {
     throw new JevConfigError("JEV_MCP_TIMEOUT_MS must be a positive integer no greater than 2147483647.");
   }
   return value;
+}
+
+function intEnv(name: string, fallback: number, min: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < min) {
+    throw new JevConfigError(`${name} must be an integer of at least ${min}.`);
+  }
+  return value;
+}
+
+function tokenBudgetEnv(): number | undefined {
+  const raw = process.env.JEV_MCP_TOKEN_BUDGET?.trim();
+  return raw ? intEnv("JEV_MCP_TOKEN_BUDGET", 0, 1) : undefined;
 }
 
 function baseUrlEnv(): string {
@@ -187,6 +207,9 @@ export function getConfig(): JevConfig {
     reviewAt: numEnv("JEV_MCP_REVIEW_AT", 0.5),
     blockAt: numEnv("JEV_MCP_BLOCK_AT", 0.75),
     timeoutMs: timeoutEnv(),
+    cacheTtlMs: intEnv("JEV_MCP_CACHE_TTL_MS", 0, 0),
+    cacheMaxEntries: intEnv("JEV_MCP_CACHE_MAX_ENTRIES", 256, 1),
+    tokenBudget: tokenBudgetEnv(),
   };
   if (config.reviewAt > config.autoAccept) {
     throw new JevConfigError("JEV_MCP_REVIEW_AT must not exceed JEV_MCP_AUTO_ACCEPT.");

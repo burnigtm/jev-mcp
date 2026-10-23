@@ -262,4 +262,5 @@ test("a lower auto_accept or review_at cannot loosen the environment floor in ve
   const tightenedReview = await runVerify({ claims: ["Tests pass"], evidence: "Tests pass", review_at: 0.6 });
   assert.equal(tightenedReview.thresholds.review_at, 0.6);
   assert.equal(tightenedReview.results[0]?.action, "escalate");
+  assert.equal(tightenedReview.action, "escalate", "the aggregate never softens a per-claim escalation");
 });

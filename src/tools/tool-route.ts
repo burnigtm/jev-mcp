@@ -83,7 +83,7 @@ export const toolRouteOutputSchema = z.object({
   selection: z.object({ id: z.string().nullable(), confidence: probability, suitability: probability.nullable() }).nullable(),
   blocked_candidates: z.array(z.object({ id: z.string(), reason_codes: z.array(reasonSchema).min(1) })),
   reason_codes: z.array(reasonSchema).min(1),
-  thresholds: z.object({ auto_accept: probability, review_at: probability }),
+  thresholds: z.object({ auto_accept: probability, review_at: probability, dispatch_at: probability }),
 });
 
 /** Local eligibility from trusted host facts; shared with the fused step router. */
@@ -173,7 +173,8 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
     const shared = {
       partner_model: { required: false as const, tier: "none" as const },
       blocked_candidates: blocked,
-      thresholds: { auto_accept: dispatchAt, review_at: reviewAt },
+      // auto_accept keeps reporting the dispatch floor for compatibility.
+      thresholds: { auto_accept: dispatchAt, review_at: reviewAt, dispatch_at: dispatchAt },
     };
     if (!candidates.length) {
       // No semantic choice exists: no provider call and no fabricated confidence.

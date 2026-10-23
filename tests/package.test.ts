@@ -102,7 +102,7 @@ test("packed package installs offline and runs its shipped CLI and MCP", { timeo
     const server = await connectServer({ binary, cwd: installation, env: { ...env, JEV_MCP_MOCK: "1" } });
     try {
       assert.equal((await server.client.listTools()).tools.length, 12);
-      assert.equal((await server.client.listResources()).resources.length, 11);
+      assert.equal((await server.client.listResources()).resources.length, 12, "eleven packs plus jev://stats");
       const verification = await server.call("jev_verify", { claims: ["Tests passed"], evidence: "Tests passed" });
       assert.match(verification.model, /\+mock$/);
       assert.equal(verification.coverage.complete, true);

@@ -171,6 +171,7 @@ export const triageReasonSchema = z.enum([
   "strategy_escalate",
   "injection_suspected",
   "incomplete_context",
+  "loop_detected",
   "review_required",
 ]);
 
@@ -187,6 +188,11 @@ export const triageOutputSchema = z.object({
   recoverable: probabilitySchema,
   strategy: choiceOutputSchema.extend({
     choice: z.enum(["retry", "change_approach", "gather_context", "ask_user", "stop", "escalate"]),
+  }),
+  loop: z.object({
+    detected: z.boolean(),
+    repeats: z.number().int().nonnegative(),
+    kind: z.enum(["none", "repeated_attempt", "same_failure"]),
   }),
   reason_codes: z.array(triageReasonSchema).min(1),
   thresholds: z.object({ auto_accept: probabilitySchema, review_at: probabilitySchema }),

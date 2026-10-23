@@ -39,8 +39,16 @@ test("all twelve tools and eleven resources work through subprocess stdio", { ti
       assert.equal(body.coverage.complete, true);
       assert.deepEqual(result.structuredContent, body);
     }
+    const stats = await client.readResource({ uri: "jev://stats" });
+    const snapshot = JSON.parse((stats.contents[0] as { text: string }).text);
+    assert.equal(Object.keys(snapshot.tools).length, fixtures.length, "every tool call is counted");
+    for (const [name] of fixtures) assert.equal(snapshot.tools[name].calls, 1);
+    assert.ok(snapshot.provider.requests >= fixtures.length);
+    assert.ok(snapshot.budget.spent > 0);
+    assert.equal(snapshot.budget.limit, null);
+    assert.doesNotMatch(stats.contents[0]!.text as string, /Fix parser/, "stats never echo tool inputs");
     const resources = await client.listResources();
-    assert.equal(resources.resources.length, 11);
+    assert.equal(resources.resources.length, 12);
     for (const resource of resources.resources) assert.equal((await client.readResource({ uri: resource.uri })).contents.length, 1);
     const prompts = await client.listPrompts();
     assert.equal(prompts.prompts.length, 6);

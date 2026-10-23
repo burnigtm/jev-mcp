@@ -4,7 +4,6 @@ import { screenQuestions } from "../packs/screen.js";
 import { screenAction, screenRecommendation, tightenBlockAt, tightenScreenReviewAt } from "../policy.js";
 import { asNoul } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
-import { JevValidationError } from "../errors.js";
 import { containsInjectionInstruction } from "../untrusted.js";
 
 export const screenInputSchema = z.object({
@@ -20,8 +19,8 @@ export type ScreenInput = z.infer<typeof screenInputSchema>;
 export async function runScreen(input: ScreenInput, context?: ToolContext) {
   const config = getConfig();
   const blockAt = tightenBlockAt(input.block_at, config.blockAt);
-  const reviewAt = tightenScreenReviewAt(input.review_at, 0.25);
-  if (reviewAt > blockAt) throw new JevValidationError("Screen thresholds must satisfy review_at <= block_at.");
+  // A stricter block_at also pulls the review cutoff down; tightening never fails.
+  const reviewAt = Math.min(tightenScreenReviewAt(input.review_at, 0.25), blockAt);
   const hasPurpose = Boolean(input.purpose?.trim());
   const result = await systemOne({
     state: {

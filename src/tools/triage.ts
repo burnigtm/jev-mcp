@@ -5,7 +5,7 @@ import { DEFAULT_FAILURE_CAUSES, triageQuestions, type FailureCause } from "../p
 import { requireCompleteContext, tightenJudgmentThresholds, triageAction, type PolicyAction } from "../policy.js";
 import { asChoice, asNoul } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
-import { containsInjectionInstruction, sanitizeJudgeText, sanitizeUntrustedDocument } from "../untrusted.js";
+import { containsInjectionInstruction, normalizedJudgeText, sanitizeJudgeText, sanitizeUntrustedDocument } from "../untrusted.js";
 import { triageOutputSchema, triageReasonSchema } from "./output-schemas.js";
 
 const causeSchema = z.object({
@@ -53,7 +53,7 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
   }
   const causes = originalCauses.map((cause, index) => ({
     id: `cause_${index}`,
-    original_id: cause.id,
+    original_id: sanitizeJudgeText(cause.id, 128),
     description: sanitizeJudgeText(cause.description, 1_000),
   }));
   const failure = sanitizeUntrustedDocument(input.failure);
@@ -67,8 +67,10 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
     observation: sanitizeUntrustedDocument(entry.observation),
   }));
   const suspicious = containsInjectionInstruction(input.failure)
-    || attempts.some((attempt) => containsInjectionInstruction(attempt.result))
-    || history.some((entry) => containsInjectionInstruction(entry.observation));
+    || attempts.some((attempt) => containsInjectionInstruction(attempt.action) || containsInjectionInstruction(attempt.result))
+    || history.some((entry) => containsInjectionInstruction(entry.action) || containsInjectionInstruction(entry.observation))
+    || originalCauses.some((cause) => containsInjectionInstruction(cause.description));
+  const loop = detectLoop(input.attempts ?? [], input.history ?? [], input.failure);
 
   const result = await systemOne({
     state: {
@@ -111,7 +113,7 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
     autoAccept,
     reviewAt,
   });
-  if (policy === "auto" && (suspicious || causeId === "unknown")) policy = "review";
+  if (policy === "auto" && (suspicious || causeId === "unknown" || loop.detected)) policy = "review";
   const actionPolicy = requireCompleteContext(policy, incomplete);
 
   const reasons: TriageReason[] = [];
@@ -124,6 +126,7 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
   if (strategy.choice === "ask_user") reasons.push("human_decision_required");
   if (strategy.choice === "escalate") reasons.push("strategy_escalate");
   if (strategy.choice === "retry" && failedAttempts >= 2) reasons.push("retry_budget_exhausted");
+  if (loop.detected) reasons.push("loop_detected");
   if (suspicious) reasons.push("injection_suspected");
   if (incomplete) reasons.push("incomplete_context");
   if (actionPolicy === "auto") {
@@ -143,7 +146,49 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
     progress: { choice: progress.choice, confidence: progress.confidence, probabilities: progress.probabilities },
     recoverable,
     strategy: { choice: strategy.choice, confidence: strategy.confidence, probabilities: strategy.probabilities },
+    loop,
     reason_codes: reasons,
     thresholds: { auto_accept: autoAccept, review_at: reviewAt },
   });
+}
+
+export type LoopVerdict = { detected: boolean; repeats: number; kind: "none" | "repeated_attempt" | "same_failure" };
+
+/**
+ * Mask values that change between otherwise identical runs so a rerun with a
+ * new timestamp, duration, PID, or temp path still fingerprints the same.
+ */
+export function loopFingerprint(text: string): string {
+  return normalizedJudgeText(text)
+    .toLowerCase()
+    .replace(/\d{4}-\d{2}-\d{2}[t ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:z|[+-]\d{2}:?\d{2})?/g, "<time>")
+    .replace(/(?:[a-z]:)?[\\/][^\s'"`]*?(?:tmp|temp)[\\/][^\s'"`]*/g, "<tmp>")
+    .replace(/\b(?:0x)?[0-9a-f]{7,}\b/g, "<hex>")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:ms|s|sec|seconds|m|min)\b/g, "<dur>")
+    .replace(/\d+/g, "<n>");
+}
+
+/**
+ * Deterministic backstop for loop detection: Jev may report `advancing` even
+ * when the host has the same failing action and result on record. Never
+ * inspects the model's answer; only host-supplied attempts, history, and failure.
+ */
+export function detectLoop(
+  attempts: ReadonlyArray<{ action: string; result?: string; failed?: boolean }>,
+  history: ReadonlyArray<{ action: string; observation: string }>,
+  failure: string,
+): LoopVerdict {
+  const failed = attempts.filter((attempt) => attempt.failed !== false);
+  const counts = new Map<string, number>();
+  const bump = (key: string) => counts.set(key, (counts.get(key) ?? 0) + 1);
+  for (const attempt of failed) bump(JSON.stringify(["attempt", loopFingerprint(attempt.action), loopFingerprint(attempt.result ?? "")]));
+  for (const entry of history) bump(JSON.stringify(["history", loopFingerprint(entry.action), loopFingerprint(entry.observation)]));
+  const repeats = Math.max(0, ...counts.values());
+  if (repeats >= 2) return { detected: true, repeats, kind: "repeated_attempt" };
+  // The latest attempt usually produced the current failure; only an identical
+  // failure across two or more failed attempts shows that nothing is changing.
+  const current = loopFingerprint(failure);
+  const sameFailure = failed.filter((attempt) => attempt.result !== undefined && loopFingerprint(attempt.result) === current).length;
+  if (sameFailure >= 2) return { detected: true, repeats: sameFailure, kind: "same_failure" };
+  return { detected: false, repeats, kind: "none" };
 }

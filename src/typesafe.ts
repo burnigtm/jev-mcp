@@ -5,10 +5,12 @@ import {
   type SystemOneResult,
 } from "@typesafe-ai/sdk";
 import { getConfig, type JevConfig } from "./config.js";
-import { JevCancelledError, JevConfigError, JevResponseError, JevTimeoutError } from "./errors.js";
+import { cacheGet, cacheKey, cacheSet } from "./cache.js";
+import { JevBudgetExhaustedError, JevCancelledError, JevConfigError, JevResponseError, JevTimeoutError } from "./errors.js";
 import { fitState, MAX_TOTAL_TOKENS, type Coverage, type FitResult } from "./limits.js";
 import { mockSystemOne } from "./mock.js";
 import { validateResponse } from "./responses.js";
+import { recordBudgetRejection, recordCacheHit, recordProviderRequest, tokensSpent } from "./stats.js";
 
 function attemptTimeoutMs(context: ToolContext, timeoutMs: number): number {
   const deadline = context.deadline ?? Date.now() + timeoutMs;
@@ -115,10 +117,36 @@ async function evaluate<Q extends Questions>(request: EvaluateRequest<Q>, contex
     model,
   };
 
+  const key = config.cacheTtlMs > 0
+    ? cacheKey({ baseURL: config.baseURL, model, mock: config.mock, state: payload.state, questions: payload.questions })
+    : undefined;
+  const cached = key ? cacheGet<SystemOneResult<Q>>(key) : undefined;
+  if (cached) {
+    recordCacheHit();
+    // No provider tokens were spent; coverage still reflects this request.
+    return { ...cached, usage: { input_tokens: 0, output_tokens: 0 }, ...applyProviderBudget(fitted, cached.usage.input_tokens) };
+  }
+
+  if (config.tokenBudget !== undefined && tokensSpent() >= config.tokenBudget) {
+    recordBudgetRejection();
+    throw new JevBudgetExhaustedError(config.tokenBudget);
+  }
+
+  const validated = await requestProvider(config, payload, request.questions, context);
+  recordProviderRequest(validated.usage);
+  // Never cache a result the caller can no longer use.
+  if (key && !context.signal?.aborted) cacheSet(key, validated, config.cacheTtlMs, config.cacheMaxEntries);
+  return { ...validated, ...applyProviderBudget(fitted, validated.usage.input_tokens) };
+}
+
+async function requestProvider<Q extends Questions>(
+  config: JevConfig,
+  payload: SystemOneRequest<Q>,
+  questions: Q,
+  context: ToolContext,
+): Promise<SystemOneResult<Q>> {
   if (config.mock) {
-    const result = mockSystemOne({ ...payload, model });
-    const bounded = applyProviderBudget(fitted, validateResponse(result, request.questions).usage.input_tokens);
-    return { ...validateResponse(result, request.questions), ...bounded };
+    return validateResponse(mockSystemOne({ ...payload, model: payload.model ?? config.model }), questions);
   }
 
   if (!config.apiKey) {
@@ -127,11 +155,10 @@ async function evaluate<Q extends Questions>(request: EvaluateRequest<Q>, contex
     );
   }
 
-  const client = createClient(config, context, model);
+  const client = createClient(config, context, payload.model ?? config.model);
   try {
     const result = await client.systemOne(payload, { signal: context.signal });
-    const validated = validateResponse(result, request.questions);
-    return { ...validated, ...applyProviderBudget(fitted, validated.usage.input_tokens) };
+    return validateResponse(result, questions);
   } catch (err) {
     if (err instanceof SyntaxError) throw new JevResponseError();
     throw err;

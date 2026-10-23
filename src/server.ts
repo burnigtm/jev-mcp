@@ -1,4 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { PACK_IDS, packBody, packUri } from "./packs/index.js";
@@ -27,7 +27,45 @@ import {
   verifyOutputSchema,
 } from "./tools/output-schemas.js";
 import { SERVER_NAME, VERSION } from "./version.js";
-import { withToolContext } from "./typesafe.js";
+import { cacheSize } from "./cache.js";
+import { getConfig } from "./config.js";
+import { errorDetails } from "./errors.js";
+import { recordToolCall, statsSnapshot } from "./stats.js";
+import { withToolContext, type ToolContext } from "./typesafe.js";
+
+export const STATS_URI = "jev://stats";
+
+const READ_ONLY_ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
+
+/**
+ * Every Jev tool shares one deadline/cancellation scope, one error envelope,
+ * and per-call stats. Errors are JSON text without structuredContent so clients
+ * never validate them against the success schema.
+ */
+function registerJevTool<I extends z.ZodType, O extends z.ZodType>(
+  server: McpServer,
+  name: string,
+  meta: { title: string; description: string; inputSchema: I; outputSchema: O },
+  run: (args: z.output<I>, context: ToolContext) => Promise<object>,
+): void {
+  const callback = async (args: z.output<I>, extra: { signal: AbortSignal }) => {
+    const started = performance.now();
+    try {
+      const payload = await withToolContext({ signal: extra.signal }, context => run(args, context));
+      const record = payload as { action?: unknown; usage?: unknown };
+      recordToolCall(name, { durationMs: performance.now() - started, action: record.action, usage: record.usage });
+      return { ...jsonResult(payload), structuredContent: payload as Record<string, unknown> };
+    } catch (err) {
+      recordToolCall(name, { durationMs: performance.now() - started, errorCode: errorDetails(err).code });
+      return jsonError(err);
+    }
+  };
+  server.registerTool(
+    name,
+    { ...meta, annotations: READ_ONLY_ANNOTATIONS },
+    callback as unknown as ToolCallback<I>,
+  );
+}
 
 export function createJevServer(): McpServer {
   const server = new McpServer(
@@ -35,270 +73,119 @@ export function createJevServer(): McpServer {
     { capabilities: { tools: {}, resources: {}, prompts: {} } },
   );
 
-  server.registerTool(
-    "jev_evaluate",
-    {
-      title: "Evaluate with Jev",
-      description:
-        "Escape hatch: send shared state plus named noul/choice/score questions to TypeSafe Jev. Use when no other jev_* recipe fits. Jev does not write code or prose. Questions in one call run in parallel. Returns typed answers, probabilities, confidence, usage, and action auto|review|escalate.",
-      inputSchema: evaluateInputSchema,
-      outputSchema: evaluateOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runEvaluate(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_evaluate", {
+    title: "Evaluate with Jev",
+    description:
+      "Escape hatch: send shared state plus named noul/choice/score questions to TypeSafe Jev. Use when no other jev_* recipe fits. Jev does not write code or prose. Questions in one call run in parallel. Returns typed answers, probabilities, confidence, usage, and action auto|review|escalate.",
+    inputSchema: evaluateInputSchema,
+    outputSchema: evaluateOutputSchema,
+  }, runEvaluate);
 
-  server.registerTool(
-    "jev_coding_loop",
-    {
-      title: "Jev coding-loop router",
-      description:
-        "Call before retry/stop/model-tier decisions. One Jev fan-out returns next, risk, focus, and explicit handoff / partner_model fields. Prefer prepared tools or gathering context; request a partner generative model only when needed and confidently supported. Legacy model_tier is conditional, not an instruction to invoke a model. Does not edit files.",
-      inputSchema: codingLoopInputSchema,
-      outputSchema: codingLoopOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runCodingLoop(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_coding_loop", {
+    title: "Jev coding-loop router",
+    description:
+      "Call before retry/stop/model-tier decisions. One Jev fan-out returns next, risk, focus, and explicit handoff / partner_model fields. Prefer prepared tools or gathering context; request a partner generative model only when needed and confidently supported. Legacy model_tier is conditional, not an instruction to invoke a model. Does not edit files.",
+    inputSchema: codingLoopInputSchema,
+    outputSchema: codingLoopOutputSchema,
+  }, runCodingLoop);
 
-  server.registerTool(
-    "jev_step",
-    {
-      title: "Jev fused step router",
-      description: "One call instead of jev_coding_loop then jev_tool_route: route the coding step and select among up to 32 host-prepared calls in a single Jev request. Returns the exact call with handoff execute_tool, or handoff use_tools|gather_context|partner_model|ask_user|stop|review with call null. Same dispatch floors. Never generates arguments, executes calls, or invokes a model.",
-      inputSchema: stepInputSchema,
-      outputSchema: stepOutputSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await runStep(args, { signal: extra.signal });
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_step", {
+    title: "Jev fused step router",
+    description:
+      "One call instead of jev_coding_loop then jev_tool_route: route the coding step and select among up to 32 host-prepared calls in a single Jev request. Returns the exact call with handoff execute_tool, or handoff use_tools|gather_context|partner_model|ask_user|stop|review with call null. Same dispatch floors. Never generates arguments, executes calls, or invokes a model.",
+    inputSchema: stepInputSchema,
+    outputSchema: stepOutputSchema,
+  }, runStep);
 
-  server.registerTool(
-    "jev_tool_route",
-    {
-      title: "Jev prepared tool-call router",
-      description: "Choose among up to 32 exact host-prepared tool calls without generating arguments or invoking a partner model. Host supplies trusted authorization, schema validation, prerequisites, effect and retry counts. Only confident, suitable, complete, low-risk selections expose a call; otherwise call is null. Empty/ineligible lists return locally without Jev. This server never executes the selected call. Use jev_coding_loop if new generation may be necessary.",
-      inputSchema: toolRouteInputSchema,
-      outputSchema: toolRouteOutputSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await runToolRoute(args, { signal: extra.signal });
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_tool_route", {
+    title: "Jev prepared tool-call router",
+    description:
+      "Choose among up to 32 exact host-prepared tool calls without generating arguments or invoking a partner model. Host supplies trusted authorization, schema validation, prerequisites, effect and retry counts. Only confident, suitable, complete, low-risk selections expose a call; otherwise call is null. Empty/ineligible lists return locally without Jev. This server never executes the selected call. Use jev_coding_loop if new generation may be necessary.",
+    inputSchema: toolRouteInputSchema,
+    outputSchema: toolRouteOutputSchema,
+  }, runToolRoute);
 
-  server.registerTool(
-    "jev_review",
-    {
-      title: "Jev patch review",
-      description:
-        "Score a proposed diff against the request: correctness, spec-match, test-gap, blast-radius, plus noul safe_to_apply. Composite weights live in code. Call before declaring a fix done. Does not apply the patch.",
-      inputSchema: reviewInputSchema,
-      outputSchema: reviewOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runReview(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_review", {
+    title: "Jev patch review",
+    description:
+      "Score a proposed diff against the request: correctness, spec-match, test-gap, blast-radius, plus noul safe_to_apply. Composite weights live in code. Call before declaring a fix done. Does not apply the patch.",
+    inputSchema: reviewInputSchema,
+    outputSchema: reviewOutputSchema,
+  }, runReview);
 
-  server.registerTool(
-    "jev_verify",
-    {
-      title: "Jev claim verifier",
-      description:
-        "Check each claim against provided evidence (PR description, agent brief, docs, diffs). Returns per claim: verified|contradicted|unsupported, probabilities, confidence, and auto vs review. Prefer this over asking a chat model to 'double-check'.",
-      inputSchema: verifyInputSchema,
-      outputSchema: verifyOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runVerify(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_verify", {
+    title: "Jev claim verifier",
+    description:
+      "Check each claim against provided evidence (PR description, agent brief, docs, diffs). Returns per claim: verified|contradicted|unsupported, probabilities, confidence, and auto vs review. Prefer this over asking a chat model to 'double-check'.",
+    inputSchema: verifyInputSchema,
+    outputSchema: verifyOutputSchema,
+  }, runVerify);
 
-  server.registerTool(
-    "jev_screen",
-    {
-      title: "Jev content screen",
-      description:
-        "Judge fetched or pasted text before the agent reads it: prompt-injection probability, substance, and optional relevance to purpose. Recommendation: pass|review|block|skip. Use on untrusted web pages, issues, and pastes. Not for first-party repo files.",
-      inputSchema: screenInputSchema,
-      outputSchema: screenOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runScreen(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_screen", {
+    title: "Jev content screen",
+    description:
+      "Judge fetched or pasted text before the agent reads it: prompt-injection probability, substance, and optional relevance to purpose. Recommendation: pass|review|block|skip. Use on untrusted web pages, issues, and pastes. Not for first-party repo files.",
+    inputSchema: screenInputSchema,
+    outputSchema: screenOutputSchema,
+  }, runScreen);
 
-  server.registerTool(
-    "jev_rank",
-    {
-      title: "Jev candidate ranker",
-      description:
-        "Rank files, symbols, errors, or skills against a plain-language query. No embeddings. One Choice over candidate ids plus a Noul that the top hit actually answers the query (so a forced winner cannot masquerade as a match). Accepts up to 5,000 supplied candidates; each Jev call uses at most 250 options and larger lists are chunked then re-ranked. Pass candidates in; this server does not index the repo.",
-      inputSchema: rankInputSchema,
-      outputSchema: rankOutputSchema,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: true,
-      },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runRank(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_rank", {
+    title: "Jev candidate ranker",
+    description:
+      "Rank files, symbols, errors, or skills against a plain-language query. No embeddings. One Choice over candidate ids plus a Noul that the top hit actually answers the query (so a forced winner cannot masquerade as a match). Accepts up to 5,000 supplied candidates; each Jev call uses at most 250 options and larger lists are chunked then re-ranked. Pass candidates in; this server does not index the repo.",
+    inputSchema: rankInputSchema,
+    outputSchema: rankOutputSchema,
+  }, runRank);
 
-  server.registerTool(
-    "jev_gate",
-    {
-      title: "Jev combined review gate",
-      description: "Review a proposed patch and verify completion claims against supplied evidence in one Jev request. Returns review and verification reports, coverage, deterministic reason codes, and one overall auto|review|escalate action. Does not apply changes or execute tests.",
-      inputSchema: gateInputSchema,
-      outputSchema: gateOutputSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runGate(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_gate", {
+    title: "Jev combined review gate",
+    description:
+      "Review a proposed patch and verify completion claims against supplied evidence in one Jev request. Returns review and verification reports, coverage, deterministic reason codes, and one overall auto|review|escalate action. Does not apply changes or execute tests.",
+    inputSchema: gateInputSchema,
+    outputSchema: gateOutputSchema,
+  }, runGate);
 
-  server.registerTool(
-    "jev_scope",
-    {
-      title: "Jev action scope guard",
-      description:
-        "Semantic preflight for one host-prepared action: is it within the approved task and scope, does its declared effect match, does it need fresh confirmation, and how risky is it? Never executes or authorizes the action; auto means no semantic scope concern.",
-      inputSchema: scopeInputSchema,
-      outputSchema: scopeOutputSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runScope(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_scope", {
+    title: "Jev action scope guard",
+    description:
+      "Semantic preflight for one host-prepared action: is it within the approved task and scope, does its declared effect match, does it need fresh confirmation, and how risky is it? Never executes or authorizes the action; auto means no semantic scope concern.",
+    inputSchema: scopeInputSchema,
+    outputSchema: scopeOutputSchema,
+  }, runScope);
 
-  server.registerTool(
-    "jev_triage",
-    {
-      title: "Jev failure and loop triage",
-      description:
-        "Classify a failure against host-supplied causes, detect advancing/repeating/regressing/complete progress, judge recoverability, and select a recovery strategy. Never executes a retry, asks a user, or changes code.",
-      inputSchema: triageInputSchema,
-      outputSchema: triageOutputSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-    },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runTriage(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
-    },
-  );
+  registerJevTool(server, "jev_triage", {
+    title: "Jev failure and loop triage",
+    description:
+      "Classify a failure against host-supplied causes, detect advancing/repeating/regressing/complete progress, judge recoverability, and select a recovery strategy. Never executes a retry, asks a user, or changes code.",
+    inputSchema: triageInputSchema,
+    outputSchema: triageOutputSchema,
+  }, runTriage);
 
-  server.registerTool(
-    "jev_risk",
+  registerJevTool(server, "jev_risk", {
+    title: "Jev security risk review",
+    description:
+      "Assess a proposed diff for authorization, validation, secret-exposure, data-loss, concurrency, dependency, and external-effect concerns, plus severity. Complements correctness review and never grants merge or deployment permission.",
+    inputSchema: riskInputSchema,
+    outputSchema: riskOutputSchema,
+  }, runRisk);
+
+  server.registerResource(
+    "stats",
+    STATS_URI,
     {
-      title: "Jev security risk review",
-      description:
-        "Assess a proposed diff for authorization, validation, secret-exposure, data-loss, concurrency, dependency, and external-effect concerns, plus severity. Complements correctness review and never grants merge or deployment permission.",
-      inputSchema: riskInputSchema,
-      outputSchema: riskOutputSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      title: "Jev usage stats",
+      description: "In-process counters: calls, actions, errors, latency, provider tokens, cache hits, and the remaining JEV_MCP_TOKEN_BUDGET. Contains no tool inputs or outputs.",
+      mimeType: "application/json",
     },
-    async (args, extra) => {
-      try {
-        const payload = await withToolContext({ signal: extra.signal }, context => runRisk(args, context));
-        return { ...jsonResult(payload), structuredContent: payload };
-      } catch (err) {
-        return jsonError(err);
-      }
+    async (uri) => {
+      const config = getConfig();
+      return {
+        contents: [{
+          uri: uri.href,
+          mimeType: "application/json",
+          text: JSON.stringify(statsSnapshot(config.tokenBudget, cacheSize()), null, 2),
+        }],
+      };
     },
   );
 
