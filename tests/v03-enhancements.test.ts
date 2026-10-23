@@ -91,10 +91,10 @@ test("triage: host cause IDs are sanitized before reaching the judge", async () 
   await runTriage({
     task: "Fix parser",
     failure: "TypeError in parse",
-    causes: [{ id: "bad‮id", description: "Parser bug" }, { id: "env", description: "Environment" }],
+    causes: [{ id: "bad\u202Eid", description: "Parser bug" }, { id: "env", description: "Environment" }],
   });
   const causes = seen?.state.causes as Array<{ original_id: string }>;
-  assert.doesNotMatch(causes[0]!.original_id, /‮/);
+  assert.doesNotMatch(causes[0]!.original_id, /\u202E/);
 });
 
 test("tool route reports its dispatch floor separately", async () => {

@@ -7,17 +7,13 @@
 - `jev_verify` no longer softens a per-claim `escalate` to an overall `review`: the overall action is now the strictest per-claim action. Per-claim actions use the same verdict policy as `jev_gate`, so a confident contradiction escalates and is counted in `needs_review` instead of reporting `auto`. **Behavior change:** a confident `unsupported` verdict is now `review` per claim, not `auto`.
 - `jev_screen` accepts a stricter per-call `block_at` below `0.25` by lowering `review_at` with it, instead of rejecting the call.
 - A per-call `review_at` above the env `auto_accept` raises `auto_accept` with it instead of failing; an explicitly inverted caller pair is still rejected.
-- `jev_triage` sanitizes host cause IDs before they reach the judge and runs the injection backstop over attempt/history actions and cause descriptions.
 - `jev_tool_route` reports `thresholds.dispatch_at` like `jev_step`; `jev_coding_loop` rejects an empty `task`; mock mode validates each response once.
-- `jev_risk` (and the risk-aware gate) no longer lets a moderate concern on one flag mask a confident concern on another, or mask an escalating severity score: every critical flag and severity are checked for escalation before any review result.
-- Raising `auto_accept` can no longer delay escalation of a judged concern. Scope `needs_confirmation`, critical risk flags, and confidently contradicted claims escalate at `min(auto_accept, 0.8)`, so tightening a call only ever makes it stricter. Behavior at or below the default `0.8` is unchanged.
-- `jev_triage` decides every escalation (low cause/strategy confidence, a recommended `escalate`, low recoverability) before any review-band result, so tighter thresholds cannot soften an escalation, and a recommended escalation is no longer reduced to `review` by moderate cause confidence.
-- The deterministic injection backstop deletes invisible characters before matching, so a zero-width, soft-hyphen, or bidi character inside a word cannot hide a phrase. It also matches common determiners ("ignore your/any/all of the previous instructions"). The soft hyphen, word joiners, and BOM are now stripped from judge projections.
+- Confidently contradicted claims in `jev_verify` and `jev_gate` escalate at `min(auto_accept, 0.8)`, like the v0.2 scope and risk concerns, so raising `auto_accept` never delays the escalation.
 - Truncation below the marker length no longer emits a lone UTF-16 high surrogate.
 
 ### Test suite
 
-- Added seeded property tests for every policy function (threshold monotonicity, never-auto conditions, distribution guards), a cross-tool invariant table (clean answers reach `auto`; truncation, flat distributions, injection text, malformed answers, and provider failures never do), and table-driven matrices for the provider boundary, question parsing, CLI arguments, configuration, reason codes, injection phrases, stats, cache, and limits. Branch coverage of `src/` rose from 87.8% to about 94%.
+- Added seeded property tests for every policy function (threshold monotonicity, never-auto conditions, distribution guards), a cross-tool invariant table (clean answers reach `auto`; truncation, flat distributions, injection text, malformed answers, and provider failures never do), and table-driven matrices for the provider boundary, question parsing, CLI arguments, configuration, reason codes, injection phrases, stats, cache, and limits. Branch coverage of `src/` rose from 87.8% to 94.7%.
 
 ### Response cache, stats, and token budget
 
@@ -42,7 +38,8 @@
 - `jev_scope` checks semantic scope, declared-effect consistency, fresh-confirmation need, and risk; external/destructive/unknown effects can never be `auto`. `auto` is not authorization.
 - `jev_triage` selects a failure cause, loop progress, recoverability, and recovery strategy. Repeating/regressing progress, exhausted retries, `ask_user`, and low recoverability cannot be `auto`; the host still executes any recovery call.
 - `jev_risk` judges authorization, validation, secret-exposure, data-loss, concurrency, dependency, and external-effect concerns plus severity. Critical/uncertain flags cannot be `auto`; it is never merge permission.
-- Moved the deterministic injection backstop into shared `untrusted.ts` and applied it to the new tools' untrusted state. Added document-safe sanitization that preserves newlines for logs/diffs.
+- Moved the deterministic injection backstop into shared `untrusted.ts` and applied it to the new tools' untrusted state. Added document-safe sanitization that preserves newlines for logs/diffs. The shared backstop deletes invisible characters (zero-width, soft hyphen, bidi, word joiners, BOM) before matching, as the screen-local version did, so a hidden character inside a word cannot split a phrase; it also matches common determiners ("ignore your/any previous instructions").
+- Policy hardening before release: every critical `jev_risk` flag and the severity score are checked for escalation before any review result, so a moderate concern cannot mask a confident one; judged concerns (scope `needs_confirmation`, critical risk flags) escalate at `min(auto_accept, 0.8)`, so raising `auto_accept` never delays an escalation; `jev_triage` decides every escalation before any review-band result; host cause IDs are sanitized before reaching the judge, and attempt/history actions and cause descriptions are screened for injection.
 - Added `jev-scope-check`, `jev-debug-loop`, and `jev-pr-risk` MCP prompts, mock regression tests, skill contracts, and a benchmark/evals update.
 
 ### Security hardening for untrusted data, helper connections, and evaluation

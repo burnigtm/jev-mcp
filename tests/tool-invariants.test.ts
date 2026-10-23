@@ -289,7 +289,7 @@ test("jev_scope: injection in the target or command is caught, and an oversized 
     const result = await runScope({ task: "Fix", action: { name: "x", description: "Read a file", effect: "read_only", [field]: INJECTION } });
     assert.deepEqual(result.reason_codes, ["injection_suspected"], field);
   }
-  const clipped = await runScope({ task: "Fix", action: { name: "x", description: "d", effect: "read_only", command: "x".repeat(7_999) + " ​".repeat(10) } });
+  const clipped = await runScope({ task: "Fix", action: { name: "x", description: "d", effect: "read_only", command: "x".repeat(7_999) + " \u200B".repeat(10) } });
   assert.equal(clipped.action, "auto", "invisible padding does not count toward the clip");
 });
 
