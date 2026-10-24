@@ -13,7 +13,7 @@ jev-mcp ci --base "$BASE_SHA" --head "$HEAD_SHA" \
 | `--base`, `--head` | Refs (or SHAs) to compare; the diff is `base...head`, the changes the head introduced since it diverged. Refs that look like options or ranges are refused before git runs |
 | `--pr-title-file`, `--pr-body-file` | The pull request's title and description, **as files** (see below) |
 | `--tests-file` | A CI or test log. It is the only evidence for the description's checked boxes |
-| `--format json\|github` | `json` (default) prints a summary with no diff text and no pull-request prose. `github` prints workflow annotations, and appends a markdown summary to `$GITHUB_STEP_SUMMARY` (or stdout when unset) |
+| `--format json\|github\|sarif` | `json` (default) prints a summary with no diff text and no pull-request prose. `github` prints workflow annotations, and appends a markdown summary to `$GITHUB_STEP_SUMMARY` (or stdout when unset) |
 | `--fail-on review\|escalate` | `review` (default): exit 10 on `review`, 20 on `escalate`. `escalate`: exit 20 on `escalate` only; a `review` verdict is still reported, but the exit code is 0 |
 | `--deterministic-only` | Skip every model call (the mode for pull requests from forks) |
 | `--callers` | Look up where changed symbols are used outside the diff and show the uses to the judge (also `JEV_MCP_CALLER_CONTEXT=on`). Off by default, because on the benchmark it made Jev hold more correct fixes and caught nothing extra |
@@ -41,6 +41,10 @@ Everything about a pull request is attacker-controlled: the diff, title, body, c
 - **No content leaves.** The JSON summary and the step summary hold reason codes, counts and file names, not diff text or the pull request's prose.
 
 [`examples/github-pr-gate.yml`](../examples/github-pr-gate.yml) is a workflow that follows all of this. It is an example and is **not enabled** in this repository; replace the placeholder version with a pinned release before use. A test checks that it uses `pull_request`, keeps pull-request expressions out of scripts, and disables credential persistence.
+
+## SARIF
+
+`--format sarif` prints SARIF 2.1.0 for GitHub code scanning (`github/codeql-action/upload-sarif`, which needs `security-events: write` on the job): one result per policy finding, held part and withheld sensitive file, with file-level locations (line 1), plus one result without a location for the overall verdict. Messages come from fixed text, never from the pull request's prose or the diff; paths that are absolute, contain `..` or a control character are skipped; at most 100 results. Annotations and the step summary already carry most of the value, so SARIF is optional.
 
 ## Rolling it out
 

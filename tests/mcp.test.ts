@@ -42,7 +42,7 @@ test("MCP lists thirteen tools and eleven packs", async () => {
       "jev_verify",
     ]);
     const resources = await client.listResources();
-    assert.equal(resources.resources.length, 12, "eleven packs plus jev://stats");
+    assert.equal(resources.resources.length, 13, "eleven packs plus jev://stats and jev://ledger");
     assert.ok(resources.resources.some(resource => resource.uri === "jev://stats"));
     const prompts = await client.listPrompts();
     assert.deepEqual(prompts.prompts.map(prompt => prompt.name).sort(), [

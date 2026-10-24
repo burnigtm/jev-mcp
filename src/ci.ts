@@ -7,6 +7,7 @@ import { getConfig } from "./config.js";
 import { JevConfigError, JevValidationError } from "./errors.js";
 import { refChanges, showFile, type ChangedFile } from "./git.js";
 import { worstAction, type PolicyAction } from "./policy.js";
+import { VERSION } from "./version.js";
 import { redactSecrets } from "./redact.js";
 import { evaluatePolicy, parseRepoPolicy, POLICY_FILE_NAME, type RepoPolicy } from "./repo-policy.js";
 import { containsInjectionInstruction } from "./untrusted.js";
@@ -305,4 +306,53 @@ export function renderMarkdown(result: CiResult): string {
 /** The machine-readable summary: no diff text, no pull-request prose. */
 export function renderJson(result: CiResult): string {
   return `${JSON.stringify(result)}\n`;
+}
+
+// --- SARIF -----------------------------------------------------------------------------------------------
+
+const SARIF_RESULT_LIMIT = 100;
+
+type SarifResult = {
+  ruleId: string;
+  level: "error" | "warning" | "note";
+  message: { text: string };
+  locations?: Array<{ physicalLocation: { artifactLocation: { uri: string }; region: { startLine: number } } }>;
+};
+
+function sarifUri(path: string): string | null {
+  if (safePath(path) === null || path.startsWith("/") || path.split("/").includes("..")) return null;
+  return path.split("/").map(encodeURIComponent).join("/");
+}
+
+/**
+ * SARIF 2.1.0 for GitHub code scanning (`github/codeql-action/upload-sarif`, which needs `security-events: write`).
+ * Locations are file-level; messages come from fixed text, never from the pull request's prose or the diff.
+ */
+export function renderSarif(result: CiResult): string {
+  const results: SarifResult[] = [];
+  const add = (ruleId: string, level: SarifResult["level"], text: string, path?: string) => {
+    if (results.length >= SARIF_RESULT_LIMIT) return;
+    const uri = path === undefined ? null : sarifUri(path);
+    if (path !== undefined && uri === null) return;
+    results.push({ ruleId, level, message: { text }, ...(uri ? { locations: [{ physicalLocation: { artifactLocation: { uri }, region: { startLine: 1 } } }] } : {}) });
+  };
+  for (const finding of result.policy.findings) {
+    add(finding.decision === "deny" ? "policy_denied" : "policy_review", finding.decision === "deny" ? "error" : "warning", `Protected by the repository policy${finding.rule ? ` (${reasonToken(finding.rule)})` : ""}.`, finding.path);
+  }
+  for (const part of result.held) {
+    for (const file of part.files) add("jev_held_part", part.action === "escalate" ? "error" : "warning", `Jev held this part of the change for review (${part.action}).`, file);
+  }
+  for (const file of result.withheld) add("sensitive_file_changed", "warning", "A sensitive file changed; its content was not read.", file);
+  if (result.action !== "auto") {
+    add("jev_result", result.action === "escalate" ? "error" : "warning", `Jev ${result.action}: ${result.reasons.map(reasonToken).join(", ")}`);
+  }
+  const ruleIds = [...new Set(results.map(item => item.ruleId))];
+  return `${JSON.stringify({
+    $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+    version: "2.1.0",
+    runs: [{
+      tool: { driver: { name: "jev-mcp", version: VERSION, informationUri: "https://github.com/burnigtm/jev-mcp", rules: ruleIds.map(id => ({ id, shortDescription: { text: id.replace(/_/g, " ") } })) } },
+      results,
+    }],
+  })}\n`;
 }
