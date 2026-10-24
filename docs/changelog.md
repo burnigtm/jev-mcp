@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Repository policy and profiles
+
+- **`.jev-policy.json`**: deterministic rules evaluated by `jev_scope` before any Jev request. `protected_paths` (globs with a `review` or `deny` floor), `commands.deny` / `commands.review` (token-prefix patterns with `*` and flags, normalized the way a person reads a command: `sudo git -C repo push -f` matches `git push --force`; no user regular expressions), and `commands.allow_read_only`. `deny` and `allow` decide locally with no model call (`model: "local-policy"`, zero tokens); `review` still asks Jev and keeps the stricter answer. `allow_read_only` is the only loosening a policy can cause: it applies only to a command the classifier fully confirmed as read-only, with a declared `read_only` effect, no injection phrase, and an explicit allow pattern for every segment. A broken policy file is a `CONFIG_ERROR`, never ignored. Output adds `policy: { decision, rule }` and the reasons `policy_denied`, `policy_review`, `policy_allowed`; `scope` and `risk` are `null` when the policy decided. A `test_command` is deliberately not supported (a checked-in command would be a code-execution path). See `examples/jev-policy.json`.
+- **Glob matching is linear-time**, a segment dynamic program rather than a regular expression, so no pattern can cause catastrophic backtracking.
+- **Profiles** (`JEV_MCP_PROFILE=balanced|strict`): `balanced` is exactly the previous behavior; `strict` raises `auto_accept` to 0.9, `review_at` to 0.6, lowers the screen `block_at` to 0.6 and sets the triage bar to 0.9. Precedence: profile, then explicit variables, then per-call arguments, which can only tighten. `jev-mcp doctor` prints the profile, the policy file and the bars, and fails if the policy file is invalid.
+- **`JEV_MCP_TRIAGE_RECOVERABLE_AT`**: a dedicated bar for triage recoverability (default: the auto-accept bar, unchanged). A caller raising `auto_accept` also raises it.
+- Measured live (`jev-1.14.0`): a read-only allowlist cut tokens 18% on the same scope cases, answered 9 commands locally and still blocked 30/30 lying commands; `strict` blocked no more risky cases than `balanced` (both 100%) but cut safe auto-approvals from 80% to 59%; a triage bar of 0.7 took safe first-failure triage from 7/22 to 22/22 `auto` with all 83 risky triage cases still non-`auto`. **No default was changed.**
+- Internals: `commandSegments` and `canonicalFlags` expose the classifier's command normalization; the wrapper unwrapping is now a single shared function.
+- Benchmark runner options: `--profile`, `--policy-file`, `--triage-recoverable-at`.
+
 ### Decision ledger and `jev_feedback`
 
 - **Every judgment result now carries a `decision_id`** (additive; a fresh one per response, even when the provider answer came from the cache). New 13th tool **`jev_feedback`** (`readOnlyHint: false`) and CLI twin `jev-mcp feedback <decision_id> <correct|false_alarm|missed> [--note TEXT]` label an earlier decision.

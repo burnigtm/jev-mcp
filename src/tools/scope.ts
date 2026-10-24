@@ -7,12 +7,14 @@ import {
   requireCompleteContext,
   scopeAction,
   tightenJudgmentThresholds,
+  worstAction,
   type ActionEffect,
   type PolicyAction,
 } from "../policy.js";
 import { asNoul, asScore } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 import { effectiveEffect } from "../effects.js";
+import { evaluatePolicy, loadRepoPolicy, NO_POLICY_VERDICT } from "../repo-policy.js";
 import { containsInjectionInstruction, judgeTextClipped, sanitizeJudgeText } from "../untrusted.js";
 import { scopeReasonSchema, scopeOutputSchema } from "./output-schemas.js";
 
@@ -61,6 +63,29 @@ export async function runScope(input: ScopeInput, context?: ToolContext) {
     || (input.action.target !== undefined && containsInjectionInstruction(input.action.target))
     || (input.action.command !== undefined && containsInjectionInstruction(input.action.command));
 
+  // Deterministic repository policy first: a decisive result costs no tokens. `deny` and `allow` are final;
+  // `review` still asks Jev and keeps the stricter answer, so no judgment is lost.
+  const policy = loadRepoPolicy();
+  const verdict = policy
+    ? evaluatePolicy(policy, { command: input.action.command, target: input.action.target, allowEligible: effects.effective === "read_only" && effects.confirmedReadOnly && !suspicious })
+    : NO_POLICY_VERDICT;
+  const effectReport = { declared: effects.declared, inferred: effects.inferred, effective: effects.effective, matched: effects.matched };
+  if (verdict.decision === "deny" || verdict.decision === "allow") {
+    return scopeOutputSchema.parse({
+      model: "local-policy",
+      usage: { input_tokens: 0, output_tokens: 0 },
+      truncated: false,
+      coverage: { complete: true, original_chars: 0, evaluated_chars: 0, estimated_tokens: { state: 0, questions: 0, longest_question: 0 }, estimator: "chars/4" },
+      action: verdict.decision === "deny" ? "escalate" : "auto",
+      effect: effectReport,
+      policy: verdict,
+      scope: null,
+      risk: null,
+      reason_codes: [verdict.decision === "deny" ? "policy_denied" : "policy_allowed"],
+      thresholds: { auto_accept: autoAccept, review_at: reviewAt },
+    });
+  }
+
   const result = await systemOne({
     state: {
       task: input.task,
@@ -77,7 +102,7 @@ export async function runScope(input: ScopeInput, context?: ToolContext) {
   const risk = asScore(result.answers.risk);
   const incomplete = result.truncated || !result.coverage.complete || clipped;
 
-  let policy: PolicyAction = scopeAction({
+  let judged: PolicyAction = scopeAction({
     effect,
     inScope,
     effectMatch,
@@ -88,10 +113,12 @@ export async function runScope(input: ScopeInput, context?: ToolContext) {
     autoAccept,
     reviewAt,
   });
-  if (policy === "auto" && suspicious) policy = "review";
-  const actionPolicy = requireCompleteContext(policy, incomplete);
+  if (judged === "auto" && suspicious) judged = "review";
+  const modelAction = requireCompleteContext(judged, incomplete);
+  const actionPolicy = verdict.decision === "review" ? worstAction([modelAction, "review"]) : modelAction;
 
   const reasons: ScopeReason[] = [];
+  if (verdict.decision === "review") reasons.push("policy_review");
   if (inScope < reviewAt) reasons.push("out_of_scope");
   else if (inScope < autoAccept) reasons.push("scope_uncertain");
   if (effectMatch < reviewAt) reasons.push("effect_mismatch");
@@ -119,7 +146,8 @@ export async function runScope(input: ScopeInput, context?: ToolContext) {
     truncated: result.truncated || clipped,
     coverage: incomplete ? { ...result.coverage, complete: false } : result.coverage,
     action: actionPolicy,
-    effect: { declared: effects.declared, inferred: effects.inferred, effective: effects.effective, matched: effects.matched },
+    effect: effectReport,
+    policy: verdict,
     scope: { in_scope: inScope, effect_match: effectMatch, needs_confirmation: needsConfirmation },
     risk: {
       score: risk.score,

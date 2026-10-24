@@ -36,6 +36,8 @@ export type CommandClassification = {
 export type EffectiveEffect = {
   declared: Effect;
   inferred: Effect | null;
+  /** The command was fully understood and is read-only (see CommandClassification). */
+  confirmedReadOnly: boolean;
   effective: Effect;
   matched: string[];
   upgraded: boolean;
@@ -669,6 +671,39 @@ function skipFlagsWithValues(args: string[], valued: Set<string>): number {
   return i;
 }
 
+/**
+ * What a wrapper (`sudo`, `env`, `xargs`, `timeout`, …) actually runs: the arguments after its own options.
+ * `bulk` is set for `xargs`, whose inner command receives an unknown number of arguments from stdin;
+ * `bareShell` marks `sudo -i` style invocations that start an interactive shell instead of a command.
+ */
+function wrapperRest(program: string, args: string[]): { rest: string[]; bulk: boolean; bareShell: boolean } {
+  let rest: string[];
+  let bulk = false;
+  if (program === "env") {
+    let i = 0;
+    while (i < args.length && (args[i]!.startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(args[i]!))) i += args[i] === "-u" || args[i] === "-C" ? 2 : 1;
+    rest = args.slice(i);
+  } else if (program === "sudo" || program === "doas") {
+    rest = args.slice(skipFlagsWithValues(args, new Set(["-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T", "-R"])));
+    if (!rest.length) return { rest, bulk, bareShell: true };
+  } else if (program === "timeout") {
+    const index = skipFlagsWithValues(args, new Set(["-s", "-k", "--signal", "--kill-after"]));
+    rest = args.slice(index + 1);
+  } else if (program === "xargs") {
+    rest = args.slice(skipFlagsWithValues(args, new Set(["-I", "-n", "-P", "-d", "-E", "-L", "-s", "-a", "-i", "--max-args", "--max-procs", "--delimiter"])));
+    if (!rest.length) rest = ["echo"];
+    bulk = true;
+  } else if (program === "nice" || program === "ionice" || program === "chrt" || program === "stdbuf" || program === "watch") {
+    rest = args.slice(skipFlagsWithValues(args, new Set(["-n", "-c", "-p", "-i", "-o", "-e", "-d", "--interval"])));
+  } else if (program === "start" || program === "call") {
+    rest = args.filter((arg) => !/^\/(b|wait|min|max|d.*|i)$/i.test(arg));
+    if (rest[0]?.startsWith('"') || rest[0] === "") rest = rest.slice(1);
+  } else {
+    rest = args.slice(skipFlagsWithValues(args, new Set()));
+  }
+  return { rest, bulk, bareShell: false };
+}
+
 /** Classify an embedded command string, or give up (as `unknown`) once nesting gets too deep. */
 function nested(src: string, depth: number, label: string): CommandClassification {
   return depth >= MAX_DEPTH ? { effect: "unknown", confirmed_read_only: false, matched: [label] } : classifyString(src, depth + 1);
@@ -717,32 +752,13 @@ function classifySegmentCore(segment: Segment, mode: Mode, depth: number, bulk =
   }
 
   if (WRAPPERS.has(program)) {
-    let rest: string[];
-    if (program === "env") {
-      let i = 0;
-      while (i < args.length && (args[i]!.startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(args[i]!))) i += args[i] === "-u" || args[i] === "-C" ? 2 : 1;
-      rest = args.slice(i);
-    } else if (program === "sudo" || program === "doas") {
-      rest = args.slice(skipFlagsWithValues(args, new Set(["-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T", "-R"])));
-      if (!rest.length) {
-        combine(merged, result("unknown", `${program} shell`));
-        return merged;
-      }
-    } else if (program === "timeout") {
-      const index = skipFlagsWithValues(args, new Set(["-s", "-k", "--signal", "--kill-after"]));
-      rest = args.slice(index + 1);
-    } else if (program === "xargs") {
-      rest = args.slice(skipFlagsWithValues(args, new Set(["-I", "-n", "-P", "-d", "-E", "-L", "-s", "-a", "-i", "--max-args", "--max-procs", "--delimiter"])));
-      if (!rest.length) rest = ["echo"];
-      bulk = true;
-    } else if (program === "nice" || program === "ionice" || program === "chrt" || program === "stdbuf" || program === "watch") {
-      rest = args.slice(skipFlagsWithValues(args, new Set(["-n", "-c", "-p", "-i", "-o", "-e", "-d", "--interval"])));
-    } else if (program === "start" || program === "call") {
-      rest = args.filter((arg) => !/^\/(b|wait|min|max|d.*|i)$/i.test(arg));
-      if (rest[0]?.startsWith('"') || rest[0] === "") rest = rest.slice(1);
-    } else {
-      rest = args.slice(skipFlagsWithValues(args, new Set()));
+    const unwrapped = wrapperRest(program, args);
+    if (unwrapped.bareShell) {
+      combine(merged, result("unknown", `${program} shell`));
+      return merged;
     }
+    const rest = unwrapped.rest;
+    if (unwrapped.bulk) bulk = true;
     if (!rest.length) {
       combine(merged, result("read_only", program, true));
       return merged;
@@ -895,5 +911,90 @@ export function classifyCommand(command: string): CommandClassification {
 export function effectiveEffect(declared: Effect, command?: string): EffectiveEffect {
   const inferred = command ? classifyCommand(command) : null;
   const effective = strictestEffect(declared, inferred?.effect);
-  return { declared, inferred: inferred?.effect ?? null, effective, matched: inferred?.matched ?? [], upgraded: effective !== declared };
+  return { declared, inferred: inferred?.effect ?? null, confirmedReadOnly: inferred?.confirmed_read_only ?? false, effective, matched: inferred?.matched ?? [], upgraded: effective !== declared };
+}
+
+// --- Normalized command segments (for policy matching) ---------------------------------------------------------
+
+export type CommandSegment = {
+  /** The program followed by its positional arguments, lower-cased, after wrappers and git global options are removed. */
+  tokens: string[];
+  /** Canonical option names: lower-cased, `=value` removed, bundled short options split, `-f`→`--force`, `-r`/`-R`→`--recursive`. */
+  flags: string[];
+};
+
+const FLAG_ALIASES: Record<string, string> = { "-f": "--force", "-r": "--recursive", "-R": "--recursive" };
+
+/** Canonical form of one option token (a bundle such as `-rf` yields several). Shared with policy patterns. */
+export function canonicalFlags(arg: string): string[] {
+  // A bundle such as `-rf` is short and single-case; `-Recurse` and `-recurse` are PowerShell parameters, not bundles.
+  if (/^-(?:[a-z]{2,5}|[A-Z]{2,5})$/.test(arg)) return [...arg.slice(1)].map((letter) => FLAG_ALIASES[`-${letter}`] ?? `-${letter.toLowerCase()}`);
+  const head = arg.split("=")[0]!;
+  return [FLAG_ALIASES[head] ?? head.toLowerCase()];
+}
+
+function gitWithoutGlobals(args: string[]): string[] {
+  let i = 0;
+  while (i < args.length) {
+    const a = args[i]!;
+    if (a === "-C" || a === "-c" || a === "--git-dir" || a === "--work-tree" || a === "--namespace" || a === "--exec-path") i += 2;
+    else if (a.startsWith("-")) i += 1;
+    else break;
+  }
+  return args.slice(i);
+}
+
+function segmentsOnce(src: string, mode: Mode, depth: number, out: CommandSegment[]): void {
+  const lexed = lex(src, mode);
+  for (const segment of lexed.segments) {
+    for (const inner of segment.subst) if (depth < MAX_DEPTH) segmentsOnce(inner, mode, depth + 1, out);
+    let words = [...segment.words];
+    while (words.length && (LEADING_KEYWORDS.has(words[0]!.text) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0]!.text))) words.shift();
+    for (let hops = 0; words.length && hops < MAX_DEPTH + 2; hops += 1) {
+      const head = words[0]!;
+      const program = head.expanded ? "\u0001" : head.text.replace(/\\/g, "/").split("/").pop()!.toLowerCase().replace(/\.(exe|com|cmd|bat)$/, "");
+      const rest = words.slice(1);
+      if (WRAPPERS.has(program) && !head.expanded) {
+        const unwrapped = wrapperRest(program, rest.map((word) => word.text));
+        if (unwrapped.bareShell || !unwrapped.rest.length) break;
+        words = rest.slice(rest.length - unwrapped.rest.length);
+        continue;
+      }
+      if ((SHELLS.has(program) || program === "cmd" || program === "pwsh" || program === "powershell") && !head.expanded) {
+        const index = rest.findIndex((word) => /^(-[a-z]*c|-command|\/c|\/k|-commandwithargs|-cwa)$/i.test(word.text));
+        if (index >= 0 && depth < MAX_DEPTH) segmentsOnce(rest.slice(index + 1).map((word) => word.text).join(" "), mode, depth + 1, out);
+      }
+      const args = program === "git" ? gitWithoutGlobals(rest.map((word) => word.text)) : rest.map((word) => word.text);
+      const positional: string[] = [program];
+      const flags: string[] = [];
+      let past = false;
+      args.forEach((arg, index) => {
+        const word = program === "git" ? undefined : rest[index];
+        if (!past && arg === "--") past = true;
+        else if (!past && arg.startsWith("-") && arg !== "-") flags.push(...canonicalFlags(arg));
+        else positional.push(word?.expanded ? "\u0001" : arg.toLowerCase());
+      });
+      out.push({ tokens: positional, flags });
+      break;
+    }
+  }
+}
+
+/**
+ * The commands inside a shell string, normalized so a policy can match them the way a person reads them:
+ * `sudo git -C repo push -f origin main` becomes tokens `git push origin main` with flag `--force`.
+ * Both parse modes are merged and nested shells and substitutions are included; duplicates are removed.
+ */
+export function commandSegments(command: string): CommandSegment[] {
+  if (!command || command.length > MAX_COMMAND_CHARS) return [];
+  const out: CommandSegment[] = [];
+  segmentsOnce(command, "posix", 0, out);
+  segmentsOnce(command, "win", 0, out);
+  const seen = new Set<string>();
+  return out.filter((segment) => {
+    const key = JSON.stringify([segment.tokens, [...segment.flags].sort()]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

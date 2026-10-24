@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { getConfig } from "./config.js";
+import { findPolicyFile, loadRepoPolicy } from "./repo-policy.js";
 import { errorDetails, JevConfigError, JevValidationError } from "./errors.js";
 import { listModels, systemOne, withToolContext } from "./typesafe.js";
 import { type QuestionInput } from "./questions.js";
@@ -14,13 +15,16 @@ export async function runDoctor(options: { json?: boolean } = {}): Promise<void>
     const config = getConfig();
     Object.assign(report, {
       model: config.model,
+      profile: config.profile,
+      policy_file: findPolicyFile(process.cwd()),
       mock: config.mock,
       api_key_set: Boolean(config.apiKey),
       base_url: safeBaseUrl(config.baseURL),
       timeout_ms: config.timeoutMs,
-      thresholds: { auto_accept: config.autoAccept, review_at: config.reviewAt, block_at: config.blockAt },
+      thresholds: { auto_accept: config.autoAccept, review_at: config.reviewAt, block_at: config.blockAt, triage_recoverable_at: config.triageRecoverableAt ?? config.autoAccept },
     });
     validatePolicyThresholds(config.autoAccept, config.reviewAt);
+    loadRepoPolicy(process.cwd()); // a broken policy file must fail the readiness check, not be discovered mid-session
     if (!config.mock && !config.apiKey) {
       throw new JevConfigError("Not ready: set TYPESAFE_API_KEY or JEV_MCP_MOCK=1.");
     }

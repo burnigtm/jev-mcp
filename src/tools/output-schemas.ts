@@ -161,6 +161,9 @@ export const scopeReasonSchema = z.enum([
   "destructive_effect",
   "unknown_effect",
   "effect_upgraded",
+  "policy_denied",
+  "policy_review",
+  "policy_allowed",
   "risk_review",
   "risk_uncertain",
   "injection_suspected",
@@ -185,15 +188,23 @@ export const effectUpgradesSchema = z.array(z.object({
   matched: z.array(z.string()),
 }));
 
+/** What the repository policy file decided, before any Jev request. `none` when there is no policy or no rule applied. */
+export const policyVerdictSchema = z.object({
+  decision: z.enum(["none", "allow", "review", "deny"]),
+  rule: z.string().nullable(),
+});
+
 export const scopeOutputSchema = z.object({
   ...baseToolOutputShape,
   effect: effectReportSchema,
+  policy: policyVerdictSchema,
+  /** Null when the repository policy decided without a Jev request (`model` is then `local-policy`). */
   scope: z.object({
     in_scope: probabilitySchema,
     effect_match: probabilitySchema,
     needs_confirmation: probabilitySchema,
-  }),
-  risk: scoreOutputSchema,
+  }).nullable(),
+  risk: scoreOutputSchema.nullable(),
   reason_codes: z.array(scopeReasonSchema).min(1),
   thresholds: z.object({ auto_accept: probabilitySchema, review_at: probabilitySchema }),
 });

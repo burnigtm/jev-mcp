@@ -41,6 +41,8 @@ type TriageReason = z.infer<typeof triageReasonSchema>;
 export async function runTriage(input: TriageInput, context?: ToolContext) {
   const config = getConfig();
   const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
+  // A caller raising auto_accept also raises this bar (tighten-only); a profile or env value can set it lower than auto_accept.
+  const recoverableAt = Math.min(1, Math.max(config.triageRecoverableAt ?? autoAccept, input.auto_accept ?? 0, reviewAt));
   const originalCauses: readonly FailureCause[] = input.causes ?? DEFAULT_FAILURE_CAUSES;
   const seen = new Set<string>();
   for (const cause of originalCauses) {
@@ -112,6 +114,7 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
     failedAttempts,
     autoAccept,
     reviewAt,
+    recoverableAt,
   });
   // "first_attempt" is only coherent when the host supplied no attempts or history.
   const progressInconsistent = progress.choice === "first_attempt" && (attempts.length > 0 || history.length > 0);
@@ -124,7 +127,7 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
   if (progress.choice === "repeating") reasons.push("progress_repeating");
   if (progress.choice === "regressing") reasons.push("progress_regressing");
   if (recoverable < reviewAt) reasons.push("not_recoverable");
-  else if (recoverable < autoAccept) reasons.push("recoverability_uncertain");
+  else if (recoverable < recoverableAt) reasons.push("recoverability_uncertain");
   if (strategy.confidence < reviewAt) reasons.push("strategy_uncertain");
   if (strategy.choice === "ask_user") reasons.push("human_decision_required");
   if (strategy.choice === "escalate") reasons.push("strategy_escalate");
