@@ -164,3 +164,85 @@ export async function runFeedbackCommand(argv: string[]): Promise<void> {
   // A label that went nowhere is a failure the caller should see; a duplicate is not.
   if (!result.recorded && result.reason !== "duplicate") process.exitCode = 1;
 }
+
+// --- Guard: hooks and the generic check --------------------------------------------------------------
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+function exitAfterFlush(stdout: string, code: number): void {
+  // Provider sockets must not keep a hook alive past its answer.
+  process.stdout.write(stdout, () => process.exit(code));
+}
+
+/** `jev-mcp hook pre-tool-use|stop|install`. */
+export async function runHookCommand(argv: string[]): Promise<void> {
+  const [sub, ...rest] = argv;
+  if (sub === "install") return runHookInstall(rest);
+  if (sub !== "pre-tool-use" && sub !== "stop") throw new Error("Usage: jev-mcp hook <pre-tool-use|stop|install>");
+  if (rest.includes("--shadow") && !process.env.JEV_MCP_HOOKS) process.env.JEV_MCP_HOOKS = "shadow";
+  const { runHook } = await import("./hook.js");
+  const run = await runHook(sub, await readStdin());
+  if (run.stderr) process.stderr.write(run.stderr);
+  exitAfterFlush(run.stdout, run.exitCode);
+}
+
+async function runHookInstall(argv: string[]): Promise<void> {
+  const { parseArgs } = await import("node:util");
+  const { values } = parseArgs({ args: argv, options: {
+    stop: { type: "boolean", default: false },
+    shadow: { type: "boolean", default: false },
+    "block-on-failure": { type: "boolean", default: false },
+    write: { type: "string" },
+    entry: { type: "string" },
+  } });
+  const { buildSettings, mergeSettings, readSettingsFile } = await import("./hook-install.js");
+  const settings = buildSettings({ stop: values.stop, shadow: values.shadow, blockOnFailure: values["block-on-failure"], entry: values.entry });
+  if (!values.write) {
+    process.stdout.write(`${JSON.stringify(settings, null, 2)}\n`);
+    return;
+  }
+  const { writeFileSync } = await import("node:fs");
+  const merged = mergeSettings(readSettingsFile(values.write), settings);
+  writeFileSync(values.write, `${JSON.stringify(merged, null, 2)}
+`);
+  console.error(`Updated ${values.write}. Other settings and hooks were left as they were.`);
+}
+
+const CHECK_EXIT = { auto: 0, review: 10, escalate: 20 } as const;
+
+/**
+ * `jev-mcp check`: JSON on stdin, decision JSON on stdout. Exit 0 auto, 10 review, 20 escalate, 2 error.
+ *   { "kind": "action", "task", "tool_name", "tool_input", "cwd" }
+ *   { "kind": "changes", "request", "claims", "evidence", "tests", "base", "cwd" }
+ */
+export async function runCheckCommand(): Promise<void> {
+  try {
+    const input = JSON.parse((await readStdin()).replace(/^\uFEFF/, "")) as Record<string, unknown>;
+    const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
+    const strings = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0).slice(0, 20) : undefined;
+    const { checkChanges, checkToolUse } = await import("./check.js");
+    const deadline = Date.now() + 80_000;
+    let result: { action: keyof typeof CHECK_EXIT };
+    if (input.kind === "action") result = await checkToolUse({ ...input, cwd }, { deadline });
+    else if (input.kind === "changes" && typeof input.request === "string") {
+      result = await checkChanges({
+        cwd,
+        request: input.request,
+        claims: strings(input.claims),
+        evidence: typeof input.evidence === "string" ? input.evidence : undefined,
+        tests: typeof input.tests === "string" ? input.tests : undefined,
+        base: typeof input.base === "string" ? input.base : undefined,
+        deadline,
+      });
+    } else throw new JevValidationError('check input needs "kind": "action" or "changes" (with a "request").');
+    const { gate: _gate, ...summary } = result as Record<string, unknown>;
+    exitAfterFlush(`${JSON.stringify(summary)}\n`, CHECK_EXIT[result.action]);
+  } catch (err) {
+    process.stderr.write(`${JSON.stringify({ error: errorDetails(err) })}\n`);
+    process.exit(2);
+  }
+}
