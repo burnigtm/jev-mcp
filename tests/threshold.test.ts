@@ -27,46 +27,51 @@ afterEach(() => {
 });
 after(restoreEnv);
 
-// --- The fast profile ---------------------------------------------------------------------------------------------
+// --- The 0.70 default and the conservative profile -----------------------------------------------------------------
 
-test("the fast profile lowers only the auto-accept bar", () => {
-  assert.equal(parseProfile("fast"), "fast");
-  assert.equal(parseProfile(" FAST "), "fast");
-  assert.deepEqual(PROFILES.fast, { ...PROFILES.balanced, autoAccept: 0.7 });
-  assert.ok(PROFILES.fast.autoAccept < PROFILES.balanced.autoAccept && PROFILES.fast.autoAccept > PROFILES.balanced.reviewAt);
-  assert.ok(PROFILES.fast.autoAccept < PROFILES.strict.autoAccept);
-  process.env.JEV_MCP_PROFILE = "fast";
-  const config = getConfig();
-  assert.deepEqual([config.profile, config.autoAccept, config.reviewAt, config.blockAt, config.triageRecoverableAt], ["fast", 0.7, 0.5, 0.75, undefined]);
+test("balanced is the default at 0.70 and conservative restores 0.80; nothing else differs", () => {
+  assert.equal(parseProfile(undefined), "balanced");
+  assert.equal(parseProfile(" CONSERVATIVE "), "conservative");
+  assert.deepEqual(PROFILES.conservative, { ...PROFILES.balanced, autoAccept: 0.8 });
+  assert.ok(PROFILES.balanced.autoAccept > PROFILES.balanced.reviewAt);
+  assert.deepEqual([getConfig().profile, getConfig().autoAccept], ["balanced", 0.7]);
+  process.env.JEV_MCP_PROFILE = "conservative";
+  assert.deepEqual([getConfig().profile, getConfig().autoAccept, getConfig().reviewAt, getConfig().blockAt], ["conservative", 0.8, 0.5, 0.75]);
   process.env.JEV_MCP_AUTO_ACCEPT = "0.75";
   assert.equal(getConfig().autoAccept, 0.75, "an explicit variable still overrides the profile");
 });
 
-test("an unknown profile names all three", () => {
-  assert.throws(() => parseProfile("reckless"), /balanced.*fast.*strict/);
+test("an unknown profile names all three; the unreleased name `fast` is not accepted", () => {
+  assert.throws(() => parseProfile("reckless"), /balanced.*conservative.*strict/);
+  assert.throws(() => parseProfile("fast"), /balanced.*conservative.*strict/);
+  process.env.JEV_MCP_PROFILE = "reckless";
+  assert.throws(() => getConfig(), (error: unknown) => errorDetails(error).code === "CONFIG_ERROR");
 });
 
-test("the fast profile approves what the balanced one holds, and per-call arguments still tighten it", async () => {
+test("the default approves what the conservative bar holds, and per-call arguments still tighten it", async () => {
   // A triage answer whose confidence sits between the two bars.
   responds(() => ({ cause: "cause_0", "cause.confidence": 0.75, progress: "first_attempt", "progress.confidence": 0.75, recoverable: 0.75, strategy: "gather_context", "strategy.confidence": 0.75 }));
   const input = { task: "Fix the failing test", failure: "AssertionError: expected 2 to equal 3" };
-  assert.notEqual((await runTriage(input)).action, "auto", "balanced holds 0.75");
+  assert.equal((await runTriage(input)).action, "auto", "0.75 clears the default 0.70");
   clearCache();
-  process.env.JEV_MCP_PROFILE = "fast";
-  assert.equal((await runTriage(input)).action, "auto", "fast approves it");
+  process.env.JEV_MCP_PROFILE = "conservative";
+  assert.notEqual((await runTriage(input)).action, "auto", "and not the earlier 0.80");
   clearCache();
+  delete process.env.JEV_MCP_PROFILE;
   assert.notEqual((await runTriage({ ...input, auto_accept: 0.8 })).action, "auto", "a caller can still raise the bar");
 });
 
-test("lowering the bar never delays an escalation of a judged concern", async () => {
-  responds(() => ({ in_scope: 0.95, effect_match: 0.95, needs_confirmation: 0.85, risk: 0 }));
-  const input = { task: "Fix the pager", action: { name: "run_command", description: "Deploy", effect: "read_only" as const, command: "git status" } };
+test("lowering the bar never delays an escalation of a judged concern: it escalates at the bar, capped at 0.8", async () => {
+  // needs_confirmation 0.75 sits between the two bars.
+  responds(() => ({ in_scope: 0.95, effect_match: 0.95, needs_confirmation: 0.75, risk: 0 }));
+  const input = { task: "Fix the pager", action: { name: "run_command", description: "Run the tests", effect: "local_write" as const, command: "npm test" } };
+  const rank = { auto: 0, review: 1, escalate: 2 } as const;
   const balanced = await runScope(input);
   clearCache();
-  process.env.JEV_MCP_PROFILE = "fast";
-  const fast = await runScope(input);
-  const rank = { auto: 0, review: 1, escalate: 2 } as const;
-  assert.ok(rank[fast.action] >= rank[balanced.action], `${fast.action} must not be looser than ${balanced.action}`);
+  process.env.JEV_MCP_PROFILE = "conservative";
+  const conservative = await runScope(input);
+  assert.equal(balanced.action, "escalate");
+  assert.ok(rank[balanced.action] >= rank[conservative.action], `${balanced.action} must not be looser than ${conservative.action}`);
 });
 
 // --- The privilege boundary -------------------------------------------------------------------------------------
@@ -105,12 +110,7 @@ test("triage: a permission failure on a system path is held whatever the confide
   const free = await runTriage({ task: "Install the tool", failure: "Error: EACCES: permission denied, open './build/out.js'" });
   assert.equal(free.action, "auto");
   assert.ok(!free.reason_codes.includes("privilege_boundary"));
-  process.env.JEV_MCP_PROFILE = "fast";
+  process.env.JEV_MCP_PROFILE = "conservative";
   clearCache();
-  assert.equal((await runTriage({ task: "Install the tool", failure: "Error: EACCES: permission denied, open '/etc/hosts'" })).action, "review", "the floor holds under the fast profile too");
-});
-
-test("the profile error is a configuration error", () => {
-  process.env.JEV_MCP_PROFILE = "reckless";
-  assert.throws(() => getConfig(), (error: unknown) => errorDetails(error).code === "CONFIG_ERROR");
+  assert.equal((await runTriage({ task: "Install the tool", failure: "Error: EACCES: permission denied, open '/etc/hosts'" })).action, "review", "the floor holds under every profile");
 });

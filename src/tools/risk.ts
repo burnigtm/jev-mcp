@@ -124,6 +124,7 @@ export function projectRisk(
     severityProbabilities: severity.probabilities,
     autoAccept,
     reviewAt,
+    escalationFloor: getConfig().autoAccept,
   });
   if (policy === "auto" && suspicious) policy = "review";
   const action = requireCompleteContext(policy, incomplete);

@@ -36,3 +36,30 @@ test("every registered tool has a section in the reference and in the docs index
     assert.match(index, new RegExp(`^## \`${tool}\``, "m"), `${tool} entry in docs/tools.md`);
   }
 });
+
+// --- The documented bars match the configured ones ---------------------------------------------------------------------
+
+test("the documented default bar and profile table match the code", async () => {
+  const { PROFILES } = await import("../src/profiles.ts");
+  const { DEFAULT_AUTO_ACCEPT, CLAIM_AUTO_ACCEPT, REVIEW_AUTO_ACCEPT } = await import("../src/policy.ts");
+  const configuration = readFileSync(fileURLToPath(new URL("../docs/configuration.md", import.meta.url)), "utf8");
+  const envExample = readFileSync(fileURLToPath(new URL("../.env.example", import.meta.url)), "utf8");
+  const bar = PROFILES.balanced.autoAccept;
+  assert.equal(DEFAULT_AUTO_ACCEPT, bar, "the fallback default is the balanced bar");
+  assert.ok(configuration.includes("| `JEV_MCP_AUTO_ACCEPT` | `" + bar + "` |"), "the environment table states the default");
+  assert.ok(envExample.split(String.fromCharCode(10)).some(line => line.trim() === "# JEV_MCP_AUTO_ACCEPT=" + bar));
+  assert.ok(reference.includes("May only raise the env floor (default `" + bar + "`"), "the tool reference states the default");
+  // The profile table: one row per bar, balanced | conservative | strict.
+  const cells = (label: string) => {
+    const line = configuration.split(String.fromCharCode(10)).find(entry => entry.startsWith(label));
+    assert.ok(line, label);
+    return line.split("|").slice(2, 5).map(cell => Number(cell.trim()));
+  };
+  assert.deepEqual(cells("| `auto_accept` |"), [PROFILES.balanced.autoAccept, PROFILES.conservative.autoAccept, PROFILES.strict.autoAccept]);
+  assert.deepEqual(cells("| `review_at` |"), [PROFILES.balanced.reviewAt, PROFILES.conservative.reviewAt, PROFILES.strict.reviewAt]);
+  assert.deepEqual(cells("| `block_at` (screen) |"), [PROFILES.balanced.blockAt, PROFILES.conservative.blockAt, PROFILES.strict.blockAt]);
+  for (const name of ["balanced", "conservative", "strict"]) assert.ok(configuration.includes("`" + name + "`"), name);
+  assert.equal(CLAIM_AUTO_ACCEPT, 0.8);
+  assert.equal(REVIEW_AUTO_ACCEPT, 0.8);
+  assert.ok(configuration.includes("max(auto_accept, 0.8)"), "the claim and review bars are documented");
+});

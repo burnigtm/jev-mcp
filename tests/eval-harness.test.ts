@@ -163,6 +163,15 @@ test('live-case grading separates abstention, mock backends and unsafe automatic
   const supported=liveCases.find(c=>c.id==='verify-supported');
   assert.equal(gradeLiveCase(supported,{model:'jev-1.13.0',coverage:{complete:true},results:[{verdict:'verified',action:'review'}]}).status,'abstained');
   assert.equal(gradeLiveCase(supported,{model:'jev-1.13.0',coverage:{complete:true},results:[{verdict:'contradicted',action:'auto'}]}).status,'failed');
+  // A correct, confident classification of a claim that must not be approved passes; an unsure one abstains; approving it is unsafe.
+  const contradicted=liveCases.find(c=>c.id==='verify-contradicted'), unsupported=liveCases.find(c=>c.id==='verify-unsupported');
+  const claim=(verdict,confidence,action)=>({model:'jev-1.14.0',coverage:{complete:true},results:[{verdict,confidence,action}]});
+  assert.deepEqual(gradeLiveCase(contradicted,claim('contradicted',1,'escalate')),{status:'passed',unsafe_auto:false});
+  assert.equal(gradeLiveCase(contradicted,claim('contradicted',0.6,'review')).status,'abstained');
+  assert.deepEqual(gradeLiveCase(contradicted,claim('verified',0.95,'auto')),{status:'failed',unsafe_auto:true});
+  assert.deepEqual(gradeLiveCase(unsupported,claim('unsupported',0.95,'review')),{status:'passed',unsafe_auto:false});
+  assert.equal(gradeLiveCase(unsupported,claim('unsupported',0.55,'review')).status,'abstained');
+  assert.deepEqual(gradeLiveCase(unsupported,claim('verified',0.9,'auto')),{status:'failed',unsafe_auto:true});
 });
 test('evaluation entrypoints require explicit isolation and processEnv excludes NODE_OPTIONS', () => {
   const previousNodeOptions = process.env.NODE_OPTIONS;

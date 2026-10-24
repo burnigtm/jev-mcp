@@ -3,7 +3,7 @@ import { getConfig } from "../config.js";
 import { JevBudgetError } from "../errors.js";
 import { MAX_CLAIMS } from "../limits.js";
 import { verifyQuestions } from "../packs/verify.js";
-import { actionFromConfidence, confidenceSupportsAuto, escalationCutoff, requireCompleteContext, tightenJudgmentThresholds, validatePolicyThresholds, worstAction } from "../policy.js";
+import { actionFromConfidence, claimAutoAccept, confidenceSupportsAuto, escalationCutoff, requireCompleteContext, tightenJudgmentThresholds, validatePolicyThresholds, worstAction } from "../policy.js";
 import { asChoice } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import type { PolicyAction } from "../policy.js";
@@ -63,7 +63,7 @@ export async function runVerify(input: VerifyInput, context?: ToolContext) {
     all_claims_verified: allClaimsVerified,
     summary,
     results,
-    thresholds: { auto_accept: autoAccept, review_at: reviewAt },
+    thresholds: { auto_accept: claimAutoAccept(autoAccept), review_at: reviewAt },
   };
 }
 
@@ -78,12 +78,15 @@ export function claimAction(
   item: { verdict: ClaimVerdict; confidence: number; probabilities: Record<string, number> },
   autoAccept: number,
   reviewAt: number,
+  escalationFloor: number = getConfig().autoAccept,
 ): PolicyAction {
-  let action = actionFromConfidence(item.confidence, autoAccept, reviewAt);
-  if (action === "auto" && !confidenceSupportsAuto(item.confidence, item.probabilities, autoAccept)) {
+  // Approving a claim needs the claim bar (never below 0.80); a confident contradiction still escalates at the configured bar.
+  const claimBar = claimAutoAccept(autoAccept);
+  let action = actionFromConfidence(item.confidence, claimBar, reviewAt);
+  if (action === "auto" && !confidenceSupportsAuto(item.confidence, item.probabilities, claimBar)) {
     action = "review";
   }
-  if (item.confidence < reviewAt || (item.verdict === "contradicted" && item.confidence >= escalationCutoff(autoAccept))) {
+  if (item.confidence < reviewAt || (item.verdict === "contradicted" && item.confidence >= escalationCutoff(autoAccept, escalationFloor))) {
     return "escalate";
   }
   if (item.verdict !== "verified") return worstAction([action, "review"]);

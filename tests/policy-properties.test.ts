@@ -401,7 +401,7 @@ test("regression: raising auto_accept never delays escalation of a judged concer
 test("regression: triage escalations are decided before any review-band return", () => {
   const base = {
     causeConfidence: 0.7, causeProbabilities: peaked(0.7), strategyConfidence: 0.7, strategyProbabilities: peaked(0.7, 6),
-    progress: "advancing" as const, recoverable: 0.9, failedAttempts: 0,
+    progress: "advancing" as const, recoverable: 0.9, failedAttempts: 0, autoAccept: 0.8, reviewAt: 0.5,
   };
   assert.equal(triageAction({ ...base, strategy: "escalate" }), "escalate", "a recommended escalation is not softened by moderate cause confidence");
   assert.equal(triageAction({ ...base, strategy: "change_approach", recoverable: 0.2 }), "escalate");

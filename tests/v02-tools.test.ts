@@ -121,7 +121,9 @@ test("risk policy blocks auto on critical flags and uncertain concern bands", ()
   };
   assert.equal(riskAction(base), "auto");
   assert.equal(riskAction({ ...base, flags: { ...flags, secret_exposure: 0.9 } }), "escalate");
-  assert.equal(riskAction({ ...base, flags: { ...flags, authorization: 0.7 } }), "review");
+  assert.equal(riskAction({ ...base, flags: { ...flags, authorization: 0.65 } }), "review");
+  assert.equal(riskAction({ ...base, flags: { ...flags, authorization: 0.7 } }), "escalate", "a critical concern escalates at the auto-accept bar");
+  assert.equal(riskAction({ ...base, flags: { ...flags, authorization: 0.7 }, autoAccept: 0.8, escalationFloor: 0.8 }), "review", "and at 0.8 under the conservative profile");
   assert.equal(riskAction({ ...base, flags: { ...flags, data_loss: 0.55 } }), "review");
   assert.equal(riskAction({ ...base, severityScore: 1.6 }), "review");
   assert.equal(riskAction({ ...base, severityScore: 2 }), "escalate");

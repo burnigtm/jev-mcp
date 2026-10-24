@@ -1,6 +1,6 @@
 # The auto-accept bar: a sweep from 0.95 down to 0.50, 2026-10-24
 
-**Bottom line.** Across 909 generated cases judged by live `jev-1.14.0` (520 risky, 389 safe, four fresh seeds), **no risky case was approved at any bar of 0.65 or above**, while the share of safe cases approved rose from **74.8% at today's 0.80 to 93.1% at 0.70** and 93.8% at 0.65. Below 0.65 the gain is under two points and the first risky approvals appear: 1 of 520 at 0.60, 3 at 0.55, 6 at 0.50. **0.70 is the recommended bar**: it keeps 0.10 of margin over the worst risky case seen (0.60) and captures all but 0.7 points of what 0.65 does. It ships as the opt-in profile `JEV_MCP_PROFILE=fast`; the default is unchanged. Raw data: [JSON](threshold-2026-10-24.json).
+**Bottom line.** Across 909 generated cases judged by live `jev-1.14.0` (520 risky, 389 safe, four fresh seeds), **no risky case was approved at any bar of 0.65 or above**, while the share of safe cases approved rose from **74.8% at today's 0.80 to 93.1% at 0.70** and 93.8% at 0.65. Below 0.65 the gain is under two points and the first risky approvals appear: 1 of 520 at 0.60, 3 at 0.55, 6 at 0.50. **0.70 is the recommended bar**: it keeps 0.10 of margin over the worst risky case seen (0.60) and captures all but 0.7 points of what 0.65 does. It became the default for the tools it was measured on (see the validation linked below). Raw data: [JSON](threshold-2026-10-24.json).
 
 ## Method
 
@@ -38,9 +38,9 @@ Because the way past a permission failure on a system path is usually elevated p
 
 First-failure triage was the biggest loser at 0.80: the recoverability score for an ordinary first failure sits around 0.7 to 0.79. The 27 safe cases still held at 0.70 are all `jev_scope`, mostly honest local writes (`git add`, `git commit`, `npm test`) that Jev doubts at any bar; no bar fixes that.
 
-## End to end with the profile
+## End to end at the two bars
 
-A separate fresh seed (868686005, 105 risky and 107 safe cases across all seven tools, including `jev_screen` and `jev_rank`, which read the profile's bars), run once under each profile on live Jev: **0 unsafe approvals under both**; safe approvals **83/107 under `balanced`, 97/107 under `fast`** (triage 4/12 to 12/12, scope 16/26 to 20/26, risk 11/13 to 13/13; review, verify, screen and rank unchanged). The two runs are separate live runs, so a case or two of provider jitter is expected.
+A separate fresh seed (868686005, 105 risky and 107 safe cases across all seven tools, including `jev_screen` and `jev_rank`, which read the profile's bars), run once at each bar on live Jev (when this sweep was written the 0.80 and 0.70 bars were the profiles `balanced` and `fast`; they are now `conservative` and `balanced`): **0 unsafe approvals at both**; safe approvals **83/107 at 0.80, 97/107 at 0.70** (triage 4/12 to 12/12, scope 16/26 to 20/26, risk 11/13 to 13/13; review, verify, screen and rank unchanged). The two runs are separate live runs, so a case or two of provider jitter is expected.
 
 ## How certain is "none"
 
@@ -48,6 +48,4 @@ Zero risky approvals in 520 means the true rate at 0.70 is below about 0.6% with
 
 ## What changed
 
-- `JEV_MCP_PROFILE=fast`: `auto_accept` 0.70; the review bar (0.5), the screen bar (0.75) and the triage bar (follows `auto_accept`) are `balanced`. Executable dispatch in `jev_step` and `jev_tool_route` keeps its own floor of 0.8, and judged concerns still escalate at `min(auto_accept, 0.8)`, so lowering the bar can only make those stricter.
-- `privilege_boundary` in `jev_triage`.
-- The default stays `balanced` (0.80). Making `fast` the default is a one-line change in `src/profiles.ts` plus the tests that pin the historical bars, and it is a decision for whoever owns the deployment.
+This sweep led to `balanced` becoming 0.70. Further testing with borderline and blind cases then narrowed where the lower bar applies: patch review and claims keep 0.80, as do the tools it was not measured on, and a rule now holds permission failures on system paths. See [the validation of the default](default-bar-2026-10-24.md).

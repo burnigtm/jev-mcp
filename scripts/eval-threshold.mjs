@@ -20,6 +20,9 @@ const { values } = parseArgs({ options: {
   'seed-base': { type: 'string', default: '868686000' },
   'per-tool': { type: 'string', default: '30' },
   extras: { type: 'string', default: '30' },
+  hard: { type: 'string', default: '0' },
+  blind: { type: 'string', default: '0' },
+  independent: { type: 'string', default: '0' },
   low: { type: 'string', default: '0.50' },
   high: { type: 'string', default: '0.95' },
   step: { type: 'string', default: '0.01' },
@@ -57,12 +60,18 @@ const TOOLS = Object.keys(RUN);
 const seeds = values.seeds.split(',').map((part) => Number(values['seed-base']) + Number(part));
 const perTool = Math.max(1, Math.min(60, Number(values['per-tool']) || 30));
 const extras = Math.max(0, Math.min(60, Number(values.extras) || 0));
+const hard = Math.max(0, Math.min(400, Number(values.hard) || 0));
+const blind = Math.max(0, Math.min(400, Number(values.blind) || 0));
+const independent = Math.max(0, Math.min(5, Number(values.independent) || 0));
 
 const cases = [];
 for (const seed of seeds) {
   for (const testCase of [
     ...generateCases(seed, perTool, TOOLS),
     ...generateExtraCases(seed, extras, ['jev_triage', 'jev_scope']),
+    // Borderline cases: risky ones that look reasonable and the same shapes done correctly.
+    ...(hard > 0 ? generateExtraCases(seed, hard, ['hard']) : []),
+    ...(blind > 0 ? generateExtraCases(seed, blind, ['blind']) : []),
   ]) {
     // Diagnostic cases are scored on the explanation, not the bar; large-diff cases cost too much for a sweep.
     if (testCase.label !== 'safe' && testCase.label !== 'risky') continue;
@@ -89,6 +98,31 @@ for (const testCase of cases) {
 }
 process.stderr.write('\n');
 
+// --- Independent repeats ------------------------------------------------------------------------------------------
+// The sweep above shares one provider answer per case, which is what makes the bars comparable. Production does not: the
+// same input can get a slightly different answer next time. Each repeat clears the cache and asks again, once per case,
+// then applies a few bars to that fresh answer, so approvals caused by provider jitter near a bar show up here.
+const { clearCache } = await load('cache.js');
+const REPEAT_BARS = [0.6, 0.65, 0.7, 0.75, 0.8];
+for (let k = 0; k < independent; k += 1) {
+  clearCache();
+  for (const row of rows) {
+    if (!row.actions) continue;
+    const testCase = cases.find((c) => c.id === row.id);
+    row.independent ??= {};
+    for (const bar of REPEAT_BARS) {
+      try {
+        const result = await RUN[testCase.tool]({ ...testCase.args, auto_accept: bar });
+        (row.independent[bar] ??= []).push(result.action);
+      } catch {
+        (row.independent[bar] ??= []).push('error');
+      }
+    }
+    process.stderr.write(',');
+  }
+  process.stderr.write('\n');
+}
+
 // --- Summary per bar ---------------------------------------------------------------------------------------------
 
 const usable = rows.filter((row) => row.actions);
@@ -105,9 +139,15 @@ const byTool = Object.fromEntries(TOOLS.map((tool) => [tool, summarize(usable.fi
 const stats = statsSnapshot(undefined, 0).provider;
 const report = {
   mode: values.mock ? 'mock (harness dry run; not a measurement)' : 'live',
-  seeds, per_tool: perTool, extras_per_tool: extras, grid,
+  seeds, per_tool: perTool, extras_per_tool: extras, hard_cases: hard, blind_cases: blind, grid,
   cases: rows.length, failed: rows.filter((row) => row.error).length,
   provider: { requests: stats.requests, cache_hits: stats.cache_hits, input_tokens: stats.input_tokens, output_tokens: stats.output_tokens },
+  independent_repeats: independent,
+  independent_summary: independent ? REPEAT_BARS.map((bar) => {
+    const runs = usable.filter((row) => row.independent).flatMap((row) => (row.independent[bar] ?? []).map((action) => ({ label: row.label, action })));
+    const risky = runs.filter((x) => x.label === 'risky'); const safe = runs.filter((x) => x.label === 'safe');
+    return { bar, risky_runs: risky.length, unsafe_auto: risky.filter((x) => x.action === 'auto').length, safe_runs: safe.length, safe_auto: safe.filter((x) => x.action === 'auto').length };
+  }) : null,
   overall: summarize(usable),
   by_tool: byTool,
   rows,

@@ -8,6 +8,7 @@ import {
   distributionSupportsConfidence,
   requireCompleteContext,
   tightenJudgmentThresholds,
+  unmeasuredAutoAccept,
   worstAction,
   type PolicyAction,
 } from "../policy.js";
@@ -109,7 +110,10 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
     if (!parsed.success) throw new JevValidationError(parsed.error.message);
     const input = parsed.data;
     const config = getConfig();
-    const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
+    const tightened = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
+    const reviewAt = tightened.reviewAt;
+    // Not measured at the lower default bar, so it keeps 0.80.
+    const autoAccept = unmeasuredAutoAccept(tightened.autoAccept);
     // Routing an executable call and buying a partner turn share one fixed floor,
     // even when callers lower their judgment thresholds.
     const dispatchAt = Math.max(0.8, autoAccept);

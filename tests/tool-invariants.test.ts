@@ -359,7 +359,7 @@ test("jev_triage and jev_risk packs carry the corrected question wording", () =>
 });
 
 test("jev_triage: recoverability just under auto_accept is named instead of review_required", async () => {
-  responds(() => ({ cause: "cause_0", progress: "first_attempt", strategy: "gather_context", recoverable: 0.79 }));
+  responds(() => ({ cause: "cause_0", progress: "first_attempt", strategy: "gather_context", recoverable: 0.69 }));
   const result = await runTriage({ task: "Fix the pager", failure: "AssertionError" });
   assert.equal(result.action, "review");
   assert.deepEqual(result.reason_codes, ["recoverability_uncertain"]);

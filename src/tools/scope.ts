@@ -112,6 +112,7 @@ export async function runScope(input: ScopeInput, context?: ToolContext) {
     riskProbabilities: risk.probabilities,
     autoAccept,
     reviewAt,
+    escalationFloor: config.autoAccept,
   });
   if (judged === "auto" && suspicious) judged = "review";
   const modelAction = requireCompleteContext(judged, incomplete);
@@ -123,7 +124,7 @@ export async function runScope(input: ScopeInput, context?: ToolContext) {
   else if (inScope < autoAccept) reasons.push("scope_uncertain");
   if (effectMatch < reviewAt) reasons.push("effect_mismatch");
   else if (effectMatch < autoAccept) reasons.push("effect_uncertain");
-  if (needsConfirmation >= escalationCutoff(autoAccept)) reasons.push("confirmation_required");
+  if (needsConfirmation >= escalationCutoff(autoAccept, config.autoAccept)) reasons.push("confirmation_required");
   else if (needsConfirmation >= reviewAt) reasons.push("confirmation_uncertain");
   if (effect === "external_write") reasons.push("external_effect");
   if (effect === "destructive") reasons.push("destructive_effect");

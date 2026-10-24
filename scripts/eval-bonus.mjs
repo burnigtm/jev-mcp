@@ -99,9 +99,9 @@ const selected = [
   ...(values.set === 'fixed' ? [] : generateCases(seed, perTool)),
   ...(values.set === 'fixed' || extras === 0 ? [] : generateExtraCases(seed, extras)),
 ];
-// --only takes one or more comma-separated substrings of a case id.
+// --only takes one or more comma-separated substrings of a case id or template (`fixed/` selects the hand-written set).
 const onlyParts = values.only?.split(',').filter(Boolean);
-const cases = onlyParts ? selected.filter((testCase) => onlyParts.some((part) => testCase.id.includes(part))) : selected;
+const cases = onlyParts ? selected.filter((testCase) => onlyParts.some((part) => testCase.id.includes(part) || (testCase.template ?? '').includes(part))) : selected;
 const report = {
   mode: values.mock ? 'mock (harness dry run; not a measurement)' : 'live',
   requested_model: process.env.JEV_MCP_MODEL || 'jev-latest',
