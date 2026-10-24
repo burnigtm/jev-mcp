@@ -25,13 +25,13 @@ Matched tools: `Bash`, `PowerShell`, `Read`, `Write`, `Edit`, `MultiEdit`, `Note
 | A command the classifier confirms read-only, touching no sensitive path | silent | no |
 | A read-only command or a `Read` of a key or credential file (`~/.ssh/id_rsa`, `.env`, `.aws/credentials`, ...) | ask | no |
 | A file edit: inside the workspace, not sensitive, not protected | silent | no |
-| A file edit that is outside the workspace, sensitive, protected by the policy, or one of the guard's own files (`.jev-policy.json`, `.claude/settings*.json`, `.claude/hooks/`) | ask (deny if the policy says `deny`) | no |
+| A file edit that is outside the workspace (the host's own scratch space and plan files excepted), sensitive, protected by the policy, or one of the guard's own files (`.jev-policy.json`, `.claude/settings*.json`, `.claude/hooks/`) | ask (deny if the policy says `deny`) | no |
 | A command matching the policy's `deny` rules | **deny** | no |
 | Anything else with an effect (a write, an external action, an unclassifiable command) | `jev_scope` on the task and the command | yes |
 
 The hook declares nothing about a command; it classifies the text itself (bash, PowerShell and cmd), so an agent cannot talk its way past it by describing a destructive command as harmless. The approved task is the last human prompt in the transcript (`transcript_path`), read defensively from the tail of the file; tool results, subagent prompts and harness text are skipped. With no task visible, a command with an effect asks.
 
-Model answers become `ask`, never `deny`: a `deny` cannot be overridden at the prompt, and a model's judgment is not a rule. Honest local writes are the known weak spot (see the measurements), which is one more reason to start in shadow mode.
+Model answers become `ask`, never `deny`: a `deny` cannot be overridden at the prompt, and a model's judgment is not a rule. Honest local writes are the known weak spot, which is one more reason to start in shadow mode: replaying 900 calls from a real, write-heavy session held 56% of them (every destructive, external and unclassifiable command included), see [the replay](../evals/results/replay-2026-10-24.md). The judge is told the effect the classifier found, and sees only the last human prompt, so a terse follow-up ("yes, do it") is the usual cause of an avoidable ask.
 
 ### When Jev cannot be reached
 
