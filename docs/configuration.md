@@ -14,7 +14,7 @@ For local CLI use on Node 20.6+, copy [`.env.example`](../.env.example) to `.env
 | `JEV_MCP_TIMEOUT_MS` | `30000` | Total deadline in milliseconds for one tool call, including retries and every ranking round. Each SDK attempt uses the time remaining and does not retry its own timeout |
 | `JEV_MCP_AUTO_ACCEPT` | `0.8` | Confidence floor for `auto` |
 | `JEV_MCP_REVIEW_AT` | `0.5` | Below this, coding-loop / review / evaluate `escalate` |
-| `JEV_MCP_PROFILE` | `balanced` | `balanced` or `strict`: a named bundle of the bars below. Explicit variables override it; per-call arguments can only tighten. See [profiles](#profiles) |
+| `JEV_MCP_PROFILE` | `balanced` | `balanced`, `fast` or `strict`: a named bundle of the bars below. Explicit variables override it; per-call arguments can only tighten. See [profiles](#profiles) |
 | `JEV_MCP_TRIAGE_RECOVERABLE_AT` | the auto-accept bar | Bar for `jev_triage` recoverability (can the host make progress from here). Must not be below `JEV_MCP_REVIEW_AT`. A caller raising `auto_accept` also raises it |
 | `JEV_POLICY_FILE` | search upward from the working directory | Absolute path of the repository policy file, or `none` to disable it. See [repository policy](#repository-policy) |
 | `JEV_MCP_BLOCK_AT` | `0.75` | Screen injection ≥ this → `block` |
@@ -51,14 +51,14 @@ Judged *concerns* (scope `needs_confirmation`, critical `jev_risk` flags, confid
 
 `JEV_MCP_PROFILE` selects a bundle of the confidence bars. Precedence, lowest to highest: the profile, explicit environment variables, per-call arguments (which can only tighten).
 
-| | `balanced` (default) | `strict` |
-| --- | --- | --- |
-| `auto_accept` | 0.8 | 0.9 |
-| `review_at` | 0.5 | 0.6 |
-| `block_at` (screen) | 0.75 | 0.6 |
-| triage recoverability bar | the `auto_accept` bar | 0.9 |
+| | `balanced` (default) | `fast` | `strict` |
+| --- | --- | --- | --- |
+| `auto_accept` | 0.8 | 0.7 | 0.9 |
+| `review_at` | 0.5 | 0.5 | 0.6 |
+| `block_at` (screen) | 0.75 | 0.75 | 0.6 |
+| triage recoverability bar | the `auto_accept` bar | the `auto_accept` bar | 0.9 |
 
-`balanced` reproduces the bars the server has always used. `strict` asks for more confidence before anything is `auto` and blocks suspicious text earlier, at the cost of more reviews of ordinary work; the measured trade-off is in [evals/results](../evals/results/profiles-2026-10-24.md). `jev-mcp doctor` prints the active profile and bars.
+`balanced` reproduces the bars the server has always used. `fast` lowers only `auto_accept`, to 0.7, the value a sweep from 0.95 down to 0.50 found: over 909 generated cases on live Jev (520 risky) no risky case was approved at 0.65 or above, and safe approvals rose from 74.8% at 0.8 to 93.1% (the worst risky case seen was approved only at bars up to 0.60). It is a measurement on synthetic cases and one model, so it is opt-in. Executable dispatch in `jev_step` and `jev_tool_route` keeps its own 0.8 floor. See [the sweep](../evals/results/threshold-2026-10-24.md). `strict` asks for more confidence before anything is `auto` and blocks suspicious text earlier, at the cost of more reviews of ordinary work; the measured trade-off is in [evals/results](../evals/results/profiles-2026-10-24.md). `jev-mcp doctor` prints the active profile and bars.
 
 ## Repository policy
 

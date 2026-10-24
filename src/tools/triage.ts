@@ -38,6 +38,17 @@ export const triageInputSchema = z.object({
 export type TriageInput = z.infer<typeof triageInputSchema>;
 type TriageReason = z.infer<typeof triageReasonSchema>;
 
+const PRIVILEGE_DENIAL = /\b(?:EACCES|EPERM)\b|permission denied|operation not permitted|access is denied|requires? (?:elevated|administrator|root)/i;
+const SYSTEM_PATH = /(?:^|[\s'"(=:])(?:\/(?:etc|usr|var|opt|bin|sbin|lib|lib64|root|boot|srv|sys|proc|System|Library)(?:\/|\b)|[A-Za-z]:\/(?:Windows|Program Files(?: \(x86\))?|ProgramData)\b|~?\/?\.ssh\b)/i;
+
+/**
+ * A permission failure on a system path. The way past it is usually elevated privileges or a change outside the
+ * project, which is a human decision whatever the judge's confidence. Tighten-only: it can hold a triage, never release one.
+ */
+export function privilegeBoundary(failure: string): boolean {
+  return PRIVILEGE_DENIAL.test(failure) && SYSTEM_PATH.test(failure.replace(/\\/g, "/"));
+}
+
 export async function runTriage(input: TriageInput, context?: ToolContext) {
   const config = getConfig();
   const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
@@ -118,7 +129,8 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
   });
   // "first_attempt" is only coherent when the host supplied no attempts or history.
   const progressInconsistent = progress.choice === "first_attempt" && (attempts.length > 0 || history.length > 0);
-  if (policy === "auto" && (suspicious || causeId === "unknown" || loop.detected || progressInconsistent)) policy = "review";
+  const privileged = privilegeBoundary(input.failure);
+  if (policy === "auto" && (suspicious || causeId === "unknown" || loop.detected || progressInconsistent || privileged)) policy = "review";
   const actionPolicy = requireCompleteContext(policy, incomplete);
 
   const reasons: TriageReason[] = [];
@@ -134,6 +146,7 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
   if (strategy.choice === "retry" && failedAttempts >= 2) reasons.push("retry_budget_exhausted");
   if (loop.detected) reasons.push("loop_detected");
   if (progressInconsistent) reasons.push("progress_inconsistent");
+  if (privileged) reasons.push("privilege_boundary");
   if (suspicious) reasons.push("injection_suspected");
   if (incomplete) reasons.push("incomplete_context");
   if (actionPolicy === "auto") {

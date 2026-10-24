@@ -239,6 +239,7 @@ export const triageReasonSchema = z.enum([
   "incomplete_context",
   "loop_detected",
   "progress_inconsistent",
+  "privilege_boundary",
   "review_required",
 ]);
 

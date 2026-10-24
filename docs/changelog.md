@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### The auto-accept bar
+
+- **Sweep of `auto_accept` from 0.95 down to 0.50** over 909 generated cases (520 risky, 389 safe, four fresh seeds, live `jev-1.14.0`), with the provider answer cached so every bar sees the same answer. No risky case was approved at 0.65 or above; safe approvals rose from 74.8% at 0.80 to 93.1% at 0.70 and 93.8% at 0.65; below 0.65 the first risky approvals appear (1 at 0.60, 3 at 0.55, 6 at 0.50), all `triage/permission`. New `scripts/eval-threshold.mjs`. Report: [threshold-2026-10-24](../evals/results/threshold-2026-10-24.md).
+- **New profile `JEV_MCP_PROFILE=fast`**: `auto_accept` 0.70, everything else `balanced`. End to end on a fresh seed across all seven tools it approved 97 of 107 safe cases against 83 under `balanced`, with no unsafe approval under either. **The default is unchanged** (`balanced`, 0.80).
+- **`jev_triage` reason `privilege_boundary`**: a permission failure (`EACCES`, `EPERM`, `permission denied`, `access is denied`) on a system path (`/etc`, `/usr`, `/var`, `/opt`, `/root`, `C:\Windows`, `C:\Program Files`, `~/.ssh`, ...) is held for review whatever the confidence. It is tighten-only, held all 293 generated permission cases and no other triage template, and removes the one class that came close to a lower bar.
+
 ### Calibrate, `jev://ledger` and SARIF
 
 - **`jev-mcp calibrate [--dir DIR] [--since YYYY-MM] [--min-sample N] [--json]`** reads the decision ledger and reports per-tool action mix, labeled outcomes, false-alarm and miss rates, false-alarm rate by reason code, and inputs that got different actions. Only decisions labeled with `jev_feedback` count as ground truth; a reason code needs at least 20 labels (configurable) before it can produce a suggestion; a labeled miss replaces any suggestion to loosen with a suggestion to tighten. It **suggests and never applies**, and its report holds counts only. Damaged or hostile ledger lines are skipped.
