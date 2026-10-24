@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-test("all twelve tools and eleven resources work through subprocess stdio", { timeout: 90_000 }, async () => {
+test("all thirteen tools and eleven resources work through subprocess stdio", { timeout: 90_000 }, async () => {
   const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined && !/^(JEV_MCP_|TYPESAFE_)/.test(entry[0])));
   env.JEV_MCP_MOCK = "1";
   const transport = new StdioClientTransport({ command: process.execPath, args: ["--import", "tsx", "src/index.ts"], cwd: fileURLToPath(new URL("../", import.meta.url)), env, stderr: "pipe" });
@@ -28,7 +28,7 @@ test("all twelve tools and eleven resources work through subprocess stdio", { ti
     let stderr = "";
     transport.stderr?.on("data", data => { stderr += String(data); });
     const listed = await client.listTools();
-    assert.equal(listed.tools.length, 12);
+    assert.equal(listed.tools.length, 13);
     assert.ok(listed.tools.find(tool => tool.name === "jev_gate")?.outputSchema);
     for (const [name, args] of fixtures) {
       const result = await client.callTool({ name, arguments: args });

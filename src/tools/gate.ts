@@ -49,6 +49,7 @@ export const gateReasonCodeSchema = z.enum([
 const securitySchema = riskOutputSchema.pick({ action: true, flags: true, severity: true, reason_codes: true, thresholds: true });
 
 export const gateOutputSchema = z.object({
+  decision_id: z.string().optional(),
   model: z.string(),
   usage: z.object({ input_tokens: z.number().nonnegative(), output_tokens: z.number().nonnegative() }),
   truncated: z.boolean(),

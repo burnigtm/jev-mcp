@@ -17,6 +17,7 @@ import { rankInputSchema } from '../src/tools/rank.ts';
 import { scopeInputSchema } from '../src/tools/scope.ts';
 import { triageInputSchema } from '../src/tools/triage.ts';
 import { riskInputSchema } from '../src/tools/risk.ts';
+import { feedbackInputSchema } from '../src/tools/feedback.ts';
 import { spawnSync } from 'node:child_process';
 
 test('standalone ZIP is reproducible, licensed and valid after isolated extraction', async () => {
@@ -60,7 +61,7 @@ test('shipped host examples forward the key instead of embedding it', async () =
 });
 
 test('every documented request validates and executes against actual MCP schemas', {timeout:60000}, async () => {
-  const schemas={jev_evaluate:evaluateInputSchema,jev_coding_loop:codingLoopInputSchema,jev_tool_route:toolRouteInputSchema,jev_step:stepInputSchema,jev_review:reviewInputSchema,jev_verify:verifyInputSchema,jev_gate:gateInputSchema,jev_screen:screenInputSchema,jev_rank:rankInputSchema,jev_scope:scopeInputSchema,jev_triage:triageInputSchema,jev_risk:riskInputSchema};
+  const schemas={jev_evaluate:evaluateInputSchema,jev_coding_loop:codingLoopInputSchema,jev_tool_route:toolRouteInputSchema,jev_step:stepInputSchema,jev_review:reviewInputSchema,jev_verify:verifyInputSchema,jev_gate:gateInputSchema,jev_screen:screenInputSchema,jev_rank:rankInputSchema,jev_scope:scopeInputSchema,jev_triage:triageInputSchema,jev_risk:riskInputSchema,jev_feedback:feedbackInputSchema};
   const requests=examples(await readFile(join(root,'skills/jev-mcp/references/tools.md'),'utf8'));
   assert.deepEqual([...new Set(requests.map(r=>r.name))].sort(),Object.keys(schemas).sort());
   const server=await connectServer({args:['--import','tsx','src/index.ts'],env:processEnv({JEV_MCP_MOCK:'1'})});
@@ -68,8 +69,15 @@ test('every documented request validates and executes against actual MCP schemas
     for(const request of requests) {
       schemas[request.name as keyof typeof schemas].parse(request.arguments);
       const result=await server.call(request.name,request.arguments);
+      if(request.name==='jev_feedback') {
+        // Bookkeeping, not a judgment: no model or coverage, and nothing is recorded while the ledger is off.
+        assert.equal(result.recorded,false);
+        assert.equal(result.reason,'ledger_disabled');
+        continue;
+      }
       assert.match(result.model,/\+mock$/);
       assert.equal(result.coverage.complete,true);
+      assert.match(result.decision_id,/^d_[0-9a-f]{24}$/);
     }
   } finally {await server.close();}
 });

@@ -18,7 +18,7 @@ after(() => {
   }
 });
 
-test("MCP lists twelve tools and eleven packs", async () => {
+test("MCP lists thirteen tools and eleven packs", async () => {
   const server = createJevServer();
   const client = new Client({ name: "test", version: "0.0.0" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -29,6 +29,7 @@ test("MCP lists twelve tools and eleven packs", async () => {
     assert.deepEqual(names, [
       "jev_coding_loop",
       "jev_evaluate",
+      "jev_feedback",
       "jev_gate",
       "jev_rank",
       "jev_review",

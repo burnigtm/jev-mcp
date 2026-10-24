@@ -157,7 +157,7 @@ async function benchmark(options) {
     await client.connect(transport);
     const listed = await client.listTools();
     startupMs = performance.now() - started;
-    if (listed.tools.length !== 12) throw new Error(`Expected 12 tools, received ${listed.tools.length}`);
+    if (listed.tools.length !== 13) throw new Error(`Expected 13 tools, received ${listed.tools.length}`);
     const cases = fixtures();
     for (const [name, arguments_] of cases) {
       for (let i = 0; i < options.warmup; i += 1) await timedCall(client, name, arguments_);

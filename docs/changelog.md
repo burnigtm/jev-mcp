@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Decision ledger and `jev_feedback`
+
+- **Every judgment result now carries a `decision_id`** (additive; a fresh one per response, even when the provider answer came from the cache). New 13th tool **`jev_feedback`** (`readOnlyHint: false`) and CLI twin `jev-mcp feedback <decision_id> <correct|false_alarm|missed> [--note TEXT]` label an earlier decision.
+- **Opt-in local ledger** (`JEV_MCP_LEDGER=1`, `JEV_MCP_LEDGER_DIR`, `JEV_MCP_LEDGER_MAX_BYTES`): one JSON line per decision, tool error and feedback in a monthly file, written with a single `O_APPEND` write so several servers can share it. **No tool input or output text is stored.** Inputs are fingerprinted with an HMAC keyed by a random per-install secret, so short or guessable inputs cannot be recovered by hashing. The ledger is observability only: write failures and a full file are counted in `jev://stats` (`ledger.written/dropped/errors`) and never affect a decision. `0600` permissions have no effect on Windows.
+- Live (`jev-1.14.0`): 153 decisions and 153 labels written, every label linked to a decision, no case text in the file, about 0.4–0.6 ms per record, no change in decisions. A sample ledger is kept as a fixture in `evals/fixtures/ledger`.
+- **Docs and tests:** a new docs-sync test requires every reason code a tool can return to be documented in the tool reference; the scope, triage and risk reason codes that were missing are now documented.
+- The benchmark runner gains `--ledger-dir` (record and label from ground truth).
+
 ### Command effect classifier
 
 - New deterministic classifier (`src/effects.ts`) for shell commands in bash, PowerShell and cmd syntax. `jev_scope`, `jev_tool_route` and `jev_step` now use the strictest of the host-declared effect and the effect the command text shows, so a mislabeled `read_only` command that deletes, force-pushes, publishes or pipes a download into a shell can no longer be `auto` when the judge approves it. The classifier only ever raises an effect; unrecognized programs add no information and anything unparseable is `unknown`. Parsed twice (POSIX and Windows rules) with the strictest result winning; wrappers, nested shells, script blocks, heredocs, substitutions and common obfuscations (`r""m`, `r\m`, `RM -RF`, `/bin/rm`) are handled.

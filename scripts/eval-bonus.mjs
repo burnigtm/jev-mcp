@@ -29,6 +29,7 @@ const { values } = parseArgs({ allowNegative: true, options: {
   seed: { type: 'string' },
   'per-tool': { type: 'string', default: '10' },
   extras: { type: 'string', default: '0' },
+  'ledger-dir': { type: 'string' },
   experiments: { type: 'boolean', default: true },
 } });
 const repeat = Math.max(1, Math.min(5, Number(values.repeat) || 1));
@@ -54,6 +55,18 @@ async function timed(server, tool, args) {
   } catch (error) {
     return { ok: false, error: /^[A-Z_a-z]+$/.test(error.message) ? error.message : 'tool_error', ms: performance.now() - started };
   }
+}
+
+// With --ledger-dir the main run records every decision to a local ledger and labels it from the case's ground truth,
+// which produces a real labelled ledger (content-free) for exercising `jev_feedback` and later calibration.
+const ledgerEnv = values['ledger-dir']
+  ? { JEV_MCP_LEDGER: '1', JEV_MCP_LEDGER_DIR: resolve(root, values['ledger-dir']) }
+  : {};
+
+/** correct -> correct; a risky case that was approved -> missed; anything else wrong -> false_alarm. */
+function feedbackFor(testCase, decision) {
+  if (correct(testCase, decision)) return 'correct';
+  return testCase.label === 'risky' ? 'missed' : 'false_alarm';
 }
 
 function serverEnv(extra = {}) {
@@ -82,6 +95,7 @@ const report = {
   repeat,
   set: values.set,
   seed: values.set === 'fixed' ? null : seed,
+  ledger_dir: values['ledger-dir'] ?? null,
   per_tool: values.set === 'fixed' ? null : perTool,
   extras_per_tool: values.set === 'fixed' || extras === 0 ? null : extras,
   cases: [],
@@ -90,7 +104,7 @@ const report = {
 
 let server;
 try {
-  server = await connectServer({ env: serverEnv() });
+  server = await connectServer({ env: serverEnv(ledgerEnv) });
 } catch (error) {
   console.error(`preflight failed: ${/^[a-z_]+$/.test(error.message) ? error.message : 'server_unavailable'}`);
   process.exit(2);
@@ -104,6 +118,10 @@ try {
       runs.push(outcome.ok
         ? { decision: jevDecision(testCase.tool, outcome.result), model: outcome.result.model, usage: outcome.result.usage, ms: Math.round(outcome.ms) }
         : { error: outcome.error, ms: Math.round(outcome.ms) });
+      if (values['ledger-dir'] && outcome.ok && outcome.result.decision_id) {
+        const decision = jevDecision(testCase.tool, outcome.result);
+        await server.call('jev_feedback', { decision_id: outcome.result.decision_id, outcome: feedbackFor(testCase, decision) });
+      }
     }
     const baseline = rules[testCase.tool](testCase.args);
     report.cases.push({

@@ -75,6 +75,7 @@ export const coverageSchema = z.object({
   estimator: z.literal("chars/4"),
 });
 export const toolRouteOutputSchema = z.object({
+  decision_id: z.string().optional(),
   model: z.string(),
   usage: usageSchema,
   truncated: z.boolean(),
