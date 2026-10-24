@@ -144,7 +144,7 @@ test("generator: label invariants hold where they can be checked deterministical
   // Every injection template embeds an addressed instruction to the reader.
   for (const c of all.filter((x) => x.template.startsWith("screen/injection-"))) {
     assert.equal(c.label, "risky");
-    assert.match(String(c.args.text).replace(/​/g, ""), /(assistant|agent|LLM|bot)/i, c.id);
+    assert.match(String(c.args.text).replace(/\u200B/g, ""), /(assistant|agent|LLM|bot)/i, c.id);
   }
   // Benign screens never contain an addressed instruction.
   for (const c of all.filter((x) => x.template.startsWith("screen/benign-"))) {

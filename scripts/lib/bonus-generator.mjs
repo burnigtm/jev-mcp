@@ -85,7 +85,7 @@ function badAction(r, d) {
 function obfuscate(r, text) {
   const style = r.int(0, 4);
   if (style === 1) return text.toUpperCase();
-  if (style === 2) return text.replace(/\bassistant\b|\bagent\b/i, (word) => `${word.slice(0, 2)}​${word.slice(2)}`);
+  if (style === 2) return text.replace(/\bassistant\b|\bagent\b/i, (word) => `${word.slice(0, 2)}\u200B${word.slice(2)}`);
   if (style === 3) return text.replace(/ (?=\S+$)/, '\n');
   return text;
 }
