@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Ledger key race
+
+- **A ledger record could be silently dropped when several processes started at once.** The per-install key was created empty and then filled, so a process that read it in between found an invalid key and dropped its record (seen once as 239 of 240 lines on a Windows CI run). The key is now written to a private temporary file and linked into place, so a reader never sees it half-written; a reader that still meets a short key (a file system without hard links) waits up to half a second for the writer. New tests include a slow writer, which failed before the fix, and a repeated race to create the key; the multi-process test helper now fails if any record is refused.
+
 ### Calibrate, `jev://ledger` and SARIF
 
 - **`jev-mcp calibrate [--dir DIR] [--since YYYY-MM] [--min-sample N] [--json]`** reads the decision ledger and reports per-tool action mix, labeled outcomes, false-alarm and miss rates, false-alarm rate by reason code, and inputs that got different actions. Only decisions labeled with `jev_feedback` count as ground truth; a reason code needs at least 20 labels (configurable) before it can produce a suggestion; a labeled miss replaces any suggestion to loosen with a suggestion to tighten. It **suggests and never applies**, and its report holds counts only. Damaged or hostile ledger lines are skipped.

@@ -173,6 +173,45 @@ test("several processes appending at once never produce a partial or corrupt lin
   assert.equal(readdirSync(dir).filter((name) => name === "ledger.key").length, 1, "the racing processes agreed on one key");
 }, { timeout: 90_000 });
 
+test("a key another process is still writing is waited for, not treated as invalid", async () => {
+  const dir = tempDir();
+  const keyPath = join(dir, "ledger.key");
+  // The creator makes the file first and fills it 200 ms later, as a slow writer on a loaded machine would.
+  const script = "const fs=require('fs');fs.writeFileSync(process.argv[1],'');setTimeout(()=>fs.writeFileSync(process.argv[1],'ab'.repeat(32)),200)";
+  const creator = spawn(process.execPath, ["-e", script, keyPath], { stdio: "ignore" });
+  const closed = new Promise<void>((resolve) => creator.on("close", () => resolve()));
+  const started = Date.now();
+  while (!existsSync(keyPath) && Date.now() - started < 10_000) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(existsSync(keyPath));
+  resetLedgerState();
+  const written = recordDecision({ enabled: true, dir, maxBytes: 1_000_000 }, { decisionId: newDecisionId(), tool: "jev_review", args: { a: 1 }, payload: { model: "jev", action: "auto", reason_codes: ["accepted"], usage: { input_tokens: 1, output_tokens: 1 }, truncated: false }, durationMs: 1 });
+  await closed;
+  assert.equal(written, true, "the record waited for the key instead of being dropped");
+  assert.equal(lines(dir).length, 1);
+});
+
+test("a new key is published whole and leaves no temporary file", () => {
+  const dir = tempDir();
+  assert.equal(recordDecision({ enabled: true, dir, maxBytes: 1_000_000 }, { decisionId: newDecisionId(), tool: "jev_review", args: { a: 1 }, payload: { model: "jev", action: "auto", reason_codes: ["accepted"], usage: { input_tokens: 1, output_tokens: 1 }, truncated: false }, durationMs: 1 }), true);
+  assert.deepEqual(readdirSync(dir).filter((name) => name.includes("ledger.key")), ["ledger.key"]);
+  assert.match(readFileSync(join(dir, "ledger.key"), "utf8"), /^[0-9a-f]{64}$/);
+});
+
+test("processes racing to create the key in a fresh directory all keep their records", async () => {
+  for (let round = 0; round < 8; round += 1) {
+    const dir = tempDir();
+    const writer = join(root, "tests", "helpers", "ledger-writer.ts");
+    const codes = await Promise.all(Array.from({ length: 8 }, (_, index) => new Promise<number>((resolve, reject) => {
+      const child = spawn(process.execPath, ["--import", "tsx", writer, dir, "1", `r${round}p${index}`], { cwd: root, stdio: "ignore" });
+      child.on("error", reject);
+      child.on("close", (code) => resolve(code ?? 1));
+    })));
+    assert.deepEqual(codes, [0, 0, 0, 0, 0, 0, 0, 0], `round ${round}: a process lost its record`);
+    assert.equal(lines(dir).length, 8, `round ${round}`);
+    assert.equal(readdirSync(dir).filter((name) => name.startsWith("ledger.key")).length, 1, `round ${round}: one key and no leftovers`);
+  }
+}, { timeout: 180_000 });
+
 // --- Feedback ---------------------------------------------------------------------------------------------------
 
 test("feedback is appended, repeated labels are ignored within a process, and notes are bounded", () => {
