@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Calibrate, `jev://ledger` and SARIF
+
+- **`jev-mcp calibrate [--dir DIR] [--since YYYY-MM] [--min-sample N] [--json]`** reads the decision ledger and reports per-tool action mix, labeled outcomes, false-alarm and miss rates, false-alarm rate by reason code, and inputs that got different actions. Only decisions labeled with `jev_feedback` count as ground truth; a reason code needs at least 20 labels (configurable) before it can produce a suggestion; a labeled miss replaces any suggestion to loosen with a suggestion to tighten. It **suggests and never applies**, and its report holds counts only. Damaged or hostile ledger lines are skipped.
+- **New resource `jev://ledger`** (the server now has thirteen resources): the same report for the configured ledger, or a note that the ledger is off.
+- **`jev-mcp ci --format sarif`**: SARIF 2.1.0 with file-level locations for policy findings, held parts and withheld sensitive files; fixed message text only, unsafe paths skipped, at most 100 results.
+
 ### Caller context
 
 - **Optional `context.callers` on `jev_review`, `jev_risk` and `jev_gate`**: up to 40 `{ path, line?, text, symbol? }` uses of the changed symbols outside the diff, supplied by the host. The snippets are untrusted (sanitized, secrets redacted, instruction-like text dropped). With callers present the correctness and blast-radius questions compare each use with the change. The decision policy is unchanged, and a test checks that identical judgments give identical decisions with and without callers. Without `context` the request is exactly what it was before.

@@ -34,10 +34,12 @@ import { errorDetails } from "./errors.js";
 import { newDecisionId, recordDecision, recordToolError, type LedgerSettings } from "./ledger.js";
 import { recordToolCall, statsSnapshot } from "./stats.js";
 import { feedbackInputSchema, feedbackOutputSchema, runFeedback } from "./tools/feedback.js";
+import { calibrate } from "./calibrate.js";
 import { chunkedTimeoutFactor } from "./tools/chunked.js";
 import { withToolContext, type ToolContext } from "./typesafe.js";
 
 export const STATS_URI = "jev://stats";
+export const LEDGER_URI = "jev://ledger";
 
 const READ_ONLY_ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
@@ -199,6 +201,23 @@ export function createJevServer(): McpServer {
     judgment: false,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   });
+
+  server.registerResource(
+    "ledger",
+    LEDGER_URI,
+    {
+      title: "Jev decision ledger summary",
+      description: "What the local decision ledger says (JEV_MCP_LEDGER=1): per-tool action mix, labeled outcomes from jev_feedback, false-alarm rates by reason code, unstable inputs, and suggestions. Counts only; contains no tool inputs, outputs or fingerprints. Suggests and never applies.",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      const config = getConfig();
+      const body = config.ledger
+        ? calibrate({ dir: config.ledgerDir })
+        : { enabled: false, note: "The decision ledger is off. Set JEV_MCP_LEDGER=1 to record decisions." };
+      return { contents: [{ uri: uri.href, mimeType: "application/json", text: JSON.stringify(body, null, 2) }] };
+    },
+  );
 
   server.registerResource(
     "stats",

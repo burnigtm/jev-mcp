@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-test("all thirteen tools and eleven resources work through subprocess stdio", { timeout: 90_000 }, async () => {
+test("all thirteen tools and every resource work through subprocess stdio", { timeout: 90_000 }, async () => {
   const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined && !/^(JEV_MCP_|TYPESAFE_)/.test(entry[0])));
   env.JEV_MCP_MOCK = "1";
   const transport = new StdioClientTransport({ command: process.execPath, args: ["--import", "tsx", "src/index.ts"], cwd: fileURLToPath(new URL("../", import.meta.url)), env, stderr: "pipe" });
@@ -48,7 +48,7 @@ test("all thirteen tools and eleven resources work through subprocess stdio", { 
     assert.equal(snapshot.budget.limit, null);
     assert.doesNotMatch(stats.contents[0]!.text as string, /Fix parser/, "stats never echo tool inputs");
     const resources = await client.listResources();
-    assert.equal(resources.resources.length, 12);
+    assert.equal(resources.resources.length, 13);
     for (const resource of resources.resources) assert.equal((await client.readResource({ uri: resource.uri })).contents.length, 1);
     const prompts = await client.listPrompts();
     assert.equal(prompts.prompts.length, 6);

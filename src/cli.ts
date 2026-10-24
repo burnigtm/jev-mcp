@@ -283,7 +283,7 @@ export async function runCiCommand(argv: string[]): Promise<void> {
     })();
     const values = parsed.values;
     if (!values.base || !values.head) throw new JevValidationError("Usage: jev-mcp ci --base REF --head REF [--pr-title-file F] [--pr-body-file F] [--tests-file F] [--format json|github] [--fail-on review|escalate]");
-    if (values.format !== "json" && values.format !== "github") throw new JevValidationError("--format must be json or github.");
+    if (values.format !== "json" && values.format !== "github" && values.format !== "sarif") throw new JevValidationError("--format must be json, github or sarif.");
     if (values["fail-on"] !== "review" && values["fail-on"] !== "escalate") throw new JevValidationError("--fail-on must be review or escalate.");
     const ci = await import("./ci.js");
     const result = await ci.runCi({
@@ -305,6 +305,8 @@ export async function runCiCommand(argv: string[]): Promise<void> {
       const summaryFile = process.env.GITHUB_STEP_SUMMARY;
       if (summaryFile) (await import("node:fs")).appendFileSync(summaryFile, `${markdown}\n`);
       stdout = `${ci.githubAnnotations(result).join("\n")}${result.action === "auto" ? "" : "\n"}jev: ${result.action} (${result.mode}) ${result.reasons.join(",")}\n${summaryFile ? "" : markdown}`;
+    } else if (values.format === "sarif") {
+      stdout = ci.renderSarif(result);
     } else {
       stdout = ci.renderJson(result);
     }
@@ -312,5 +314,32 @@ export async function runCiCommand(argv: string[]): Promise<void> {
   } catch (err) {
     process.stderr.write(`${JSON.stringify({ error: errorDetails(err) })}\n`);
     process.exit(2);
+  }
+}
+
+/** `jev-mcp calibrate [--dir DIR] [--since YYYY-MM] [--min-sample N] [--json]`: what the local ledger says; suggests, never applies. */
+export async function runCalibrateCommand(argv: string[]): Promise<void> {
+  try {
+    const { parseArgs } = await import("node:util");
+    let values;
+    try {
+      values = parseArgs({ args: argv, options: {
+        dir: { type: "string" },
+        since: { type: "string" },
+        "min-sample": { type: "string" },
+        json: { type: "boolean", default: false },
+      } }).values;
+    } catch (err) {
+      throw new JevValidationError(err instanceof Error ? err.message : "Invalid options.");
+    }
+    if (values.since !== undefined && !/^\d{4}-\d{2}$/.test(values.since)) throw new JevValidationError("--since must look like 2026-10.");
+    const minSample = values["min-sample"] === undefined ? undefined : Number(values["min-sample"]);
+    if (minSample !== undefined && (!Number.isSafeInteger(minSample) || minSample < 1)) throw new JevValidationError("--min-sample must be a positive integer.");
+    const { calibrate, renderCalibration } = await import("./calibrate.js");
+    const report = calibrate({ dir: values.dir ?? getConfig().ledgerDir, since: values.since, minSample });
+    process.stdout.write(values.json ? `${JSON.stringify(report, null, 2)}\n` : renderCalibration(report));
+  } catch (err) {
+    process.stderr.write(`${JSON.stringify({ error: errorDetails(err) })}\n`);
+    process.exitCode = 2;
   }
 }
