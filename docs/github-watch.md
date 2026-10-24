@@ -8,12 +8,12 @@ This is the **Cursor Project dashboard** for [burnigtm/jev-mcp](https://github.c
 
 | | |
 | --- | --- |
-| **Last refresh** | 2026-10-24T09:31:41Z |
+| **Last refresh** | 2026-10-24T09:32:13Z |
 | **Data** | GitHub API |
 | **Last GitHub event** | `push` |
 | **Open PRs** | [#23](https://github.com/burnigtm/jev-mcp/pull/23) feat: calibrate, jev://ledger resource and SARIF output |
 | **Merged (recent)** | [#22](https://github.com/burnigtm/jev-mcp/pull/22) feat: optional caller context for the review tools (opt-in), [#21](https://github.com/burnigtm/jev-mcp/pull/21) feat: pull-request gate (jev-mcp ci), [#20](https://github.com/burnigtm/jev-mcp/pull/20) feat: enforced Claude Code hooks and jev-mcp check, [#19](https://github.com/burnigtm/jev-mcp/pull/19) feat: chunked review for diffs too large for one request, [#18](https://github.com/burnigtm/jev-mcp/pull/18) Repository policy file, profiles, and a dedicated triage recoverability bar |
-| **GitHub `main`** | [`84e23d8`](https://github.com/burnigtm/jev-mcp/commit/84e23d810887ef55cb6ea81ed3ca3031ea204fa3) |
+| **GitHub `main`** | [`2fee7e8`](https://github.com/burnigtm/jev-mcp/commit/2fee7e83c2122ba37f87df6571011b095db3ae62) |
 | **Cursor target** | `bc-c78e565c-bc13-4d27-ada8-cc5e7e04eb9e` |
 
 ## Latest
@@ -129,8 +129,8 @@ No open pull requests.
 <tr><td><strong>State</strong></td><td>MERGED</td></tr>
 <tr><td><strong>Author</strong></td><td>burnigtm</td></tr>
 <tr><td><strong>Branches</strong></td><td>feat/large-diff-review → main</td></tr>
-<tr><td><strong>Updated</strong></td><td>2026-10-24T09:30:08Z · 1m ago</td></tr>
-<tr><td><strong>Merged</strong></td><td>2026-10-24T09:30:07Z · 1m ago</td></tr>
+<tr><td><strong>Updated</strong></td><td>2026-10-24T09:30:08Z · 2m ago</td></tr>
+<tr><td><strong>Merged</strong></td><td>2026-10-24T09:30:07Z · 2m ago</td></tr>
 <tr><td><strong>Diff</strong></td><td>+3831 −74 · 24 files</td></tr>
 <tr><td><strong>Commits</strong></td><td>1</td></tr>
 <tr><td><strong>Checks</strong></td><td>no checks reported</td></tr>
@@ -147,8 +147,8 @@ No open pull requests.
 <tr><td><strong>State</strong></td><td>MERGED</td></tr>
 <tr><td><strong>Author</strong></td><td>burnigtm</td></tr>
 <tr><td><strong>Branches</strong></td><td>feat/repo-policy-profiles → main</td></tr>
-<tr><td><strong>Updated</strong></td><td>2026-10-24T09:30:00Z · 1m ago</td></tr>
-<tr><td><strong>Merged</strong></td><td>2026-10-24T09:29:59Z · 1m ago</td></tr>
+<tr><td><strong>Updated</strong></td><td>2026-10-24T09:30:00Z · 2m ago</td></tr>
+<tr><td><strong>Merged</strong></td><td>2026-10-24T09:29:59Z · 2m ago</td></tr>
 <tr><td><strong>Diff</strong></td><td>+26124 −43 · 24 files</td></tr>
 <tr><td><strong>Commits</strong></td><td>1</td></tr>
 <tr><td><strong>Checks</strong></td><td>no checks reported</td></tr>
@@ -165,8 +165,8 @@ No open pull requests.
 <tr><td><strong>State</strong></td><td>MERGED</td></tr>
 <tr><td><strong>Author</strong></td><td>burnigtm</td></tr>
 <tr><td><strong>Branches</strong></td><td>feat/decision-ledger → main</td></tr>
-<tr><td><strong>Updated</strong></td><td>2026-10-24T09:29:52Z · 1m ago</td></tr>
-<tr><td><strong>Merged</strong></td><td>2026-10-24T09:29:52Z · 1m ago</td></tr>
+<tr><td><strong>Updated</strong></td><td>2026-10-24T09:29:52Z · 2m ago</td></tr>
+<tr><td><strong>Merged</strong></td><td>2026-10-24T09:29:52Z · 2m ago</td></tr>
 <tr><td><strong>Diff</strong></td><td>+7759 −13 · 32 files</td></tr>
 <tr><td><strong>Commits</strong></td><td>1</td></tr>
 <tr><td><strong>Checks</strong></td><td>no checks reported</td></tr>
@@ -183,8 +183,8 @@ No open pull requests.
 <tr><td><strong>State</strong></td><td>MERGED</td></tr>
 <tr><td><strong>Author</strong></td><td>burnigtm</td></tr>
 <tr><td><strong>Branches</strong></td><td>feat/command-effect-classifier → main</td></tr>
-<tr><td><strong>Updated</strong></td><td>2026-10-24T09:29:45Z · 1m ago</td></tr>
-<tr><td><strong>Merged</strong></td><td>2026-10-24T09:29:44Z · 1m ago</td></tr>
+<tr><td><strong>Updated</strong></td><td>2026-10-24T09:29:45Z · 2m ago</td></tr>
+<tr><td><strong>Merged</strong></td><td>2026-10-24T09:29:44Z · 2m ago</td></tr>
 <tr><td><strong>Diff</strong></td><td>+8170 −9 · 16 files</td></tr>
 <tr><td><strong>Commits</strong></td><td>1</td></tr>
 <tr><td><strong>Checks</strong></td><td>no checks reported</td></tr>
@@ -201,8 +201,8 @@ No open pull requests.
 <tr><td><strong>State</strong></td><td>MERGED</td></tr>
 <tr><td><strong>Author</strong></td><td>burnigtm</td></tr>
 <tr><td><strong>Branches</strong></td><td>feat/hardening-loop-budget-gate → main</td></tr>
-<tr><td><strong>Updated</strong></td><td>2026-10-24T09:29:09Z · 2m ago</td></tr>
-<tr><td><strong>Merged</strong></td><td>2026-10-24T09:29:09Z · 2m ago</td></tr>
+<tr><td><strong>Updated</strong></td><td>2026-10-24T09:29:09Z · 3m ago</td></tr>
+<tr><td><strong>Merged</strong></td><td>2026-10-24T09:29:09Z · 3m ago</td></tr>
 <tr><td><strong>Diff</strong></td><td>+8543 −49 · 22 files</td></tr>
 <tr><td><strong>Commits</strong></td><td>2</td></tr>
 <tr><td><strong>Checks</strong></td><td>no checks reported</td></tr>
@@ -329,10 +329,10 @@ None.
 
 ## Activity
 
-Push to `main` `84e23d8`.
+Push to `main` `2fee7e8`.
 
 - Event: `push`
-- Ref: `main` SHA [`84e23d8`](https://github.com/burnigtm/jev-mcp/commit/84e23d810887ef55cb6ea81ed3ca3031ea204fa3)
+- Ref: `main` SHA [`2fee7e8`](https://github.com/burnigtm/jev-mcp/commit/2fee7e83c2122ba37f87df6571011b095db3ae62)
 
 Search, filters, checks, commits, and files are on the interactive board next to this file. Follow-ups land in the **Jev_MCP Project** chat.
 
