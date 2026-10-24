@@ -40,7 +40,7 @@
   <p class="kicker">burnigtm/jev-mcp · GitHub API</p>
   <h1>GitHub watch</h1>
   <p class="lede" id="latest-line">Latest is #25 feat: fast profile (auto_accept 0.70) from a threshold sweep, and a privilege-boundary floor (open, 2026-10-24T10:00:25Z · 1m ago).</p>
-  <p class="meta">Refreshed 2026-10-24T10:01:53Z. Open 1 · Merged 14 · Closed 0. The newest pull request stays visible while you filter.</p>
+  <p class="meta">Refreshed 2026-10-24T10:02:12Z. Open 1 · Merged 14 · Closed 0. The newest pull request stays visible while you filter.</p>
 </header>
 <div class="toolbar">
   <input id="q" type="search" placeholder="Filter by number, title, author, or branch" aria-label="Filter pull requests">
@@ -65,7 +65,7 @@
   <div class="row"><span>burnigtm</span><span>+95 −12 · 4 files</span><span>no checks reported</span></div>
   <details >
     <summary>Details</summary>
-    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>fix/ledger-key-race</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T10:00:27Z · 1m ago</td></tr><tr><td>Merged</td><td>2026-10-24T10:00:27Z · 1m ago</td></tr><tr><td>Diff</td><td>+95 −12 · 4 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/018ebe5dd15285066ebb5cd4e3b0481c88b2a1ff">018ebe5</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/e1bbaf938879d7665578fd1076549703296ed361">e1bbaf9</a></td></tr></table>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>fix/ledger-key-race</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T10:02:12Z · just now</td></tr><tr><td>Merged</td><td>2026-10-24T10:02:12Z · just now</td></tr><tr><td>Diff</td><td>+95 −12 · 4 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/018ebe5dd15285066ebb5cd4e3b0481c88b2a1ff">018ebe5</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/e1bbaf938879d7665578fd1076549703296ed361">e1bbaf9</a></td></tr></table>
     <h3>Description</h3><p>The flaky Windows CI failure `several processes appending at once never produce a partial or corrupt line` (239 of 240 lines) was a real race, not test flakiness: the ledger key was created empty and then filled, so a process reading it in between found an invalid key and dropped its record. **Fix:** write the key to a private temporary file and link it into place (exactly one racing process wins; readers never see a partial key); a reader that still meets a short key (a file system without har…</p>
   </details>
 </article>
@@ -110,7 +110,7 @@
   <div class="row"><span>burnigtm</span><span>+3831 −74 · 24 files</span><span>no checks reported</span></div>
   <details >
     <summary>Details</summary>
-    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/large-diff-review</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:30:08Z · 31m ago</td></tr><tr><td>Merged</td><td>2026-10-24T09:30:07Z · 31m ago</td></tr><tr><td>Diff</td><td>+3831 −74 · 24 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/f4f3a928290f2b20bec1d2a1fcc50815c1b6d145">f4f3a92</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/84e23d810887ef55cb6ea81ed3ca3031ea204fa3">84e23d8</a></td></tr></table>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/large-diff-review</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:30:08Z · 32m ago</td></tr><tr><td>Merged</td><td>2026-10-24T09:30:07Z · 32m ago</td></tr><tr><td>Diff</td><td>+3831 −74 · 24 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/f4f3a928290f2b20bec1d2a1fcc50815c1b6d145">f4f3a92</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/84e23d810887ef55cb6ea81ed3ca3031ea204fa3">84e23d8</a></td></tr></table>
     <h3>Description</h3><p>## Summary PR 5 of the roadmap. **Stacked on #18** (base is that branch; GitHub retargets it as the stack merges). Until now a diff past about 31.8k estimated tokens was cut off at the tail and could never be `auto`, so a large change was unreviewable and a defect past the cut was invisible. `jev_review`, `jev_risk` and `jev_gate` now review it in parts. - **Split along file boundaries.** A lossless unified-diff parser (`src/diff.ts`; handles renames, deletions, binary, `\ No newline`, CRLF, qu…</p>
   </details>
 </article>
@@ -119,7 +119,7 @@
   <div class="row"><span>burnigtm</span><span>+26124 −43 · 24 files</span><span>no checks reported</span></div>
   <details >
     <summary>Details</summary>
-    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/repo-policy-profiles</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:30:00Z · 31m ago</td></tr><tr><td>Merged</td><td>2026-10-24T09:29:59Z · 31m ago</td></tr><tr><td>Diff</td><td>+26124 −43 · 24 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/99ae156299d4be9ce3a66325d88d590b9027df84">99ae156</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/e7574703ff30f1e0de72292365e33c4a4ed60fe1">e757470</a></td></tr></table>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/repo-policy-profiles</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:30:00Z · 32m ago</td></tr><tr><td>Merged</td><td>2026-10-24T09:29:59Z · 32m ago</td></tr><tr><td>Diff</td><td>+26124 −43 · 24 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/99ae156299d4be9ce3a66325d88d590b9027df84">99ae156</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/e7574703ff30f1e0de72292365e33c4a4ed60fe1">e757470</a></td></tr></table>
     <h3>Description</h3><p>## Summary PR 4 of the roadmap. **Stacked on #17** (base is that branch; GitHub retargets it as the stack merges). Adds the deterministic layer the hooks and CI will use, and settles the open &quot;triage bar&quot; and &quot;strict profile&quot; questions with measurements instead of argument. - **`.jev-policy.json`**, evaluated by `jev_scope` before any Jev request: - `protected_paths`: globs with a `review` or `deny` floor, tested against the action&#x27;s `target` and every path-like argument of the command. - `comm…</p>
   </details>
 </article>
@@ -146,7 +146,7 @@
   <div class="row"><span>burnigtm</span><span>+8543 −49 · 22 files</span><span>no checks reported</span></div>
   <details >
     <summary>Details</summary>
-    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/hardening-loop-budget-gate</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:29:09Z · 32m ago</td></tr><tr><td>Merged</td><td>2026-10-24T09:29:09Z · 32m ago</td></tr><tr><td>Diff</td><td>+8543 −49 · 22 files</td></tr><tr><td>Commits</td><td>2</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/a9f4ddaae201754e237dfb6c2b3af3fe636d1841">a9f4dda</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/92186330bb5558398cea2e40275c28e26c87f6a3">9218633</a></td></tr></table>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/hardening-loop-budget-gate</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:29:09Z · 33m ago</td></tr><tr><td>Merged</td><td>2026-10-24T09:29:09Z · 33m ago</td></tr><tr><td>Diff</td><td>+8543 −49 · 22 files</td></tr><tr><td>Commits</td><td>2</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/a9f4ddaae201754e237dfb6c2b3af3fe636d1841">a9f4dda</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/92186330bb5558398cea2e40275c28e26c87f6a3">9218633</a></td></tr></table>
     <h3>Description</h3><p>## Summary PR 1 of a 9-stage roadmap (reviewed code from #12–#14, then planned fixes and enhancements). Hardening only: it fixes defects found by reading and running the merged code, and one model misjudgment found by the live benchmark. - **Loop detector no longer flags progress.** Failure counts that strictly shrink across attempts (9 → 5 → 2 failed) were reported as `same_failure` because every digit was masked. They are now progress (`loop.improving`, additive). A changing counter (`retry 3…</p>
   </details>
 </article>
@@ -187,7 +187,7 @@
   </details>
 </article>
 </main>
-<script id="watch-data" type="application/json">{"source": "github-api", "refreshedAt": "2026-10-24T10:01:53Z"}</script>
+<script id="watch-data" type="application/json">{"source": "github-api", "refreshedAt": "2026-10-24T10:02:12Z"}</script>
 <script>
 const q = document.getElementById("q");
 let filter = "all";
