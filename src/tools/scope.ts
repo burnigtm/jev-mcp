@@ -12,6 +12,7 @@ import {
 } from "../policy.js";
 import { asNoul, asScore } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
+import { effectiveEffect } from "../effects.js";
 import { containsInjectionInstruction, judgeTextClipped, sanitizeJudgeText } from "../untrusted.js";
 import { scopeReasonSchema, scopeOutputSchema } from "./output-schemas.js";
 
@@ -42,14 +43,17 @@ const MAX_TARGET_CHARS = 2_000;
 export async function runScope(input: ScopeInput, context?: ToolContext) {
   const config = getConfig();
   const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
-  const effect = input.action.effect as ActionEffect;
+  const declaredEffect = input.action.effect as ActionEffect;
+  // The declared effect is a host claim. Policy uses the strictest of it and what the command text shows.
+  const effects = effectiveEffect(declaredEffect, input.action.command);
+  const effect = effects.effective as ActionEffect;
   const clipped = judgeTextClipped(input.action.description, MAX_DESCRIPTION_CHARS)
     || (input.action.target !== undefined && judgeTextClipped(input.action.target, MAX_TARGET_CHARS))
     || (input.action.command !== undefined && judgeTextClipped(input.action.command, MAX_COMMAND_CHARS));
   const action = {
     name: sanitizeJudgeText(input.action.name, 256),
     description: sanitizeJudgeText(input.action.description, MAX_DESCRIPTION_CHARS),
-    effect,
+    effect: declaredEffect,
     target: input.action.target === undefined ? "" : sanitizeJudgeText(input.action.target, MAX_TARGET_CHARS),
     command: input.action.command === undefined ? "" : sanitizeJudgeText(input.action.command, MAX_COMMAND_CHARS),
   };
@@ -97,6 +101,7 @@ export async function runScope(input: ScopeInput, context?: ToolContext) {
   if (effect === "external_write") reasons.push("external_effect");
   if (effect === "destructive") reasons.push("destructive_effect");
   if (effect === "unknown") reasons.push("unknown_effect");
+  if (effects.upgraded) reasons.push("effect_upgraded");
   if (risk.score >= 1.5) reasons.push("risk_review");
   else if (!confidenceSupportsAuto(risk.confidence, risk.probabilities, autoAccept)) reasons.push("risk_uncertain");
   if (suspicious) reasons.push("injection_suspected");
@@ -114,6 +119,7 @@ export async function runScope(input: ScopeInput, context?: ToolContext) {
     truncated: result.truncated || clipped,
     coverage: incomplete ? { ...result.coverage, complete: false } : result.coverage,
     action: actionPolicy,
+    effect: { declared: effects.declared, inferred: effects.inferred, effective: effects.effective, matched: effects.matched },
     scope: { in_scope: inScope, effect_match: effectMatch, needs_confirmation: needsConfirmation },
     risk: {
       score: risk.score,

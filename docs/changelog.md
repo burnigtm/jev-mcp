@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Command effect classifier
+
+- New deterministic classifier (`src/effects.ts`) for shell commands in bash, PowerShell and cmd syntax. `jev_scope`, `jev_tool_route` and `jev_step` now use the strictest of the host-declared effect and the effect the command text shows, so a mislabeled `read_only` command that deletes, force-pushes, publishes or pipes a download into a shell can no longer be `auto` when the judge approves it. The classifier only ever raises an effect; unrecognized programs add no information and anything unparseable is `unknown`. Parsed twice (POSIX and Windows rules) with the strictest result winning; wrappers, nested shells, script blocks, heredocs, substitutions and common obfuscations (`r""m`, `r\m`, `RM -RF`, `/bin/rm`) are handled.
+- Additive output: `jev_scope` returns `effect: { declared, inferred, effective, matched }` and the reason `effect_upgraded`; `jev_tool_route` and `jev_step` return `effect_upgrades`. The judge's state is unchanged (it still sees the declared effect).
+- Measured: on 720 generated lying commands, declared-only rules approved 720 and rules plus the classifier approved 0; on 480 honest commands neither raised any (0 false positives). Live Jev had already escalated all 30 lying commands in the live sample, so the classifier changed no live outcome there; it matters when the judge misses a lie or cannot run.
+
 ### Hardening
 
 - **Loop detector no longer flags progress.** Failure counts that strictly shrink across attempts (9 → 5 → 2 failed) used to be reported as `same_failure` because every digit was masked. They are now recognized as progress (`loop.improving: true`, additive); changing counters with no failure count (`retry 3/5`) and stuck or growing counts are still loops. Offline, the previous detector flagged 240 of 240 generated shrinking trajectories and the new one flags 0, while still catching 240 of 240 counter loops.
