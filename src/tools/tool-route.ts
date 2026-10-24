@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { effectiveEffect, type Effect } from "../effects.js";
+import { effectUpgradesSchema } from "./output-schemas.js";
 import { getConfig } from "../config.js";
 import { JevValidationError } from "../errors.js";
 import { MAX_CANDIDATE_CHARS, truncateText } from "../limits.js";
@@ -54,6 +56,7 @@ export const toolRouteInputSchema = z.object({
 
 export type ToolRouteInput = z.infer<typeof toolRouteInputSchema>;
 export type ToolCandidate = z.infer<typeof toolCandidateSchema>;
+export type EffectUpgrade = { id: string; declared: Effect; effective: Effect; matched: string[] };
 type Candidate = ToolCandidate;
 export type JudgeCandidate = Pick<Candidate, "id" | "name" | "description" | "effect"> & {
   argument_shape: unknown;
@@ -82,9 +85,28 @@ export const toolRouteOutputSchema = z.object({
   call: z.object({ candidate_id: z.string(), name: z.string(), arguments: argumentsSchema }).nullable(),
   selection: z.object({ id: z.string().nullable(), confidence: probability, suitability: probability.nullable() }).nullable(),
   blocked_candidates: z.array(z.object({ id: z.string(), reason_codes: z.array(reasonSchema).min(1) })),
+  effect_upgrades: effectUpgradesSchema,
   reason_codes: z.array(reasonSchema).min(1),
   thresholds: z.object({ auto_accept: probability, review_at: probability, dispatch_at: probability }),
 });
+
+/**
+ * A host-declared effect is a claim. When the prepared call carries a shell command in `arguments.command`, the
+ * command text can only raise it: `read_only` + `rm -rf build` becomes `destructive` before any eligibility or
+ * dispatch rule looks at the candidate. Shared with the fused step router.
+ */
+export function applyEffectiveEffects(candidates: ToolCandidate[]): { candidates: ToolCandidate[]; upgrades: EffectUpgrade[] } {
+  const upgrades: EffectUpgrade[] = [];
+  const normalized = candidates.map((candidate) => {
+    const command = (candidate.arguments as Record<string, unknown> | undefined)?.command;
+    if (typeof command !== "string") return candidate;
+    const effects = effectiveEffect(candidate.effect, command);
+    if (!effects.upgraded) return candidate;
+    upgrades.push({ id: candidate.id, declared: effects.declared, effective: effects.effective, matched: effects.matched });
+    return { ...candidate, effect: effects.effective };
+  });
+  return { candidates: normalized, upgrades };
+}
 
 /** Local eligibility from trusted host facts; shared with the fused step router. */
 export function ineligibility(candidate: Candidate): Reason[] {
@@ -164,7 +186,8 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
     // Routing executable calls has a fixed safety floor, even with permissive judgment thresholds.
     const dispatchAt = Math.max(0.8, autoAccept);
     const blocked: Array<{ id: string; reason_codes: Reason[] }> = [];
-    const candidates = input.candidates.filter(candidate => {
+    const normalized = applyEffectiveEffects(input.candidates);
+    const candidates = normalized.candidates.filter(candidate => {
       const reasons = ineligibility(candidate);
       if (reasons.length) blocked.push({ id: candidate.id, reason_codes: reasons });
       return reasons.length === 0;
@@ -173,6 +196,7 @@ export async function runToolRoute(rawInput: ToolRouteInput, context?: ToolConte
     const shared = {
       partner_model: { required: false as const, tier: "none" as const },
       blocked_candidates: blocked,
+      effect_upgrades: normalized.upgrades,
       // auto_accept keeps reporting the dispatch floor for compatibility.
       thresholds: { auto_accept: dispatchAt, review_at: reviewAt, dispatch_at: dispatchAt },
     };

@@ -189,6 +189,7 @@ The response has an MCP output schema and matching JSON text and `structuredCont
 - `call: { candidate_id, name, arguments }` only with `action: auto` and `handoff: execute_tool`. Every other result has `call: null`.
 - `partner_model: { required: false, tier: "none" }` for every result.
 - `selection: { id, confidence, suitability }`, or `null` when no Jev request was needed. A non-auto selection is diagnostic, never an executable dispatch.
+- `effect_upgrades`: `[{ id, declared, effective, matched }]` for candidates whose `arguments.command` (when a string) showed a stricter effect than declared, using the same classifier as `jev_scope`. The stricter effect applies before eligibility and dispatch, so a `read_only` candidate running `curl … | sh` is blocked as `unknown_effect` and one running `git push` needs review.
 - `blocked_candidates` with exclusion reasons, overall `reason_codes`, effective `thresholds` (`auto_accept` reports the dispatch floor for compatibility; `dispatch_at` reports it explicitly, matching `jev_step`), coverage, model, and usage.
 
 For provider privacy, the judgment state contains only each eligible candidate's control-stripped id, control-stripped tool name, sanitized description, effect, and argument shape (key names control-stripped). Exact argument values are retained for the returned call but are not transmitted to TypeSafe.
@@ -350,6 +351,8 @@ Semantic preflight for **one** host-prepared action. It judges scope and effect 
 | `auto_accept` / `review_at` | no | May only tighten the env floors |
 
 `command` must be redacted. The description and command are untrusted evidence and receive the shared data-boundary clause.
+
+**The declared effect is a claim, and the command can only raise it.** When `command` is present, a deterministic classifier (`src/effects.ts`) reads it as bash, PowerShell and cmd, unwraps `sudo`, `env`, `xargs`, `find -exec`, `bash -c`, `cmd /c` and `powershell -Command`, and infers an effect. The policy uses the strictest of the declared and inferred effects, so `read_only` plus `rm -rf build && git push --force` is `destructive` whatever the judge says. Anything it cannot fully parse (a variable in command position, `eval`, `curl … | sh`, an unterminated quote, a command piped into an interpreter) is `unknown`. A program it does not recognize adds no information, so the declared effect stands; code inside an interpreter's inline script (`python -c`) is not analyzed. The judge still sees the declared effect, so its own honesty check is unchanged. The result reports `effect: { declared, inferred, effective, matched }` and adds the reason `effect_upgraded` when the effective effect is stricter than the declared one.
 
 **Questions:** Noul `in_scope`, `effect_match`, `needs_confirmation`; Score `risk` from read-only (0) to external/destructive (2).
 

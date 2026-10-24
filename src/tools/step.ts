@@ -23,7 +23,9 @@ import {
   type Handoff,
   type PartnerTier,
 } from "./coding-loop.js";
+import { effectUpgradesSchema } from "./output-schemas.js";
 import {
+  applyEffectiveEffects,
   argumentsSchema,
   candidateProjectionClipped,
   coverageSchema,
@@ -79,6 +81,7 @@ export const stepOutputSchema = z.object({
   }),
   selection: z.object({ id: z.string().nullable(), confidence: probability, suitability: probability.nullable() }).nullable(),
   blocked_candidates: z.array(z.object({ id: z.string(), reason_codes: z.array(reasonSchema).min(1) })),
+  effect_upgrades: effectUpgradesSchema,
   reason_codes: z.array(stepReasonSchema).min(1),
   next: choiceAnswerSchema,
   model_tier: choiceAnswerSchema,
@@ -115,7 +118,8 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
       failed_attempts: input.execution?.failed_attempts ?? 0,
     };
     const candidatesOmitted = input.candidates === undefined && !execution.prepared_tool_call;
-    const supplied = input.candidates ?? [];
+    const normalized = applyEffectiveEffects(input.candidates ?? []);
+    const supplied = normalized.candidates;
     const blocked: Array<{ id: string; reason_codes: Reason[] }> = [];
     const eligible = supplied.filter(candidate => {
       const reasons = ineligibility(candidate);
@@ -235,6 +239,7 @@ export async function runStep(rawInput: StepInput, context?: ToolContext) {
       partner_model: partnerModel,
       selection,
       blocked_candidates: blocked,
+      effect_upgrades: normalized.upgrades,
       reason_codes: reasons,
       ...codingLoopSignals(answers),
       thresholds: { auto_accept: autoAccept, review_at: reviewAt, dispatch_at: dispatchAt },

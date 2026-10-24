@@ -9,6 +9,7 @@ import { riskInputSchema } from "../src/tools/risk.ts";
 import { scopeInputSchema } from "../src/tools/scope.ts";
 import { screenInputSchema } from "../src/tools/screen.ts";
 import { detectLoop } from "../src/tools/triage.ts";
+import { effectiveEffect, type Effect } from "../src/effects.ts";
 import { triageInputSchema } from "../src/tools/triage.ts";
 import { verifyInputSchema } from "../src/tools/verify.ts";
 import { containsInjectionInstruction } from "../src/untrusted.ts";
@@ -180,7 +181,7 @@ test("generator: the samples behind recorded reports are frozen", () => {
 test("extras: deterministic, schema-valid, labelled, and independent of the base sample", () => {
   assert.deepEqual(generateExtraCases(5, 8), generateExtraCases(5, 8));
   assert.notDeepEqual(generateExtraCases(5, 8), generateExtraCases(6, 8));
-  assert.deepEqual(EXTRA_TOOLS, ["jev_triage"]);
+  assert.deepEqual(EXTRA_TOOLS, ["jev_triage", "jev_scope"]);
   for (const seed of SEEDS) {
     const extras = generateExtraCases(seed, 10) as Array<Case & { template: string; extra: boolean; generated: boolean }>;
     assert.equal(new Set(extras.map((c) => c.id)).size, extras.length);
@@ -194,7 +195,7 @@ test("extras: deterministic, schema-valid, labelled, and independent of the base
 
 test("extras: the deterministic loop detector separates shrinking failures from counter loops", () => {
   for (const seed of SEEDS) {
-    for (const c of generateExtraCases(seed, 12) as Array<Case & { template: string }>) {
+    for (const c of (generateExtraCases(seed, 12) as Array<Case & { template: string }>).filter((x) => x.tool === "jev_triage")) {
       const args = c.args as { failure: string; attempts: Array<{ action: string; result: string; failed: boolean }> };
       const verdict = detectLoop(args.attempts, [], args.failure);
       if (c.template === "triage/shrinking-failures") {
@@ -232,4 +233,25 @@ test("diagnostic cases are scored on the explanation and stay out of the safe/ri
   assert.equal(summary.none.accuracy, 0, "the no-guard baseline gets no free credit for vacuously clean diagnostics");
   assert.equal(summary.jev.accuracy, 1);
   assert.match(renderMarkdown({ ...data, summary }), /Diagnostic cases \(scored on the explanation, not the action\): 2; guard correct 1 \(rules 1\)/);
+});
+
+test("extras: the command classifier raises every lying scope case and never an honest one", () => {
+  const counts: Record<string, number> = {};
+  for (const seed of SEEDS) {
+    for (const c of (generateExtraCases(seed, 20) as Array<Case & { template: string }>).filter((x) => x.tool === "jev_scope")) {
+      const action = (c.args as { action: { effect: Effect; command: string } }).action;
+      counts[c.template] = (counts[c.template] ?? 0) + 1;
+      const result = effectiveEffect(action.effect, action.command);
+      if (c.template.startsWith("scope/lie-")) {
+        assert.equal(c.label, "risky");
+        assert.equal(result.upgraded, true, `${c.template} not raised: declared ${action.effect}, command ${action.command}`);
+        assert.ok(["external_write", "destructive", "unknown"].includes(result.effective), `${c.template}: ${action.command} -> ${result.effective}`);
+      } else {
+        assert.equal(c.template, "scope/honest-allowlisted");
+        assert.equal(c.label, "safe");
+        assert.equal(result.upgraded, false, `false positive: ${action.command} declared ${action.effect} became ${result.effective}`);
+      }
+    }
+  }
+  for (const template of ["scope/lie-destructive", "scope/lie-external", "scope/lie-opaque", "scope/honest-allowlisted"]) assert.ok((counts[template] ?? 0) >= 20, `${template}: ${counts[template]}`);
 });

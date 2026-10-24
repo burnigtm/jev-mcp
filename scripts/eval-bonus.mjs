@@ -33,8 +33,9 @@ const { values } = parseArgs({ allowNegative: true, options: {
 } });
 const repeat = Math.max(1, Math.min(5, Number(values.repeat) || 1));
 const { containsInjectionInstruction } = await import(new URL('../dist/untrusted.js', import.meta.url));
+const { effectiveEffect } = await import(new URL('../dist/effects.js', import.meta.url));
 const { detectLoop } = await import(new URL('../dist/tools/triage.js', import.meta.url));
-const rules = createRules({ containsInjectionInstruction, detectLoop });
+const rules = createRules({ containsInjectionInstruction, detectLoop, effectiveEffect });
 
 function jevDecision(tool, result) {
   return {
@@ -108,6 +109,7 @@ try {
     report.cases.push({
       id: testCase.id, tool: testCase.tool, label: testCase.label, template: testCase.template, generated: Boolean(testCase.generated),
       rules: { ...baseline, correct: correct(testCase, baseline) },
+      ...(testCase.tool === 'jev_scope' && testCase.args.action.command ? { rules_plus: (() => { const plus = rules.jev_scope_plus(testCase.args); return { ...plus, correct: correct(testCase, plus) }; })() } : {}),
       none: { action: 'auto', correct: testCase.label === 'safe' },
       jev: runs.map((run) => (run.decision ? { ...run, correct: correct(testCase, run.decision) } : run)),
     });

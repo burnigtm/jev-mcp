@@ -158,6 +158,7 @@ export const scopeReasonSchema = z.enum([
   "external_effect",
   "destructive_effect",
   "unknown_effect",
+  "effect_upgraded",
   "risk_review",
   "risk_uncertain",
   "injection_suspected",
@@ -165,8 +166,26 @@ export const scopeReasonSchema = z.enum([
   "review_required",
 ]);
 
+const effectNameSchema = z.enum(["read_only", "local_write", "external_write", "destructive", "unknown"]);
+
+/** How the host-declared effect compares with what the command text shows. */
+export const effectReportSchema = z.object({
+  declared: effectNameSchema,
+  inferred: effectNameSchema.nullable(),
+  effective: effectNameSchema,
+  matched: z.array(z.string()),
+});
+
+export const effectUpgradesSchema = z.array(z.object({
+  id: z.string(),
+  declared: effectNameSchema,
+  effective: effectNameSchema,
+  matched: z.array(z.string()),
+}));
+
 export const scopeOutputSchema = z.object({
   ...baseToolOutputShape,
+  effect: effectReportSchema,
   scope: z.object({
     in_scope: probabilitySchema,
     effect_match: probabilitySchema,
