@@ -137,3 +137,77 @@ export function withholdSensitive(diff: string, withheld: string[]): string {
     return `diff --git a/${path} b/${path}\n[content of a sensitive file withheld]\n`;
   }).join("");
 }
+
+// --- Between two refs (the CI gate) ------------------------------------------------------------------
+
+const SAFE_REF = new RegExp("^[A-Za-z0-9._/@^~{}:+-]+$");
+
+/** A ref the CI gate may pass to git: no leading dash (an option), no `..` (a range of our own making), no whitespace. */
+export function isSafeRef(ref: string): boolean {
+  return ref.length > 0 && ref.length <= 200 && !ref.startsWith("-") && !ref.includes("..") && SAFE_REF.test(ref);
+}
+
+export type ChangedFile = { status: string; path: string; oldPath?: string };
+
+export type RefChanges = {
+  root: string;
+  diff: string;
+  truncated: boolean;
+  withheld: string[];
+  files: ChangedFile[];
+  /** Commit messages between the refs; untrusted text. */
+  commits: string;
+};
+
+/** Parse `git diff --name-status -z`: `M\0path\0`, or `R100\0old\0new\0` for a rename or copy. */
+export function parseNameStatus(raw: string): ChangedFile[] {
+  const parts = raw.split("\0");
+  const files: ChangedFile[] = [];
+  for (let i = 0; i < parts.length;) {
+    const status = parts[i++];
+    if (!status) continue;
+    if (/^[RC]/.test(status)) {
+      const oldPath = parts[i++];
+      const path = parts[i++];
+      if (path !== undefined && oldPath !== undefined) files.push({ status: status[0]!, path, oldPath });
+    } else {
+      const path = parts[i++];
+      if (path !== undefined) files.push({ status: status[0]!, path });
+    }
+  }
+  return files;
+}
+
+/** Changes introduced by `head` since it diverged from `base` (a three-dot diff). Null when the refs do not resolve. */
+export async function refChanges(cwd: string, base: string, head: string): Promise<RefChanges | null> {
+  if (!isSafeRef(base) || !isSafeRef(head)) return null;
+  const root = await repoRoot(cwd);
+  if (!root) return null;
+  for (const ref of [base, head]) {
+    const found = await runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], root, { maxBytes: 1_000 });
+    if (!found.ok) return null;
+  }
+  const range = `${base}...${head}`;
+  const diff = await runGit(["diff", ...NO_EXT, range], root);
+  if (!diff.ok && !diff.truncated) return null;
+  const names = await runGit(["diff", ...NO_EXT, "--name-status", "-z", "-M", range], root, { maxBytes: 2_000_000 });
+  const log = await runGit(["log", "-n", "50", "--format=%B%x00", `${base}..${head}`], root, { maxBytes: 200_000 });
+  const withheld: string[] = [];
+  return {
+    root,
+    diff: withholdSensitive(diff.stdout, withheld),
+    truncated: diff.truncated,
+    withheld,
+    files: parseNameStatus(names.stdout),
+    commits: log.stdout.split("\0").map(message => message.trim()).filter(Boolean).join("\n---\n"),
+  };
+}
+
+/** A file's content at a ref, or null. Used to read the policy from the base ref, which a pull request cannot edit. */
+export async function showFile(cwd: string, ref: string, path: string): Promise<string | null> {
+  if (!isSafeRef(ref) || path.includes("\0") || path.startsWith("-")) return null;
+  const root = await repoRoot(cwd);
+  if (!root) return null;
+  const result = await runGit(["show", `${ref}:${path}`], root, { maxBytes: 200_000 });
+  return result.ok ? result.stdout : null;
+}

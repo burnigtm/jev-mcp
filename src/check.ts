@@ -296,21 +296,53 @@ export type ChangesResult = {
   model_calls: number;
 };
 
-/** Gate the working tree's uncommitted changes against the request and the completion claims. */
-export async function checkChanges(input: ChangesInput): Promise<ChangesResult> {
-  const changes = await workingChanges(input.cwd, input.base);
-  const empty = { files: 0, secrets_redacted: 0, withheld: [] as string[], claims: [] as string[], gate: null, model_calls: 0 };
-  if (!changes) return { action: "auto", reasons: ["not_a_repository"], ...empty };
-  if (!changes.diff.trim()) return { action: "auto", reasons: ["no_changes"], ...empty };
+export type GateDiffInput = {
+  diff: string;
+  /** Repository-relative paths whose content was withheld because they are sensitive. */
+  withheld: string[];
+  truncated: boolean;
+  request: string;
+  claims?: string[];
+  evidence?: string;
+  tests?: string;
+  risk?: boolean;
+  deadline?: number;
+};
 
-  const diff = redactSecrets(changes.diff);
+/** Redact, apply the deterministic floors, and run the completion gate on a diff that is already in hand. */
+export async function gateDiff(input: GateDiffInput): Promise<ChangesResult> {
+  const diff = redactSecrets(input.diff);
   const tests = redactSecrets(input.tests ?? "");
   const evidence = redactSecrets(input.evidence ?? "");
-  const claims = input.claims && input.claims.length ? input.claims : ["The change implements what was requested."];
+  const claims = input.claims ?? [];
   const floors: string[] = [];
   if (diff.count > 0) floors.push("secret_in_diff");
-  if (changes.withheld.length) floors.push("sensitive_file_changed");
-  if (changes.truncated) floors.push("diff_truncated");
+  if (input.withheld.length) floors.push("sensitive_file_changed");
+  if (input.truncated) floors.push("diff_truncated");
+
+  const context = input.deadline === undefined ? undefined : { deadline: input.deadline };
+  if (claims.length === 0) {
+    // Nothing was claimed, so there is nothing to verify: judge the patch and its security, and do not invent a
+    // claim that no evidence could support.
+    const [{ runReview }, { runRisk }] = await Promise.all([import("./tools/review.js"), import("./tools/risk.js")]);
+    const common = { request: input.request, diff: diff.text, tests: tests.text };
+    const [review, security] = await Promise.all([
+      runReview(common, context),
+      input.risk === false ? Promise.resolve(null) : runRisk(common, context),
+    ]);
+    const reasons = [...floors];
+    for (const code of [...review.reason_codes, ...(security?.reason_codes ?? [])]) if (code !== "accepted" && !reasons.includes(code)) reasons.push(code);
+    return {
+      action: worstAction([review.action, ...(security ? [security.action] : []), ...(floors.length ? ["review" as const] : [])]),
+      reasons,
+      files: (diff.text.match(/^diff --git /gm) ?? []).length,
+      secrets_redacted: diff.count + tests.count + evidence.count,
+      withheld: input.withheld,
+      claims,
+      gate: { review, security, chunks: [...(review.chunks ?? []), ...(security?.chunks ?? [])] },
+      model_calls: security ? 2 : 1,
+    };
+  }
 
   const { runGate } = await import("./tools/gate.js");
   const gate = await runGate({
@@ -320,16 +352,25 @@ export async function checkChanges(input: ChangesInput): Promise<ChangesResult> 
     evidence: `${evidence.text}\nChanged files: ${(diff.text.match(/^diff --git /gm) ?? []).length}`.trim(),
     tests: tests.text,
     risk: input.risk ?? true,
-  }, input.deadline === undefined ? undefined : { deadline: input.deadline });
+  }, context);
   const reasons = [...floors, ...gate.reason_codes.filter((code: string) => code !== "accepted")];
   return {
     action: worstAction([gate.action, ...(floors.length ? ["review" as const] : [])]),
     reasons,
     files: (diff.text.match(/^diff --git /gm) ?? []).length,
     secrets_redacted: diff.count + tests.count + evidence.count,
-    withheld: changes.withheld,
+    withheld: input.withheld,
     claims,
     gate,
     model_calls: 1,
   };
+}
+
+/** Gate the working tree's uncommitted changes against the request and the completion claims. */
+export async function checkChanges(input: ChangesInput): Promise<ChangesResult> {
+  const changes = await workingChanges(input.cwd, input.base);
+  const empty = { files: 0, secrets_redacted: 0, withheld: [] as string[], claims: [] as string[], gate: null, model_calls: 0 };
+  if (!changes) return { action: "auto", reasons: ["not_a_repository"], ...empty };
+  if (!changes.diff.trim()) return { action: "auto", reasons: ["no_changes"], ...empty };
+  return gateDiff({ ...input, diff: changes.diff, withheld: changes.withheld, truncated: changes.truncated });
 }

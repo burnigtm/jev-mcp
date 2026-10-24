@@ -29,6 +29,7 @@ For local CLI use on Node 20.6+, copy [`.env.example`](../.env.example) to `.env
 | `JEV_MCP_STOP_DEADLINE_MS` | `80000` | The `Stop` hook's deadline for the completion gate |
 | `JEV_MCP_TEST_COMMAND` | unset | A command run by the `Stop` hook for test evidence. Read from the environment only, never from a repository file |
 | `JEV_MCP_TEST_TIMEOUT_MS` | `120000` | Timeout for that command |
+| `JEV_MCP_CI_DEADLINE_MS` | `600000` | Deadline for one whole `jev-mcp ci` run. See [the pull-request gate](ci.md) |
 | `JEV_MCP_MAX_REVIEW_CHUNKS` | `12` | Most chunks a single `jev_review`, `jev_risk` or `jev_gate` call sends when a diff is too large for one request. Each chunk is one Jev request of up to the full context, so this also bounds the cost of one review; beyond it the first chunks are reviewed, `omitted_files` names the rest and the result is never `auto` |
 | `JEV_MCP_TOKEN_BUDGET` | unlimited | Provider tokens (input + output) this server process may spend. Each request reserves its estimated tokens (state, questions, and a per-question output allowance) before it is sent, so concurrent calls cannot all pass the same check. Once spent plus reserved tokens reach the budget, calls fail with `BUDGET_EXHAUSTED` before any provider request, and the request that crosses the line may overshoot by its own size. A request that reached the provider but returned no usage (timeout, abort, API error, invalid response) is charged at its reservation. Cache hits are still served |
 

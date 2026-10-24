@@ -246,3 +246,69 @@ export async function runCheckCommand(): Promise<void> {
     process.exit(2);
   }
 }
+
+const CI_FILE_CAP = 200_000;
+
+function readCapped(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  return readFileSync(path, "utf8").slice(0, CI_FILE_CAP);
+}
+
+/**
+ * `jev-mcp ci --base REF --head REF [--pr-title-file F] [--pr-body-file F] [--tests-file F]
+ *   [--format json|github] [--fail-on review|escalate] [--deterministic-only] [--require-jev]`.
+ * Exit 0 auto, 10 review, 20 escalate, 2 error (fail closed). The title, body and log arrive as files so a
+ * workflow never interpolates pull-request text into a shell command.
+ */
+export async function runCiCommand(argv: string[]): Promise<void> {
+  try {
+    const { parseArgs } = await import("node:util");
+    const parsed = (() => {
+      try {
+        return parseArgs({ args: argv, options: {
+      base: { type: "string" },
+      head: { type: "string" },
+      "pr-title-file": { type: "string" },
+      "pr-body-file": { type: "string" },
+      "tests-file": { type: "string" },
+      format: { type: "string", default: "json" },
+      "fail-on": { type: "string", default: "review" },
+      "deterministic-only": { type: "boolean", default: false },
+      "require-jev": { type: "boolean", default: false },
+        } });
+      } catch (err) {
+        throw new JevValidationError(err instanceof Error ? err.message : "Invalid options.");
+      }
+    })();
+    const values = parsed.values;
+    if (!values.base || !values.head) throw new JevValidationError("Usage: jev-mcp ci --base REF --head REF [--pr-title-file F] [--pr-body-file F] [--tests-file F] [--format json|github] [--fail-on review|escalate]");
+    if (values.format !== "json" && values.format !== "github") throw new JevValidationError("--format must be json or github.");
+    if (values["fail-on"] !== "review" && values["fail-on"] !== "escalate") throw new JevValidationError("--fail-on must be review or escalate.");
+    const ci = await import("./ci.js");
+    const result = await ci.runCi({
+      cwd: process.cwd(),
+      base: values.base,
+      head: values.head,
+      title: readCapped(values["pr-title-file"])?.trim(),
+      body: readCapped(values["pr-body-file"]),
+      tests: readCapped(values["tests-file"]),
+      failOn: values["fail-on"],
+      deterministicOnly: values["deterministic-only"],
+      requireJev: values["require-jev"],
+      deadline: Date.now() + (Number(process.env.JEV_MCP_CI_DEADLINE_MS) > 0 ? Number(process.env.JEV_MCP_CI_DEADLINE_MS) : 600_000),
+    });
+    let stdout: string;
+    if (values.format === "github") {
+      const markdown = ci.renderMarkdown(result);
+      const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+      if (summaryFile) (await import("node:fs")).appendFileSync(summaryFile, `${markdown}\n`);
+      stdout = `${ci.githubAnnotations(result).join("\n")}${result.action === "auto" ? "" : "\n"}jev: ${result.action} (${result.mode}) ${result.reasons.join(",")}\n${summaryFile ? "" : markdown}`;
+    } else {
+      stdout = ci.renderJson(result);
+    }
+    exitAfterFlush(stdout, result.exit_code);
+  } catch (err) {
+    process.stderr.write(`${JSON.stringify({ error: errorDetails(err) })}\n`);
+    process.exit(2);
+  }
+}

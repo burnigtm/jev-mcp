@@ -136,6 +136,7 @@ The regular suite never runs live evaluations, even when a key is inherited. Pac
 | [Tools](docs/tools.md) | Arguments and outputs for all twelve tools |
 | [Install](docs/install.md) | Host configuration and Windows checkout |
 | [Hooks](docs/hooks.md) | Enforced Claude Code hooks and `jev-mcp check` |
+| [Pull-request gate](docs/ci.md) | `jev-mcp ci` and an example GitHub workflow |
 | [Configuration](docs/configuration.md) | Environment, thresholds, diagnostics, tests |
 | [Agent skill](skills/jev-mcp/SKILL.md) | Calling guidance for the host |
 | [AGENTS.md](AGENTS.md) | Short project guidance |
