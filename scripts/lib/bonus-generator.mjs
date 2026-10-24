@@ -6,6 +6,7 @@
 // determines the sample, so any run can be replayed exactly, while a new seed
 // gives cases the hand-written set and earlier runs have never seen.
 
+import { behaviorCallersBreak, fixCallersCompatible, fixCallersWrong, signatureCallersBreak } from './bonus-callers.mjs';
 import { largeContractBreak, largeReviewClean, largeReviewPlanted, largeRiskClean, largeRiskPlanted } from './bonus-large.mjs';
 
 export function rng(seed) {
@@ -439,6 +440,8 @@ const EXTRA_BUILDERS = {
   jev_scope: [scopeLieDestructiveCase, scopeLieExternalCase, scopeLieOpaqueCase, scopeHonestCase, scopeHonestCase],
   jev_review: [largeReviewClean, largeReviewPlanted, largeContractBreak, largeReviewPlanted],
   jev_risk: [largeRiskClean, largeRiskPlanted],
+  // Same tool as jev_review, own key: it draws from the stream after every earlier tool, so their cases are unchanged.
+  jev_review_callers: [fixCallersCompatible, signatureCallersBreak, behaviorCallersBreak, fixCallersWrong],
 };
 export const EXTRA_TOOLS = Object.keys(EXTRA_BUILDERS);
 
@@ -449,7 +452,7 @@ export function generateExtraCases(seed, perTool = 10, tools = EXTRA_TOOLS) {
   for (const tool of tools) {
     const builders = EXTRA_BUILDERS[tool] ?? [];
     for (let i = 0; i < perTool && builders.length; i += 1) {
-      cases.push({ ...builders[i % builders.length](r, { testsGreen: () => testsGreen(r) }), id: `x${seed}-${tool.replace('jev_', '')}-${i}`, generated: true, extra: true });
+      cases.push({ ...builders[i % builders.length](r, { testsGreen: () => testsGreen(r), domains: DOMAINS, fixes: FIXES, badPatches: BAD_PATCHES }), id: `x${seed}-${tool.replace('jev_', '')}-${i}`, generated: true, extra: true });
     }
   }
   return cases;

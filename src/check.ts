@@ -2,6 +2,7 @@ import { open, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { effectiveEffect, commandSegments, type Effect } from "./effects.js";
 import { errorDetails } from "./errors.js";
+import { callerContextForDiff } from "./context.js";
 import { workingChanges } from "./git.js";
 import { worstAction, type PolicyAction } from "./policy.js";
 import { redactSecrets } from "./redact.js";
@@ -283,6 +284,8 @@ export type ChangesInput = {
   base?: string;
   risk?: boolean;
   deadline?: number;
+  /** Where the changed symbols are used outside the diff; see src/context.ts. */
+  repoContext?: { callers: Array<{ path: string; line?: number; text: string; symbol?: string }>; total?: number };
 };
 
 export type ChangesResult = {
@@ -307,6 +310,8 @@ export type GateDiffInput = {
   tests?: string;
   risk?: boolean;
   deadline?: number;
+  /** Where the changed symbols are used outside the diff; see src/context.ts. */
+  repoContext?: { callers: Array<{ path: string; line?: number; text: string; symbol?: string }>; total?: number };
 };
 
 /** Redact, apply the deterministic floors, and run the completion gate on a diff that is already in hand. */
@@ -325,7 +330,7 @@ export async function gateDiff(input: GateDiffInput): Promise<ChangesResult> {
     // Nothing was claimed, so there is nothing to verify: judge the patch and its security, and do not invent a
     // claim that no evidence could support.
     const [{ runReview }, { runRisk }] = await Promise.all([import("./tools/review.js"), import("./tools/risk.js")]);
-    const common = { request: input.request, diff: diff.text, tests: tests.text };
+    const common = { request: input.request, diff: diff.text, tests: tests.text, ...(input.repoContext ? { context: input.repoContext } : {}) };
     const [review, security] = await Promise.all([
       runReview(common, context),
       input.risk === false ? Promise.resolve(null) : runRisk(common, context),
@@ -352,6 +357,7 @@ export async function gateDiff(input: GateDiffInput): Promise<ChangesResult> {
     evidence: `${evidence.text}\nChanged files: ${(diff.text.match(/^diff --git /gm) ?? []).length}`.trim(),
     tests: tests.text,
     risk: input.risk ?? true,
+    ...(input.repoContext ? { context: input.repoContext } : {}),
   }, context);
   const reasons = [...floors, ...gate.reason_codes.filter((code: string) => code !== "accepted")];
   return {
@@ -372,5 +378,7 @@ export async function checkChanges(input: ChangesInput): Promise<ChangesResult> 
   const empty = { files: 0, secrets_redacted: 0, withheld: [] as string[], claims: [] as string[], gate: null, model_calls: 0 };
   if (!changes) return { action: "auto", reasons: ["not_a_repository"], ...empty };
   if (!changes.diff.trim()) return { action: "auto", reasons: ["no_changes"], ...empty };
-  return gateDiff({ ...input, diff: changes.diff, withheld: changes.withheld, truncated: changes.truncated });
+  const found = ["on", "1", "true", "yes"].includes(process.env.JEV_MCP_CALLER_CONTEXT?.trim().toLowerCase() ?? "") ? await callerContextForDiff(changes.root, changes.diff) : null;
+  const repoContext = found && found.callers.length > 0 ? { callers: found.callers, total: found.total } : undefined;
+  return gateDiff({ ...input, diff: changes.diff, withheld: changes.withheld, truncated: changes.truncated, repoContext });
 }

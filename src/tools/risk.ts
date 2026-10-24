@@ -7,6 +7,7 @@ import { asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { containsInjectionInstruction, sanitizeJudgeText, sanitizeUntrustedDocument } from "../untrusted.js";
 import { chunkedCoverage, chunkedIncomplete, chunkSummaries, mergeRisks, omittedFiles, riskFloors, runChunks, singleOrChunked, type ChunkedPlan } from "./chunked.js";
+import { contextSchema, judgeContext } from "./context-input.js";
 import { riskOutputSchema, riskReasonSchema } from "./output-schemas.js";
 
 export const fileSchema = z.object({
@@ -22,6 +23,7 @@ export const riskInputSchema = z.object({
   tests: z.string().optional().describe("Test output that supports or challenges the patch"),
   files: z.array(fileSchema).max(100).optional().describe("Changed files and host-supplied change kinds"),
   dependencies: dependenciesSchema.optional().describe("New or changed external dependencies"),
+  context: contextSchema.optional(),
   auto_accept: z.number().min(0).max(1).optional(),
   review_at: z.number().min(0).max(1).optional(),
   model: z.string().optional(),
@@ -39,8 +41,10 @@ export async function runRisk(input: RiskInput, context?: ToolContext) {
   const dependencies = sanitizeDependencies(input.dependencies);
   const suspicious = riskInputSuspicious(input.diff, input.tests);
 
+  const shown = judgeContext(input.context);
   const state = {
     request: input.request,
+    ...(shown ? { context: shown } : {}),
     diff,
     tests,
     files,
@@ -51,7 +55,7 @@ export async function runRisk(input: RiskInput, context?: ToolContext) {
       diff,
       tests,
       whole: { state, questions: riskQuestions() },
-      base: { request: input.request, files, dependencies },
+      base: { request: input.request, ...(shown ? { context: shown } : {}), files, dependencies },
       questions: chunkQuestions({ review: false, risk: true }),
     },
     async () => {

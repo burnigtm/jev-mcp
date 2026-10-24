@@ -21,9 +21,9 @@ function withChunkClause<Q extends Questions>(questions: Q): Q {
 }
 
 /** Questions for one chunk: patch review, security flags, or both (the completion gate). */
-export function chunkQuestions(parts: { review: boolean; risk: boolean }): Questions {
+export function chunkQuestions(parts: { review: boolean; risk: boolean; callers?: boolean }): Questions {
   return withChunkClause({
-    ...(parts.review ? reviewQuestions() : {}),
+    ...(parts.review ? reviewQuestions({ callers: parts.callers }) : {}),
     ...(parts.risk ? riskQuestions() : {}),
   });
 }

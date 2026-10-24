@@ -64,7 +64,7 @@ Usage:
                           Claude Code hook: reads the event on stdin, prints a permission decision or nothing
   jev-mcp hook install [--stop] [--shadow] [--block-on-failure] [--write FILE]
                           Print (or merge into FILE) the Claude Code settings that wire the hooks in
-  jev-mcp ci --base REF --head REF [--pr-body-file F] [--tests-file F] [--format json|github] [--fail-on review|escalate]
+  jev-mcp ci --base REF --head REF [--pr-body-file F] [--tests-file F] [--format json|github] [--fail-on review|escalate] [--callers]
                           Pull-request gate; exit 0 auto, 10 review, 20 escalate, 2 error
   jev-mcp check           JSON on stdin ({"kind":"action"|"changes",...}); exit 0 auto, 10 review, 20 escalate, 2 error
 `);

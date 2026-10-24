@@ -185,7 +185,7 @@ test("generator: the samples behind recorded reports are frozen", () => {
 test("extras: deterministic, schema-valid, labelled, and independent of the base sample", () => {
   assert.deepEqual(generateExtraCases(5, 8), generateExtraCases(5, 8));
   assert.notDeepEqual(generateExtraCases(5, 8), generateExtraCases(6, 8));
-  assert.deepEqual(EXTRA_TOOLS, ["jev_triage", "jev_scope", "jev_review", "jev_risk"]);
+  assert.deepEqual(EXTRA_TOOLS, ["jev_triage", "jev_scope", "jev_review", "jev_risk", "jev_review_callers"]);
   for (const seed of SEEDS) {
     const extras = generateExtraCases(seed, 10) as Array<Case & { template: string; extra: boolean; generated: boolean }>;
     assert.equal(new Set(extras.map((c) => c.id)).size, extras.length);
@@ -232,6 +232,26 @@ test("extras: large-diff cases need chunking, mark exactly one planted edit, and
   for (const template of ["review/large-clean", "review/large-contract-break", "risk/large-clean"]) assert.ok(seen.has(template), template);
   assert.ok([...seen].some((template) => template.startsWith("review/large-planted-")));
   assert.ok([...seen].some((template) => template.startsWith("risk/large-planted-")));
+});
+
+test("extras: caller-context cases carry their callers, keep the same diff either way, and label by template", () => {
+  const seen = new Set<string>();
+  for (const seed of SEEDS) {
+    const cases = generateExtraCases(seed, 9, ["jev_review_callers"]) as Array<Case & { template: string; callers: Array<{ path: string; line: number; text: string; symbol: string }>; args: { request: string; diff: string } }>;
+    for (const c of cases) {
+      seen.add(c.template.replace(/-(skipped-test|swallowed-error|hardcoded-case)$/, ""));
+      assert.equal(c.tool, "jev_review");
+      assert.ok(c.callers.length >= 3 && c.callers.every((caller) => caller.path.startsWith("src/") && caller.text.includes(caller.symbol)), c.id);
+      assert.ok(reviewInputSchema.safeParse({ ...c.args, context: { callers: c.callers, total: c.callers.length } }).success, `${c.id}: valid with context`);
+      if (c.template === "review/fix-callers-compatible") assert.equal(c.label, "safe");
+      else assert.equal(c.label, "risky");
+      if (c.template === "review/signature-callers-break") {
+        assert.match(c.args.diff, /\+export function \w+\(value, limit, mode\)/);
+        assert.ok(c.callers.every((caller) => !caller.text.includes("mode")), "the callers still use the old arguments");
+      }
+    }
+  }
+  assert.deepEqual([...seen].sort(), ["review/behavior-callers-break", "review/fix-callers-compatible", "review/fix-callers-wrong", "review/signature-callers-break"]);
 });
 
 test("extras: the deterministic loop detector separates shrinking failures from counter loops", () => {

@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { gateDiff } from "./check.js";
+import { callerContextForDiff } from "./context.js";
 import { fileFloors } from "./diff-chunks.js";
 import { parseUnifiedDiff } from "./diff.js";
 import { getConfig } from "./config.js";
@@ -31,6 +32,8 @@ export type CiOptions = {
   failOn?: "review" | "escalate";
   /** Run only the checks that need no model (the mode for pull requests from forks, which get no secrets). */
   deterministicOnly?: boolean;
+  /** Look up where changed symbols are used outside the diff. Off by default (`JEV_MCP_CALLER_CONTEXT=on` or `--callers` enables it): it names the callers a change affects, but on the benchmark it made Jev hold more correct fixes and caught nothing extra. */
+  callers?: boolean;
   /** Treat a missing API key as an error instead of falling back to the deterministic checks. */
   requireJev?: boolean;
   deadline?: number;
@@ -50,6 +53,8 @@ export type CiResult = {
   withheld: string[];
   /** Held parts of a large change (from the chunked review). */
   held: Array<{ files: string[]; action: PolicyAction }>;
+  /** Caller lookup: symbols searched, uses shown to the judge, uses found, snippets withheld as instructions. */
+  callers: { symbols: string[]; shown: number; total: number; withheld: number } | null;
   unsupported_claims: string[];
   fail_on: "review" | "escalate";
   exit_code: number;
@@ -91,6 +96,11 @@ function policyFindings(policy: RepoPolicy, files: ChangedFile[]): PolicyFinding
     }
   }
   return findings;
+}
+
+/** Opt-in: `JEV_MCP_CALLER_CONTEXT=on`. */
+export function callerContextEnabled(): boolean {
+  return ["on", "1", "true", "yes"].includes(process.env.JEV_MCP_CALLER_CONTEXT?.trim().toLowerCase() ?? "");
 }
 
 function haveCredentials(): boolean {
@@ -135,6 +145,7 @@ export async function runCi(options: CiOptions): Promise<CiResult> {
   let secretsRedacted = redactSecrets(changes.diff).count;
   let modelCalls = 0;
   let usedClaims = claims;
+  let callerReport: CiResult["callers"] = null;
 
   if (useJev && changes.diff.trim()) {
     const request = [options.title, options.body].filter(Boolean).join("\n\n").slice(0, 4_000) || "Review this pull request.";
@@ -145,6 +156,13 @@ export async function runCi(options: CiOptions): Promise<CiResult> {
     if (screened.action === "escalate") floor("escalate", "pr_text_flagged");
     else if (screened.action === "review") floor("review", "pr_text_flagged");
 
+    let repoContext: { callers: Array<{ path: string; line?: number; text: string; symbol?: string }>; total: number } | undefined;
+    if (options.callers === true || (options.callers === undefined && callerContextEnabled())) {
+      const found = await callerContextForDiff(options.cwd, changes.diff, { ref: options.head });
+      callerReport = { symbols: found.symbols, shown: found.callers.length, total: found.total, withheld: found.withheld };
+      if (found.withheld > 0) floor("review", "caller_context_injection");
+      if (found.callers.length > 0) repoContext = { callers: found.callers, total: found.total };
+    }
     const result = await gateDiff({
       diff: changes.diff,
       withheld: [],
@@ -155,6 +173,7 @@ export async function runCi(options: CiOptions): Promise<CiResult> {
       tests: options.tests,
       risk: true,
       deadline: options.deadline,
+      repoContext,
     });
     modelCalls += result.model_calls;
     secretsRedacted = Math.max(secretsRedacted, result.secrets_redacted);
@@ -191,6 +210,7 @@ export async function runCi(options: CiOptions): Promise<CiResult> {
     secrets_redacted: secretsRedacted,
     withheld: changes.withheld,
     held,
+    callers: callerReport,
     unsupported_claims: unsupported,
     fail_on: failOn,
     exit_code: exitCode,
