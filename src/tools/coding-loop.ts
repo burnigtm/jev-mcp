@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { codingLoopQuestions } from "../packs/coding-loop.js";
-import { codingLoopAction, confidenceSupportsAuto, distributionSupportsConfidence, requireCompleteContext, tightenJudgmentThresholds } from "../policy.js";
+import { codingLoopAction, confidenceSupportsAuto, distributionSupportsConfidence, requireCompleteContext, tightenJudgmentThresholds, unmeasuredAutoAccept } from "../policy.js";
 import { asChoice, asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 
@@ -38,7 +38,10 @@ export type ExecutionFacts = { prepared_tool_call: boolean; context_complete: bo
 
 export async function runCodingLoop(input: CodingLoopInput, context?: ToolContext) {
   const config = getConfig();
-  const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
+  const tightened = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
+  const reviewAt = tightened.reviewAt;
+  // Not measured at the lower default bar, so it keeps 0.80.
+  const autoAccept = unmeasuredAutoAccept(tightened.autoAccept);
   const execution = {
     prepared_tool_call: input.execution?.prepared_tool_call ?? false,
     context_complete: input.execution?.context_complete ?? false,

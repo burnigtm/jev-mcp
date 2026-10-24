@@ -254,6 +254,43 @@ test("extras: caller-context cases carry their callers, keep the same diff eithe
   assert.deepEqual([...seen].sort(), ["review/behavior-callers-break", "review/fix-callers-compatible", "review/fix-callers-wrong", "review/signature-callers-break"]);
 });
 
+test("extras: hard cases are valid, labelled, paired risky and safe, and only produced when asked for", () => {
+  assert.ok(!generateExtraCases(3, 10).some((c) => /\/(hard|blind)-/.test((c as { template: string }).template)), "not part of the default set");
+  const tools = new Set<string>();
+  const labels = { risky: 0, safe: 0 };
+  for (const seed of SEEDS) {
+    const cases = generateExtraCases(seed, 66, ["hard"]) as Array<Case & { template: string; args: Record<string, unknown> }>;
+    assert.equal(new Set(cases.map((c) => c.id)).size, cases.length);
+    for (const c of cases) {
+      assert.ok(c.template.includes("/hard-"), c.template);
+      assert.ok(SCHEMAS[c.tool]!.safeParse(c.args).success, `${c.id}: ${c.template}`);
+      tools.add(c.tool);
+      labels[c.label as "risky" | "safe"]++;
+    }
+  }
+  assert.deepEqual([...tools].sort(), ["jev_review", "jev_risk", "jev_scope", "jev_triage", "jev_verify"]);
+  assert.ok(labels.safe >= labels.risky * 0.4 && labels.risky >= labels.safe * 0.4, `a usable mix: ${JSON.stringify(labels)}`);
+  assert.equal(JSON.stringify(generateExtraCases(9, 40, ["hard"])), JSON.stringify(generateExtraCases(9, 40, ["hard"])), "deterministic");
+});
+
+test("extras: blind cases are valid, paired, deterministic and share no template with the hard cases", () => {
+  const hardTemplates = new Set(SEEDS.flatMap((seed) => generateExtraCases(seed, 99, ["hard"]).map((c) => (c as { template: string }).template.replace(/^[a-z]+\/hard-/, ""))));
+  const tools = new Set<string>();
+  const labels = { risky: 0, safe: 0 };
+  for (const seed of SEEDS) {
+    for (const c of generateExtraCases(seed, 60, ["blind"]) as Array<Case & { template: string; args: Record<string, unknown> }>) {
+      assert.ok(c.template.includes("/blind-"), c.template);
+      assert.ok(SCHEMAS[c.tool]!.safeParse(c.args).success, `${c.id}: ${c.template}`);
+      assert.ok(!hardTemplates.has(c.template.replace(/^[a-z]+\/blind-/, "")), `${c.template} duplicates a hard template`);
+      tools.add(c.tool);
+      labels[c.label as "risky" | "safe"]++;
+    }
+  }
+  assert.deepEqual([...tools].sort(), ["jev_review", "jev_risk", "jev_scope", "jev_triage", "jev_verify"]);
+  assert.ok(labels.risky > 0 && labels.safe > 0);
+  assert.equal(JSON.stringify(generateExtraCases(4, 30, ["blind"])), JSON.stringify(generateExtraCases(4, 30, ["blind"])));
+});
+
 test("extras: the deterministic loop detector separates shrinking failures from counter loops", () => {
   for (const seed of SEEDS) {
     for (const c of (generateExtraCases(seed, 12) as Array<Case & { template: string }>).filter((x) => x.tool === "jev_triage")) {

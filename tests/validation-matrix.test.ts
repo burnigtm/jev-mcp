@@ -213,7 +213,7 @@ test("config defaults, trimming, and boolean spellings", () => {
   const config = getConfig();
   assert.deepEqual(
     { model: config.model, auto: config.autoAccept, review: config.reviewAt, block: config.blockAt, timeout: config.timeoutMs, ttl: config.cacheTtlMs, max: config.cacheMaxEntries, budget: config.tokenBudget },
-    { model: "jev-latest", auto: 0.8, review: 0.5, block: 0.75, timeout: 30_000, ttl: 0, max: 256, budget: undefined },
+    { model: "jev-latest", auto: 0.7, review: 0.5, block: 0.75, timeout: 30_000, ttl: 0, max: 256, budget: undefined },
   );
   process.env.JEV_MCP_MODEL = "  ";
   process.env.JEV_MCP_TOKEN_BUDGET = "  1000 ";

@@ -147,11 +147,12 @@ const CLEAN_FLAGS = { authorization: 0.02, input_validation: 0.02, secret_exposu
 test("risk: a low severity split between none and bounded is auto-eligible; real severity mass is not", () => {
   const split = scoreFrom([0.6, 0.38, 0.02]);
   assert.ok(split.confidence < 0.8);
-  assert.equal(riskAction({ flags: CLEAN_FLAGS, severityScore: split.score, severityConfidence: split.confidence, severityProbabilities: split.probabilities }), "auto");
+  const bars = { autoAccept: 0.8, reviewAt: 0.5 };
+  assert.equal(riskAction({ flags: CLEAN_FLAGS, severityScore: split.score, severityConfidence: split.confidence, severityProbabilities: split.probabilities, ...bars }), "auto");
   const serious = scoreFrom([0.5, 0.2, 0.3]);
-  assert.equal(riskAction({ flags: CLEAN_FLAGS, severityScore: serious.score, severityConfidence: serious.confidence, severityProbabilities: serious.probabilities }), "review");
+  assert.equal(riskAction({ flags: CLEAN_FLAGS, severityScore: serious.score, severityConfidence: serious.confidence, severityProbabilities: serious.probabilities, ...bars }), "review");
   const bounded = scoreFrom([0.05, 0.7, 0.25]);
-  assert.notEqual(riskAction({ flags: CLEAN_FLAGS, severityScore: bounded.score, severityConfidence: bounded.confidence, severityProbabilities: bounded.probabilities }), "auto", "score >= 1.2 floor still applies");
+  assert.notEqual(riskAction({ flags: CLEAN_FLAGS, severityScore: bounded.score, severityConfidence: bounded.confidence, severityProbabilities: bounded.probabilities, ...bars }), "auto", "score >= 1.2 floor still applies");
 });
 
 // --- Triage causes ---------------------------------------------------------------------
@@ -176,7 +177,7 @@ test("risk: a flag that is neither a concern nor confidently absent is named con
   try {
     responds(() => ({ external_effect: 0.3 }));
     const { runRisk } = await import("../src/tools/risk.ts");
-    const result = await runRisk({ request: "Log timing", diff: "+  logger.debug(\"took\", { ms });" });
+    const result = await runRisk({ request: "Log timing", diff: "+  logger.debug(\"took\", { ms });", auto_accept: 0.8 });
     assert.equal(result.action, "review");
     assert.deepEqual(result.reason_codes, ["concern_uncertain"]);
   } finally {

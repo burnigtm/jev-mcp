@@ -105,7 +105,7 @@ High confidence does **not** mean the answer is true. It means Jev is not torn b
 
 Default judgment bands (overridable per call or with env vars; prepared-call dispatch retains its `0.8` minimum):
 
-- **auto** — confidence ≥ `0.8` and risk is low
+- **auto** — confidence ≥ `0.7` (patch review, claims and executable dispatch keep `0.8`) and risk is low
 - **review** — medium confidence, or high-stakes even when confident
 - **escalate** — confidence < `0.5`, or a hard fail (contradicted claim, injection block, unsafe patch)
 

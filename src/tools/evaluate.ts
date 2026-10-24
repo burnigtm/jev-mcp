@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parseQuestions, type QuestionInput } from "../questions.js";
-import { actionFromConfidence, confidenceSupportsAuto, minConfidence, requireCompleteContext, validatePolicyThresholds } from "../policy.js";
+import { actionFromConfidence, confidenceSupportsAuto, minConfidence, requireCompleteContext, unmeasuredAutoAccept, validatePolicyThresholds } from "../policy.js";
 import { getConfig } from "../config.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 import { asChoice, asNoul, asScore } from "../result.js";
@@ -35,7 +35,9 @@ export type EvaluateInput = z.infer<typeof evaluateInputSchema>;
 
 export async function runEvaluate(input: EvaluateInput, context?: ToolContext) {
   const config = getConfig();
-  validatePolicyThresholds(config.autoAccept, config.reviewAt);
+  // Not measured at the lower default bar, so the generic evaluator keeps 0.80.
+  const bar = unmeasuredAutoAccept(config.autoAccept);
+  validatePolicyThresholds(bar, config.reviewAt);
   const questions = parseQuestions(input.questions as Record<string, QuestionInput>);
   const result = await systemOne({
     state: input.state,
@@ -48,17 +50,17 @@ export async function runEvaluate(input: EvaluateInput, context?: ToolContext) {
     if (answer.type === "choice") {
       const choice = asChoice(answer);
       confidences.push(choice.confidence);
-      distributionIncoherent = distributionIncoherent || !confidenceSupportsAuto(choice.confidence, choice.probabilities, config.autoAccept);
+      distributionIncoherent = distributionIncoherent || !confidenceSupportsAuto(choice.confidence, choice.probabilities, bar);
     } else if (answer.type === "score") {
       const score = asScore(answer);
       confidences.push(score.confidence);
-      distributionIncoherent = distributionIncoherent || !confidenceSupportsAuto(score.confidence, score.probabilities, config.autoAccept);
+      distributionIncoherent = distributionIncoherent || !confidenceSupportsAuto(score.confidence, score.probabilities, bar);
     } else {
       const noul = asNoul(answer).noul;
       confidences.push(Math.abs(noul - 0.5) * 2);
     }
   }
-  let action = actionFromConfidence(minConfidence(confidences), config.autoAccept, config.reviewAt);
+  let action = actionFromConfidence(minConfidence(confidences), bar, config.reviewAt);
   if (action === "auto" && distributionIncoherent) action = "review";
   return {
     model: result.model,

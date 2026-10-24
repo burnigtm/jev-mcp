@@ -12,9 +12,9 @@ For local CLI use on Node 20.6+, copy [`.env.example`](../.env.example) to `.env
 | `JEV_MCP_ALLOW_CUSTOM_BASE_URL` | off | `1` / `true` / `yes` — allow a public HTTPS host other than `api.typesafe.ai` |
 | `JEV_MCP_MOCK` | off | `1` / `true` / `yes` — local deterministic judge |
 | `JEV_MCP_TIMEOUT_MS` | `30000` | Total deadline in milliseconds for one tool call, including retries and every ranking round. Each SDK attempt uses the time remaining and does not retry its own timeout |
-| `JEV_MCP_AUTO_ACCEPT` | `0.8` | Confidence floor for `auto` |
+| `JEV_MCP_AUTO_ACCEPT` | `0.7` | Confidence floor for `auto`. Claims and patch review keep their own floor of `0.8` (see [claims and patches](#claims-and-patches-keep-a-higher-bar)) |
 | `JEV_MCP_REVIEW_AT` | `0.5` | Below this, coding-loop / review / evaluate `escalate` |
-| `JEV_MCP_PROFILE` | `balanced` | `balanced` or `strict`: a named bundle of the bars below. Explicit variables override it; per-call arguments can only tighten. See [profiles](#profiles) |
+| `JEV_MCP_PROFILE` | `balanced` | `balanced`, `conservative` or `strict`: a named bundle of the bars below. Explicit variables override it; per-call arguments can only tighten. See [profiles](#profiles) |
 | `JEV_MCP_TRIAGE_RECOVERABLE_AT` | the auto-accept bar | Bar for `jev_triage` recoverability (can the host make progress from here). Must not be below `JEV_MCP_REVIEW_AT`. A caller raising `auto_accept` also raises it |
 | `JEV_POLICY_FILE` | search upward from the working directory | Absolute path of the repository policy file, or `none` to disable it. See [repository policy](#repository-policy) |
 | `JEV_MCP_BLOCK_AT` | `0.75` | Screen injection ≥ this → `block` |
@@ -43,7 +43,7 @@ Per-call overrides can only tighten the environment floors:
 - `jev_screen`: `block_at` becomes `min(caller, env)` and `review_at` becomes `min(caller, 0.25)`, so a call can only tighten screen thresholds (`block_at: 1` cannot loosen `0.75`, and `review_at: 0.7` cannot loosen `0.25`). A `block_at` below `0.25` lowers `review_at` with it
 - All tools: `model`
 
-Judged *concerns* (scope `needs_confirmation`, critical `jev_risk` flags, confidently contradicted claims) escalate at `min(auto_accept, 0.8)`. Raising `auto_accept` above the default therefore never delays an escalation: tightening a call only makes it stricter.
+Judged *concerns* (scope `needs_confirmation`, critical `jev_risk` flags, confidently contradicted claims) escalate at the configured `auto_accept`, capped at 0.8. Raising `auto_accept` above the default therefore never delays an escalation: tightening a call only makes it stricter.
 
 `jev_evaluate` uses the environment confidence thresholds. Configurable confidence bands must satisfy `0 <= review_at <= auto_accept <= 1`; invalid environment values are configuration errors rather than silent fallbacks. `TYPESAFE_BASE_URL` is normalized to origin plus path. Userinfo, query strings, fragments, obfuscated numeric hosts, and non-public IPv4/IPv6 addresses (private, link-local, loopback on HTTPS, metadata, reserved, NAT64/6to4, and Teredo) are rejected. For custom HTTPS, `localhost`/`.localhost`, `.local`, `.internal`, `.home.arpa`, `.localdomain`, single-label names, trailing-dot forms, and zone identifiers are also rejected; `api.typesafe.ai` must use its default port. HTTP is allowed for IPv4/IPv6 loopback (`127.0.0.0/8`, `::1`, `localhost`). Hostnames are not resolved locally, so a custom endpoint remains operator-trusted and DNS rebinding is a documented residual risk. The screen review threshold cannot exceed its block threshold, and `JEV_MCP_BLOCK_AT` must be at least the default screen review threshold of `0.25`.
 
@@ -51,14 +51,18 @@ Judged *concerns* (scope `needs_confirmation`, critical `jev_risk` flags, confid
 
 `JEV_MCP_PROFILE` selects a bundle of the confidence bars. Precedence, lowest to highest: the profile, explicit environment variables, per-call arguments (which can only tighten).
 
-| | `balanced` (default) | `strict` |
-| --- | --- | --- |
-| `auto_accept` | 0.8 | 0.9 |
-| `review_at` | 0.5 | 0.6 |
-| `block_at` (screen) | 0.75 | 0.6 |
-| triage recoverability bar | the `auto_accept` bar | 0.9 |
+| | `balanced` (default) | `conservative` | `strict` |
+| --- | --- | --- | --- |
+| `auto_accept` | 0.7 | 0.8 | 0.9 |
+| `review_at` | 0.5 | 0.5 | 0.6 |
+| `block_at` (screen) | 0.75 | 0.75 | 0.6 |
+| triage recoverability bar | the `auto_accept` bar | the `auto_accept` bar | 0.9 |
 
-`balanced` reproduces the bars the server has always used. `strict` asks for more confidence before anything is `auto` and blocks suspicious text earlier, at the cost of more reviews of ordinary work; the measured trade-off is in [evals/results](../evals/results/profiles-2026-10-24.md). `jev-mcp doctor` prints the active profile and bars.
+`balanced` uses an `auto_accept` of **0.70**, the value a sweep of the bar from 0.95 down to 0.50 found. On live Jev over thousands of generated cases (hundreds of them deliberately borderline), no risky case was approved at 0.70, while ordinary work was approved far more often than at 0.80; the worst risky case seen was approved only at bars up to 0.67 (and that tool, claim verification, keeps its own bar, below). `conservative` is the bar the server used before (0.80) and reproduces its earlier behavior exactly. `strict` asks for more confidence before anything is `auto` and blocks suspicious text earlier, at the cost of more reviews of ordinary work; the measured trade-off is in [evals/results](../evals/results/profiles-2026-10-24.md). `jev-mcp doctor` prints the active profile and bars. See [the sweep](../evals/results/threshold-2026-10-24.md) and [the validation of the default](../evals/results/default-bar-2026-10-24.md).
+
+### Claims and patches keep a higher bar
+
+A claim is approved as verified, and a patch as ready, only at a confidence of `max(auto_accept, 0.8)`, under every profile (`jev_verify`, `jev_review`, and the claims and the patch review inside `jev_gate`). Neither tool gained anything from a lower bar in the sweep (each approved the same safe cases at 0.70 and 0.80), and each judges evidence the judge cannot see all of. Each had a risky case that only the 0.80 bar held: a claim of "no regressions" backed only by updated snapshots (approved up to 0.67), and a requested change in behavior whose callers, outside the diff, would break (approved at 0.70 in 15 of 15 runs of the end-to-end benchmark). A caller can raise these bars with `auto_accept` but not lower them. A confident contradiction still escalates at the configured bar. Executable dispatch in `jev_step` and `jev_tool_route` likewise keeps its own 0.8 floor, and so do the tools the lower bar was never measured on: the coding-loop router (`jev_coding_loop`, and the routing in `jev_step`) and the generic `jev_evaluate`. The lower bar therefore applies to `jev_scope`, `jev_triage` and `jev_risk` (and to `jev_rank`, which reads the configured bar), which is where the extra approvals came from.
 
 ## Repository policy
 

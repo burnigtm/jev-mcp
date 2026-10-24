@@ -3,7 +3,9 @@ import { JevValidationError } from "./errors.js";
 export type PolicyAction = "auto" | "review" | "escalate";
 export type ScreenRecommendation = "pass" | "review" | "block" | "skip";
 
-export const DEFAULT_AUTO_ACCEPT = 0.8;
+export const DEFAULT_AUTO_ACCEPT = 0.7;
+/** Judged concerns escalate at the auto-accept bar but never above this, so raising the bar cannot delay an escalation. */
+export const ESCALATION_CAP = 0.8;
 export const DEFAULT_REVIEW_AT = 0.5;
 export const DEFAULT_BLOCK_AT = 0.75;
 export const DEFAULT_SKIP_BELOW = 0.35;
@@ -182,13 +184,44 @@ export type TriageProgress = "first_attempt" | "advancing" | "repeating" | "regr
 export type TriageStrategy = "retry" | "change_approach" | "gather_context" | "ask_user" | "stop" | "escalate";
 
 /**
- * Probability at which a judged *concern* (needs confirmation, a critical
- * security flag, a contradicted claim) escalates. Capped at the default
- * auto_accept so that a caller raising auto_accept to be stricter can never
- * make a concern escalate later.
+ * The bar for approving a claim as verified or a patch as ready. Both keep 0.80 under every profile, for two measured reasons.
+ * First, a sweep of the auto-accept bar found that neither tool gains anything from a lower bar (each approved the same
+ * safe cases at 0.70 and 0.80). Second, both judge evidence the judge cannot see all of, and each had a risky case that
+ * only the 0.80 bar held: a claim of "no regressions" backed only by updated snapshots (approved up to 0.67), and a requested
+ * change in behavior whose callers, outside the diff, would break (approved at 0.70 in 15 of 15 runs). A caller or profile
+ * can raise this bar but not lower it.
  */
-export function escalationCutoff(autoAccept: number): number {
-  return Math.min(autoAccept, DEFAULT_AUTO_ACCEPT);
+export const CLAIM_AUTO_ACCEPT = 0.8;
+
+export function claimAutoAccept(autoAccept: number): number {
+  return Math.max(autoAccept, CLAIM_AUTO_ACCEPT);
+}
+
+/**
+ * Tools the lower bar was not measured on keep the earlier 0.80: the coding-loop router, the step router and the generic
+ * evaluator. The measured tools are `jev_scope`, `jev_triage` and `jev_risk` (and `jev_screen` and `jev_rank`, which have their
+ * own bars). Extending the lower bar to a tool means measuring it first.
+ */
+export const UNMEASURED_AUTO_ACCEPT = 0.8;
+
+export function unmeasuredAutoAccept(autoAccept: number): number {
+  return Math.max(autoAccept, UNMEASURED_AUTO_ACCEPT);
+}
+
+/** The bar for approving a patch review (`jev_review`, and the patch review inside `jev_gate`). */
+export const REVIEW_AUTO_ACCEPT = 0.8;
+
+export function reviewAutoAccept(autoAccept: number): number {
+  return Math.max(autoAccept, REVIEW_AUTO_ACCEPT);
+}
+
+/**
+ * Probability at which a judged *concern* (needs confirmation, a critical security flag, a contradicted claim)
+ * escalates: the bar the server is configured with (`floor`), capped at 0.80. A caller can only raise the bar above
+ * that floor, and the cutoff does not move with it, so tightening a call can never make a concern escalate later.
+ */
+export function escalationCutoff(autoAccept: number, floor: number = DEFAULT_AUTO_ACCEPT): number {
+  return Math.min(autoAccept, floor, ESCALATION_CAP);
 }
 
 /** A Noul is "confidently false" only when its yes-probability is low enough. */
@@ -210,12 +243,14 @@ export function scopeAction(input: {
   riskProbabilities: Record<string, number>;
   autoAccept?: number;
   reviewAt?: number;
+  /** The configured bar; concerns escalate at it (see escalationCutoff). */
+  escalationFloor?: number;
 }): PolicyAction {
   const autoAccept = input.autoAccept ?? DEFAULT_AUTO_ACCEPT;
   const reviewAt = input.reviewAt ?? DEFAULT_REVIEW_AT;
   validatePolicyThresholds(autoAccept, reviewAt);
   if (input.inScope < reviewAt || input.effectMatch < reviewAt) return "escalate";
-  if (input.needsConfirmation >= escalationCutoff(autoAccept)) return "escalate";
+  if (input.needsConfirmation >= escalationCutoff(autoAccept, input.escalationFloor)) return "escalate";
   if (input.effect === "external_write" || input.effect === "destructive" || input.effect === "unknown") return "review";
   if (input.riskScore >= 1.5) return "review";
   if (input.inScope < autoAccept || input.effectMatch < autoAccept || input.needsConfirmation >= reviewAt) return "review";
@@ -273,13 +308,14 @@ export function riskAction(input: {
   severityProbabilities: Record<string, number>;
   autoAccept?: number;
   reviewAt?: number;
+  escalationFloor?: number;
 }): PolicyAction {
   const autoAccept = input.autoAccept ?? DEFAULT_AUTO_ACCEPT;
   const reviewAt = input.reviewAt ?? DEFAULT_REVIEW_AT;
   validatePolicyThresholds(autoAccept, reviewAt);
   // Check every critical flag for escalation first: a moderate concern on one
   // flag must never mask a confident concern on another.
-  const escalateAt = escalationCutoff(autoAccept);
+  const escalateAt = escalationCutoff(autoAccept, input.escalationFloor);
   if (CRITICAL_RISK_FLAGS.some((flag) => (input.flags[flag] ?? 0) >= escalateAt)) return "escalate";
   if (input.severityScore >= 1.9) return "escalate";
   if (Object.values(input.flags).some((probability) => probability >= reviewAt)) return "review";

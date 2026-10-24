@@ -6,6 +6,8 @@
 // determines the sample, so any run can be replayed exactly, while a new seed
 // gives cases the hand-written set and earlier runs have never seen.
 
+import { reviewBlindRisky, reviewBlindSafe, riskBlindRisky, riskBlindSafe, scopeBlindRisky, scopeBlindSafe, triageBlindRisky, triageBlindSafe, verifyBlindRisky, verifyBlindSafe } from './bonus-blind.mjs';
+import { reviewAssertionWeakened, reviewDocsOnly, reviewOffByOneWeakTest, reviewPredictableTempFile, reviewRefactorSame, reviewSecretLogged, reviewStrongFix, reviewValidationRemoved, reviewWrongBranch, riskHardRisky, riskHardSafe, scopeHardRisky, scopeHardSafe, triageHardRisky, triageHardSafe, verifyHardRisky, verifyHardSafe } from './bonus-hard.mjs';
 import { behaviorCallersBreak, fixCallersCompatible, fixCallersWrong, signatureCallersBreak } from './bonus-callers.mjs';
 import { largeContractBreak, largeReviewClean, largeReviewPlanted, largeRiskClean, largeRiskPlanted } from './bonus-large.mjs';
 
@@ -442,8 +444,24 @@ const EXTRA_BUILDERS = {
   jev_risk: [largeRiskClean, largeRiskPlanted],
   // Same tool as jev_review, own key: it draws from the stream after every earlier tool, so their cases are unchanged.
   jev_review_callers: [fixCallersCompatible, signatureCallersBreak, behaviorCallersBreak, fixCallersWrong],
+  // Borderline cases across the judgment tools: risky ones that look reasonable, and the same shapes done correctly.
+  hard: [
+    reviewOffByOneWeakTest, riskHardRisky, scopeHardRisky, triageHardRisky, verifyHardRisky,
+    reviewStrongFix, riskHardSafe, scopeHardSafe, triageHardSafe, verifyHardSafe,
+    reviewValidationRemoved, riskHardRisky, scopeHardRisky, triageHardRisky, verifyHardRisky,
+    reviewRefactorSame, riskHardSafe, scopeHardSafe, triageHardSafe, verifyHardSafe,
+    reviewPredictableTempFile, riskHardRisky, scopeHardRisky, triageHardRisky, verifyHardRisky,
+    reviewDocsOnly, riskHardSafe, scopeHardSafe, triageHardSafe, verifyHardSafe,
+    reviewWrongBranch, reviewAssertionWeakened, reviewSecretLogged,
+  ],
+  // Failure modes written after the bar, the floors and the claim bar were chosen: does the choice generalize?
+  blind: [
+    reviewBlindRisky, riskBlindRisky, scopeBlindRisky, triageBlindRisky, verifyBlindRisky,
+    reviewBlindSafe, riskBlindSafe, scopeBlindSafe, triageBlindSafe, verifyBlindSafe,
+  ],
 };
-export const EXTRA_TOOLS = Object.keys(EXTRA_BUILDERS);
+// `hard` is asked for by name (it reuses the tool names of the sets above, so it must not ride along by default).
+export const EXTRA_TOOLS = Object.keys(EXTRA_BUILDERS).filter((key) => key !== 'hard' && key !== 'blind');
 
 /** `perTool` extra cases per tool, alternating templates, fully determined by `seed`. */
 export function generateExtraCases(seed, perTool = 10, tools = EXTRA_TOOLS) {

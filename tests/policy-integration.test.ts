@@ -177,10 +177,13 @@ test("scope: the policy and the effect classifier compose: a lie about the effec
 
 // --- Profiles ---------------------------------------------------------------------------------------------------------------------
 
-test("the balanced profile is exactly the historical default", () => {
+test("the balanced profile is the default at 0.70, and conservative is exactly the earlier 0.80 behavior", () => {
   const config = getConfig();
-  assert.deepEqual([config.profile, config.autoAccept, config.reviewAt, config.blockAt, config.triageRecoverableAt], ["balanced", 0.8, 0.5, 0.75, undefined]);
-  assert.deepEqual(PROFILES.balanced, { autoAccept: 0.8, reviewAt: 0.5, blockAt: 0.75, triageRecoverableAt: undefined });
+  assert.deepEqual([config.profile, config.autoAccept, config.reviewAt, config.blockAt, config.triageRecoverableAt], ["balanced", 0.7, 0.5, 0.75, undefined]);
+  assert.deepEqual(PROFILES.balanced, { autoAccept: 0.7, reviewAt: 0.5, blockAt: 0.75, triageRecoverableAt: undefined });
+  assert.deepEqual(PROFILES.conservative, { autoAccept: 0.8, reviewAt: 0.5, blockAt: 0.75, triageRecoverableAt: undefined });
+  process.env.JEV_MCP_PROFILE = "conservative";
+  assert.deepEqual([getConfig().profile, getConfig().autoAccept], ["conservative", 0.8]);
 });
 
 test("the strict profile raises every bar, explicit variables override it, and a bad profile is refused", () => {
@@ -195,12 +198,14 @@ test("the strict profile raises every bar, explicit variables override it, and a
   assert.throws(() => getConfig(), (error: unknown) => errorDetails(error).code === "CONFIG_ERROR");
 });
 
-test("every profile satisfies the threshold invariants, and the strict bars are never looser than balanced", () => {
+test("every profile satisfies the threshold invariants, and the bars only ever tighten from balanced to conservative to strict", () => {
   for (const [name, profile] of Object.entries(PROFILES)) {
     assert.ok(profile.reviewAt <= profile.autoAccept, name);
     assert.ok(profile.blockAt >= 0.25, `${name}: block_at must stay at least the screen review default`);
     assert.ok((profile.triageRecoverableAt ?? profile.autoAccept) >= profile.reviewAt, name);
   }
+  assert.ok(PROFILES.conservative.autoAccept >= PROFILES.balanced.autoAccept && PROFILES.strict.autoAccept >= PROFILES.conservative.autoAccept);
+  assert.ok(PROFILES.conservative.reviewAt >= PROFILES.balanced.reviewAt && PROFILES.conservative.blockAt === PROFILES.balanced.blockAt);
   assert.ok(PROFILES.strict.autoAccept >= PROFILES.balanced.autoAccept);
   assert.ok(PROFILES.strict.reviewAt >= PROFILES.balanced.reviewAt);
   assert.ok(PROFILES.strict.blockAt <= PROFILES.balanced.blockAt, "a lower screen block bar is the stricter one");
@@ -219,11 +224,15 @@ test("the triage recoverability bar is validated against review_at", () => {
 const FIRST_FAILURE = { task: "Fix the pager", failure: "AssertionError: expected [] to equal [21]" };
 const TRIAGE_ANSWERS = { cause: "cause_0", progress: "first_attempt", strategy: "gather_context", recoverable: 0.75 };
 
-test("triage: recoverability just under the auto bar reviews by default and is approved with a lower dedicated bar", async () => {
+test("triage: recoverability just under the auto bar reviews and is approved with a lower dedicated bar", async () => {
   responds(() => TRIAGE_ANSWERS);
+  assert.equal((await runTriage(FIRST_FAILURE)).action, "auto", "0.75 clears the default bar of 0.70");
+  clearCache();
+  process.env.JEV_MCP_PROFILE = "conservative";
   const byDefault = await runTriage(FIRST_FAILURE);
   assert.equal(byDefault.action, "review");
   assert.deepEqual(byDefault.reason_codes, ["recoverability_uncertain"]);
+  clearCache();
 
   process.env.JEV_MCP_TRIAGE_RECOVERABLE_AT = "0.7";
   const lowered = await runTriage(FIRST_FAILURE);

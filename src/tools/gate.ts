@@ -4,7 +4,7 @@ import { JevBudgetError } from "../errors.js";
 import { chunkedGateVerificationQuestions, chunkQuestions } from "../packs/chunked.js";
 import { gateQuestions } from "../packs/gate.js";
 import { MAX_CLAIMS } from "../limits.js";
-import { confidenceSupportsAuto, tightenJudgmentThresholds, worstAction } from "../policy.js";
+import { claimAutoAccept, confidenceSupportsAuto, tightenJudgmentThresholds, worstAction } from "../policy.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { sanitizeUntrustedDocument } from "../untrusted.js";
 import { addUsage, chunkedCoverage, chunkedIncomplete, chunkSummaries, mergeReviews, mergeRisks, omittedFiles, reviewFloors, riskFloors, runChunks, singleOrChunked, type ChunkedPlan } from "./chunked.js";
@@ -232,7 +232,7 @@ function composeGate(parts: {
     action: worstAction(results.map((item) => item.action)),
     summary: summarizeClaims(results),
     results,
-    thresholds: { auto_accept: autoAccept, review_at: reviewAt },
+    thresholds: { auto_accept: claimAutoAccept(autoAccept), review_at: reviewAt },
   };
   const action = worstAction([review.action, verification.action, ...(security ? [security.action] : [])]);
   const reasonCodes: Array<z.infer<typeof gateReasonCodeSchema>> = [];
@@ -242,10 +242,12 @@ function composeGate(parts: {
   if (verification.summary.contradicted > 0) reasonCodes.push("claims_contradicted");
   if (verification.summary.unsupported > 0) reasonCodes.push("claims_unsupported");
   if (results.some((item) => item.confidence < reviewAt)) reasonCodes.push("claim_confidence_low");
-  if (results.some((item) => item.confidence >= reviewAt && item.confidence < autoAccept)) {
+  // Claims are held to the claim bar, which stays at 0.80 under every profile.
+  const claimBar = claimAutoAccept(autoAccept);
+  if (results.some((item) => item.confidence >= reviewAt && item.confidence < claimBar)) {
     reasonCodes.push("claim_confidence_below_auto_accept");
   }
-  if (results.some((item) => item.confidence >= autoAccept && !confidenceSupportsAuto(item.confidence, item.probabilities, autoAccept))) {
+  if (results.some((item) => item.confidence >= claimBar && !confidenceSupportsAuto(item.confidence, item.probabilities, claimBar))) {
     reasonCodes.push("confidence_incoherent");
   }
   if (security?.action === "escalate") reasonCodes.push("security_escalated");

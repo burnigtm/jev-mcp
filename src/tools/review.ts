@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getConfig } from "../config.js";
 import { chunkQuestions } from "../packs/chunked.js";
 import { reviewQuestions } from "../packs/review.js";
-import { acceptableRegionConfidence, confidenceSupportsAuto, minConfidence, requireCompleteContext, reviewAction, reviewComposite, tightenJudgmentThresholds } from "../policy.js";
+import { acceptableRegionConfidence, confidenceSupportsAuto, minConfidence, requireCompleteContext, reviewAction, reviewAutoAccept, reviewComposite, tightenJudgmentThresholds } from "../policy.js";
 import { chunkedCoverage, chunkedIncomplete, chunkSummaries, mergeReviews, omittedFiles, reviewFloors, runChunks, singleOrChunked, type ChunkedPlan } from "./chunked.js";
 import { contextSchema, judgeContext } from "./context-input.js";
 import { reviewOutputSchema, type ReviewReason } from "./output-schemas.js";
@@ -71,7 +71,9 @@ async function runChunkedReview(first: ChunkedPlan, input: ReviewInput, autoAcce
 }
 
 /** Shared scoring policy for the standalone review and combined gate. */
-export function projectReview(result: EvaluateResponse, autoAccept: number, reviewAt: number) {
+export function projectReview(result: EvaluateResponse, configuredBar: number, reviewAt: number) {
+  // Approving a patch needs the review bar (never below 0.80); escalation below `reviewAt` is unchanged.
+  const autoAccept = reviewAutoAccept(configuredBar);
   const correctness = asScore(result.answers.correctness);
   const specMatch = asScore(result.answers.spec_match);
   const testGap = asScore(result.answers.test_gap);
