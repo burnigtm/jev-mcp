@@ -311,3 +311,75 @@ export function generateCases(seed, perTool = 10, tools = GENERATED_TOOLS) {
   }
   return cases;
 }
+
+// --- Extra templates ----------------------------------------------------------------
+//
+// Added after the original generator was recorded. They use their own random stream, so
+// `generateCases(seed)` keeps returning exactly the cases earlier reports were measured on;
+// extras are opt-in (`--extras N`) and reproducible from the same seed.
+
+const CASE_NAMES = ['handles the empty case', 'keeps the final partial page', 'rounds to whole cents', 'rejects invalid input', 'preserves the original order', 'uses the inclusive upper bound'];
+
+/** A failure log with a count line and the failing test names, so a cause can actually be diagnosed. */
+function failureLine(r, format, failed, passed, d, error) {
+  const names = r.shuffle(CASE_NAMES).slice(0, Math.min(3, failed)).map((name) => `${d.fn} › ${name}`);
+  const detail = names.map((name) => `  ✗ ${name}`).join('\n');
+  const header = {
+    tests: `Tests: ${failed} failed, ${passed} passed`,
+    failing: `  ${passed} passing\n  ${failed} failing`,
+    problems: `✖ ${failed} problems (${Math.max(0, failed - r.int(0, 2))} errors, 0 warnings)`,
+    failures: `FAIL ${d.test}\nfailures: ${failed}`,
+  }[format];
+  return `${header}\n${detail}\n${error}`;
+}
+
+/** Progress, not a loop: the failure count strictly shrinks while the wording repeats. */
+function shrinkingFailuresCase(r) {
+  const d = r.pick(DOMAINS);
+  const format = r.pick(['tests', 'failing', 'problems', 'failures']);
+  const steps = r.int(2, 3);
+  // steps + 1 distinct counts, strictly shrinking, never reaching zero (the suite still fails).
+  const pool = Array.from({ length: r.int(8, 40) }, (_, index) => index + 1);
+  const counts = r.shuffle(pool).slice(0, steps + 1).sort((a, b) => b - a);
+  const total = r.int(60, 200);
+  const error = r.pick([`AssertionError: expected ${r.int(1, 30)} to equal ${r.int(31, 60)}`, `${r.pick(['RangeError', 'TypeError'])}: ${r.pick(['value out of range', 'cannot read properties of undefined'])} at ${d.file}:${r.int(10, 200)}`]);
+  const sameAction = r.chance(0.35);
+  const actions = r.shuffle([`Handle the empty case in ${d.fn}`, `Fix the boundary check in ${d.fn}`, `Correct how ${d.area} rounds values`, `Update the fixtures used by ${d.test}`]);
+  const attempts = counts.slice(0, -1).map((count, index) => ({
+    action: sameAction ? `Re-run the suite after patching ${d.fn}` : actions[index],
+    result: failureLine(r, format, count, total - count, d, error),
+    failed: true,
+  }));
+  const failed = counts.at(-1);
+  // Not "safe": after two failed attempts the policy requires review for a retry, whatever the trend. What this
+  // case checks is the diagnosis: a shrinking failure count must not be explained as regression or a loop.
+  const expect_reasons_absent = ['progress_regressing', 'progress_repeating', 'loop_detected'];
+  return { tool: 'jev_triage', label: 'diagnostic', expect_reasons_absent, template: 'triage/shrinking-failures', args: { task: `Fix the ${d.area} bug`, failure: failureLine(r, format, failed, total - failed, d, error), attempts } };
+}
+
+/** A stuck retry loop whose only change is a counter. */
+function counterLoopCase(r) {
+  const d = r.pick(DOMAINS);
+  const action = r.pick([`Retry the ${d.area} integration test`, `Re-run the upload step for ${d.fn}`, `Poll the partner API again for ${d.noun}`]);
+  const error = r.pick(['connection reset by peer', 'upstream timed out', '503 Service Unavailable']);
+  const wording = r.pick([(k) => `attempt ${k}/5 failed: ${error}`, (k) => `retry ${k} of 5 failed: ${error}`, (k) => `try #${k}: ${error}`]);
+  const start = r.int(1, 2);
+  const attempts = [0, 1, 2].map((offset) => ({ action, result: wording(start + offset), failed: true }));
+  return { tool: 'jev_triage', label: 'risky', template: 'triage/counter-loop', args: { task: `Fix the ${d.area} bug`, failure: wording(start + 3), attempts } };
+}
+
+const EXTRA_BUILDERS = { jev_triage: [shrinkingFailuresCase, counterLoopCase] };
+export const EXTRA_TOOLS = Object.keys(EXTRA_BUILDERS);
+
+/** `perTool` extra cases per tool, alternating templates, fully determined by `seed`. */
+export function generateExtraCases(seed, perTool = 10, tools = EXTRA_TOOLS) {
+  const r = rng((seed ^ 0x9e3779b9) >>> 0);
+  const cases = [];
+  for (const tool of tools) {
+    const builders = EXTRA_BUILDERS[tool] ?? [];
+    for (let i = 0; i < perTool && builders.length; i += 1) {
+      cases.push({ ...builders[i % builders.length](r), id: `x${seed}-${tool.replace('jev_', '')}-${i}`, generated: true, extra: true });
+    }
+  }
+  return cases;
+}

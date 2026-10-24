@@ -17,7 +17,7 @@ For local CLI use on Node 20.6+, copy [`.env.example`](../.env.example) to `.env
 | `JEV_MCP_BLOCK_AT` | `0.75` | Screen injection ≥ this → `block` |
 | `JEV_MCP_CACHE_TTL_MS` | `0` (off) | Cache validated provider results for this many milliseconds. Identical requests (same endpoint, model, evaluated state, and questions) are served with zero usage; tool policy still runs on every call |
 | `JEV_MCP_CACHE_MAX_ENTRIES` | `256` | Least-recently-used entries kept when the cache is on |
-| `JEV_MCP_TOKEN_BUDGET` | unlimited | Provider tokens (input + output) this server process may spend. Once spent, calls fail with `BUDGET_EXHAUSTED` before any provider request; cache hits are still served |
+| `JEV_MCP_TOKEN_BUDGET` | unlimited | Provider tokens (input + output) this server process may spend. Each request reserves its estimated tokens (state, questions, and a per-question output allowance) before it is sent, so concurrent calls cannot all pass the same check. Once spent plus reserved tokens reach the budget, calls fail with `BUDGET_EXHAUSTED` before any provider request, and the request that crosses the line may overshoot by its own size. A request that reached the provider but returned no usage (timeout, abort, API error, invalid response) is charged at its reservation. Cache hits are still served |
 
 Per-call overrides can only tighten the environment floors:
 
@@ -34,7 +34,7 @@ Judged *concerns* (scope `needs_confirmation`, critical `jev_risk` flags, confid
 
 ## Usage stats
 
-The `jev://stats` MCP resource reports in-process counters: calls, action mix, error codes, and p50/max latency per tool, plus provider requests, cache hits and misses, tokens spent, and the remaining `JEV_MCP_TOKEN_BUDGET`. It never contains tool inputs or outputs, and it resets when the server restarts.
+The `jev://stats` MCP resource reports in-process counters: calls, action mix, error codes, and p50/max latency per tool, plus provider requests, cache hits and misses, tokens spent, tokens currently reserved by in-flight requests, failed requests (`failed_requests`, charged at their reservation), why provider responses were rejected (`response_failures`, counted by a fixed reason name such as `probability_mass` or `not_json`, never provider content), and the remaining `JEV_MCP_TOKEN_BUDGET`. It never contains tool inputs or outputs, and it resets when the server restarts.
 
 Review and gate `auto` also requires each raw score to clear a floor on the 0–2 scale: correctness and spec match at least 1, test gap and blast radius at most 1. The weighted composite alone is not enough. Correctness and spec match need confidence in their exact level; test gap, blast radius, and `jev_risk` severity need at least `auto_accept` of their probability mass inside the levels their floor accepts (0–1), i.e. `P(level 2) ≤ 1 − auto_accept`.
 

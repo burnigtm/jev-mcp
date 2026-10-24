@@ -7,10 +7,10 @@ import {
 import { getConfig, type JevConfig } from "./config.js";
 import { cacheGet, cacheKey, cacheSet } from "./cache.js";
 import { JevBudgetExhaustedError, JevCancelledError, JevConfigError, JevResponseError, JevTimeoutError } from "./errors.js";
-import { fitState, MAX_TOTAL_TOKENS, type Coverage, type FitResult } from "./limits.js";
+import { estimateTokens, fitState, MAX_TOTAL_TOKENS, type Coverage, type FitResult } from "./limits.js";
 import { mockSystemOne } from "./mock.js";
 import { validateResponse } from "./responses.js";
-import { recordBudgetRejection, recordCacheHit, recordProviderRequest, tokensSpent } from "./stats.js";
+import { OUTPUT_TOKENS_PER_QUESTION, recordBudgetRejection, recordCacheHit, recordFailedRequest, recordProviderRequest, recordResponseFailure, releaseTokens, tryReserveTokens } from "./stats.js";
 
 function attemptTimeoutMs(context: ToolContext, timeoutMs: number): number {
   const deadline = context.deadline ?? Date.now() + timeoutMs;
@@ -127,12 +127,26 @@ async function evaluate<Q extends Questions>(request: EvaluateRequest<Q>, contex
     return { ...cached, usage: { input_tokens: 0, output_tokens: 0 }, ...applyProviderBudget(fitted, cached.usage.input_tokens) };
   }
 
-  if (config.tokenBudget !== undefined && tokensSpent() >= config.tokenBudget) {
+  const estimate = estimateTokens({ state: payload.state, questions: payload.questions })
+    + Object.keys(request.questions).length * OUTPUT_TOKENS_PER_QUESTION;
+  const reservation = tryReserveTokens(estimate, config.tokenBudget);
+  if (reservation === undefined) {
     recordBudgetRejection();
-    throw new JevBudgetExhaustedError(config.tokenBudget);
+    throw new JevBudgetExhaustedError(config.tokenBudget!);
   }
 
-  const validated = await requestProvider(config, payload, request.questions, context);
+  let dispatched = false;
+  let validated: SystemOneResult<Q>;
+  try {
+    validated = await requestProvider(config, payload, request.questions, context, () => { dispatched = true; });
+  } catch (err) {
+    // Once a request is on the wire the provider may have processed it even if we never saw usage.
+    if (dispatched) recordFailedRequest(reservation);
+    if (err instanceof JevResponseError) recordResponseFailure(err.reason);
+    throw err;
+  } finally {
+    releaseTokens(reservation);
+  }
   recordProviderRequest(validated.usage);
   // Never cache a result the caller can no longer use.
   if (key && !context.signal?.aborted) cacheSet(key, validated, config.cacheTtlMs, config.cacheMaxEntries);
@@ -144,6 +158,7 @@ async function requestProvider<Q extends Questions>(
   payload: SystemOneRequest<Q>,
   questions: Q,
   context: ToolContext,
+  onDispatch: () => void,
 ): Promise<SystemOneResult<Q>> {
   if (config.mock) {
     return validateResponse(mockSystemOne({ ...payload, model: payload.model ?? config.model }), questions);
@@ -157,10 +172,11 @@ async function requestProvider<Q extends Questions>(
 
   const client = createClient(config, context, payload.model ?? config.model);
   try {
+    onDispatch();
     const result = await client.systemOne(payload, { signal: context.signal });
     return validateResponse(result, questions);
   } catch (err) {
-    if (err instanceof SyntaxError) throw new JevResponseError();
+    if (err instanceof SyntaxError) throw new JevResponseError("not_json");
     throw err;
   }
 }
@@ -181,6 +197,6 @@ async function listModelsWithinDeadline(context: ToolContext): Promise<string[]>
   }
   const client = createClient(config, context, config.model);
   const models = await client.models.list({ signal: context.signal });
-  if (!models.every(model => typeof model?.name === "string" && model.name.length > 0)) throw new JevResponseError();
+  if (!models.every(model => typeof model?.name === "string" && model.name.length > 0)) throw new JevResponseError("models_list");
   return models.map((model) => model.name);
 }

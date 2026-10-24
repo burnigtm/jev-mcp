@@ -112,19 +112,23 @@ export async function runGate(input: GateInput, context?: ToolContext) {
   const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
   const risk = input.risk === true;
   const result = await systemOne({
+    // Oversized state is cut from the tail of the serialized JSON. Keep what every verdict depends on and
+    // is small (request, claims, evidence, file list) first, and the bulky diff and test log last.
     state: {
       request: input.request,
-      // Security mode strips hidden characters, matching the standalone jev_risk projection.
-      diff: risk ? sanitizeUntrustedDocument(input.diff) : input.diff,
-      tests: input.tests === undefined ? "" : risk ? sanitizeUntrustedDocument(input.tests) : input.tests,
       claims: input.claims,
       evidence: input.evidence,
       ...(risk ? { files: sanitizeFiles(input.files), dependencies: sanitizeDependencies(input.dependencies) } : {}),
+      // Security mode strips hidden characters, matching the standalone jev_risk projection.
+      diff: risk ? sanitizeUntrustedDocument(input.diff) : input.diff,
+      tests: input.tests === undefined ? "" : risk ? sanitizeUntrustedDocument(input.tests) : input.tests,
     },
     questions: gateQuestions(input.claims.length, { risk }),
     model: input.model,
   }, context);
-  return projectGate(result, input.claims, autoAccept, reviewAt, risk ? { suspicious: riskInputSuspicious(input.diff, input.tests) } : undefined);
+  return gateOutputSchema.parse(
+    projectGate(result, input.claims, autoAccept, reviewAt, risk ? { suspicious: riskInputSuspicious(input.diff, input.tests) } : undefined),
+  );
 }
 
 /** Deterministic policy after the single shared evaluation has completed. */

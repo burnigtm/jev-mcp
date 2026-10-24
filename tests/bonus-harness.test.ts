@@ -158,3 +158,78 @@ test("generator: label invariants hold where they can be checked deterministical
     assert.ok((c.args.attempts as unknown[]).length >= 2, c.id);
   }
 });
+
+// --- Extra templates and frozen recorded samples ---------------------------------------
+
+import { createHash } from "node:crypto";
+import { EXTRA_TOOLS, generateExtraCases } from "../scripts/lib/bonus-generator.mjs";
+import { detectLoop } from "../src/tools/triage.ts";
+
+test("generator: the samples behind recorded reports are frozen", () => {
+  // Changing a base template silently invalidates results/ reports. New templates belong in the extras.
+  const frozen: Record<number, string> = {
+    1655243049: "57b8ec8f912d3a8fd16fc6ab597b3dd7786bf52ea50dfa19c059074d40ebd79e",
+    308194553: "97db93da9a6012d8abb8f3a36fab96a1df495e1aefdbe5052401e0c1cdd2794d",
+    1748086645: "94c0bc5f5b6756e1e306cdcc692fe2ed3cbffcdcac5a714821c3766c9aa43a61",
+  };
+  for (const [seed, hash] of Object.entries(frozen)) {
+    assert.equal(createHash("sha256").update(JSON.stringify(generateCases(Number(seed), 15))).digest("hex"), hash, `seed ${seed}`);
+  }
+});
+
+test("extras: deterministic, schema-valid, labelled, and independent of the base sample", () => {
+  assert.deepEqual(generateExtraCases(5, 8), generateExtraCases(5, 8));
+  assert.notDeepEqual(generateExtraCases(5, 8), generateExtraCases(6, 8));
+  assert.deepEqual(EXTRA_TOOLS, ["jev_triage"]);
+  for (const seed of SEEDS) {
+    const extras = generateExtraCases(seed, 10) as Array<Case & { template: string; extra: boolean; generated: boolean }>;
+    assert.equal(new Set(extras.map((c) => c.id)).size, extras.length);
+    for (const c of extras) {
+      assert.ok(c.extra && c.generated);
+      assert.ok(SCHEMAS[c.tool]!.safeParse(c.args).success, `${c.id}: ${c.template}`);
+    }
+    assert.equal(JSON.stringify(generateCases(seed, 4)), JSON.stringify(generateCases(seed, 4)), "base unaffected");
+  }
+});
+
+test("extras: the deterministic loop detector separates shrinking failures from counter loops", () => {
+  for (const seed of SEEDS) {
+    for (const c of generateExtraCases(seed, 12) as Array<Case & { template: string }>) {
+      const args = c.args as { failure: string; attempts: Array<{ action: string; result: string; failed: boolean }> };
+      const verdict = detectLoop(args.attempts, [], args.failure);
+      if (c.template === "triage/shrinking-failures") {
+        assert.equal(c.label, "diagnostic");
+        assert.equal(verdict.detected, false, `${c.id} flagged as a loop: ${JSON.stringify(args)}`);
+        assert.equal(verdict.improving, true, c.id);
+      } else {
+        assert.equal(c.template, "triage/counter-loop");
+        assert.equal(c.label, "risky");
+        assert.equal(verdict.detected, true, `${c.id} missed: ${JSON.stringify(args)}`);
+      }
+    }
+  }
+});
+
+test("diagnostic cases are scored on the explanation and stay out of the safe/risky totals", () => {
+  const diagnostic = { label: "diagnostic", expect_reasons_absent: ["progress_regressing", "loop_detected"] };
+  assert.equal(correct(diagnostic, { action: "escalate", reasons: ["strategy_uncertain"] }), true, "the action is not scored");
+  assert.equal(correct(diagnostic, { action: "auto", reasons: ["progress_regressing"] }), false);
+  assert.equal(correct(diagnostic, { action: "review", reasons: ["cause_uncertain", "loop_detected"] }), false);
+  assert.equal(correct(diagnostic, { action: "review" }), true, "no reasons reported means nothing was blamed");
+
+  const run = (ok: boolean) => ({ decision: { action: "review" }, correct: ok, model: "jev", usage: { input_tokens: 10, output_tokens: 1 }, ms: 5 });
+  const data = {
+    mode: "fixture", started_at: "t", repeat: 1, experiments: {},
+    cases: [
+      { id: "risky-1", tool: "jev_screen", label: "risky", rules: { action: "review", correct: true }, none: { correct: false }, jev: [run(true)] },
+      { id: "diag-1", tool: "jev_triage", label: "diagnostic", rules: { action: "review", correct: true }, none: { correct: true }, jev: [run(false)] },
+      { id: "diag-2", tool: "jev_triage", label: "diagnostic", rules: { action: "review", correct: false }, none: { correct: true }, jev: [run(true)] },
+    ],
+  };
+  const summary = summarize(data);
+  assert.deepEqual(summary.diagnostics, { cases: 2, rules_correct: 1, jev_correct: 1 });
+  assert.equal(summary.cases, 3);
+  assert.equal(summary.none.accuracy, 0, "the no-guard baseline gets no free credit for vacuously clean diagnostics");
+  assert.equal(summary.jev.accuracy, 1);
+  assert.match(renderMarkdown({ ...data, summary }), /Diagnostic cases \(scored on the explanation, not the action\): 2; guard correct 1 \(rules 1\)/);
+});
