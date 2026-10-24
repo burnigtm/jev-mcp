@@ -15,6 +15,11 @@ async function main(): Promise<void> {
     await runEval(argv.slice(1));
     return;
   }
+  if (cmd === "feedback") {
+    const { runFeedbackCommand } = await import("./cli.js");
+    await runFeedbackCommand(argv.slice(1));
+    return;
+  }
   if (cmd === "help" || cmd === "--help" || cmd === "-h") {
     printHelp();
     return;
@@ -38,6 +43,8 @@ Usage:
   jev-mcp eval --json '{ "state": "...", "questions": { ... } }'
   jev-mcp eval --state TEXT --questions JSON
   jev-mcp eval --stdin
+  jev-mcp feedback <decision_id> <correct|false_alarm|missed> [--note TEXT]
+                          Label an earlier decision in the local ledger (needs JEV_MCP_LEDGER=1)
 `);
 }
 

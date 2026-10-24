@@ -67,6 +67,7 @@ const choiceAnswerSchema = z.object({
 });
 
 export const stepOutputSchema = z.object({
+  decision_id: z.string().optional(),
   model: z.string(),
   usage: usageSchema,
   truncated: z.boolean(),

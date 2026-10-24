@@ -35,5 +35,8 @@ The canonical, portable [Jev tool contracts](../skills/jev-mcp/references/tools.
 ## `jev_risk`
 [Security-risk contract](../skills/jev-mcp/references/tools.md#jev_risk)
 
+## `jev_feedback`
+[Decision-feedback contract](../skills/jev-mcp/references/tools.md#jev_feedback)
+
 ## `jev_evaluate`
 [Custom-evaluation contract](../skills/jev-mcp/references/tools.md#jev_evaluate)

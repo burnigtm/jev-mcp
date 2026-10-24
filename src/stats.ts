@@ -21,6 +21,8 @@ const provider = {
   // error, invalid response). Their cost is unknown, so the budget charges the reservation.
   failed_requests: 0, failed_estimated_tokens: 0,
 };
+/** Ledger writes by outcome; the ledger is observability, so failures are counted rather than raised. */
+const ledgerEvents = { written: 0, dropped: 0, errors: 0 };
 /** Why provider responses were rejected, by fixed reason name (never provider content). */
 const responseFailures: Record<string, number> = {};
 /** Estimated tokens of requests currently in flight; released when each request settles. */
@@ -93,6 +95,11 @@ export function releaseTokens(reservation: number): void {
   reserved = Math.max(0, reserved - reservation);
 }
 
+export function recordLedgerEvent(kind: "written" | "dropped" | "error"): void {
+  if (kind === "error") ledgerEvents.errors += 1;
+  else ledgerEvents[kind] += 1;
+}
+
 export function recordResponseFailure(reason: string): void {
   responseFailures[reason] = (responseFailures[reason] ?? 0) + 1;
 }
@@ -115,6 +122,7 @@ export function statsSnapshot(tokenBudget: number | undefined, cacheEntries: num
   return {
     started_at: startedAt,
     provider: { ...provider, response_failures: { ...responseFailures }, cache_entries: cacheEntries },
+    ledger: { ...ledgerEvents },
     budget: {
       limit: tokenBudget ?? null,
       spent,
@@ -136,5 +144,8 @@ export function resetStats(): void {
   tools.clear();
   reserved = 0;
   for (const key of Object.keys(responseFailures)) delete responseFailures[key];
+  ledgerEvents.written = 0;
+  ledgerEvents.dropped = 0;
+  ledgerEvents.errors = 0;
   for (const key of Object.keys(provider) as Array<keyof typeof provider>) provider[key] = 0;
 }

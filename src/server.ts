@@ -1,4 +1,5 @@
 import { McpServer, type ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { PACK_IDS, packBody, packUri } from "./packs/index.js";
@@ -30,7 +31,9 @@ import { SERVER_NAME, VERSION } from "./version.js";
 import { cacheSize } from "./cache.js";
 import { getConfig } from "./config.js";
 import { errorDetails } from "./errors.js";
+import { newDecisionId, recordDecision, recordToolError, type LedgerSettings } from "./ledger.js";
 import { recordToolCall, statsSnapshot } from "./stats.js";
+import { feedbackInputSchema, feedbackOutputSchema, runFeedback } from "./tools/feedback.js";
 import { withToolContext, type ToolContext } from "./typesafe.js";
 
 export const STATS_URI = "jev://stats";
@@ -47,24 +50,40 @@ function registerJevTool<I extends z.ZodType, O extends z.ZodType>(
   name: string,
   meta: { title: string; description: string; inputSchema: I; outputSchema: O },
   run: (args: z.output<I>, context: ToolContext) => Promise<object>,
+  options: { judgment?: boolean; annotations?: ToolAnnotations } = {},
 ): void {
+  // A judgment gets a decision_id and a ledger record; bookkeeping tools such as jev_feedback do not.
+  const judgment = options.judgment ?? true;
   const callback = async (args: z.output<I>, extra: { signal: AbortSignal }) => {
     const started = performance.now();
+    const settings = ledgerSettings();
     try {
-      const payload = await withToolContext({ signal: extra.signal }, context => run(args, context));
-      const record = payload as { action?: unknown; usage?: unknown };
-      recordToolCall(name, { durationMs: performance.now() - started, action: record.action, usage: record.usage });
+      const result = await withToolContext({ signal: extra.signal }, context => run(args, context));
+      const durationMs = performance.now() - started;
+      const record = result as { action?: unknown; usage?: unknown };
+      recordToolCall(name, { durationMs, action: record.action, usage: record.usage });
+      // A fresh id per response, even when the provider answer came from the cache.
+      const payload = judgment ? { ...result, decision_id: newDecisionId() } : result;
+      if (judgment) recordDecision(settings, { decisionId: (payload as { decision_id: string }).decision_id, tool: name, args, payload: payload as Record<string, unknown>, durationMs });
       return { ...jsonResult(payload), structuredContent: payload as Record<string, unknown> };
     } catch (err) {
-      recordToolCall(name, { durationMs: performance.now() - started, errorCode: errorDetails(err).code });
+      const durationMs = performance.now() - started;
+      const code = errorDetails(err).code;
+      recordToolCall(name, { durationMs, errorCode: code });
+      if (judgment) recordToolError(settings, name, code, durationMs);
       return jsonError(err);
     }
   };
   server.registerTool(
     name,
-    { ...meta, annotations: READ_ONLY_ANNOTATIONS },
+    { ...meta, annotations: options.annotations ?? READ_ONLY_ANNOTATIONS },
     callback as unknown as ToolCallback<I>,
   );
+}
+
+function ledgerSettings(): LedgerSettings {
+  const config = getConfig();
+  return { enabled: config.ledger, dir: config.ledgerDir, maxBytes: config.ledgerMaxBytes };
 }
 
 export function createJevServer(): McpServer {
@@ -168,6 +187,17 @@ export function createJevServer(): McpServer {
     inputSchema: riskInputSchema,
     outputSchema: riskOutputSchema,
   }, runRisk);
+
+  registerJevTool(server, "jev_feedback", {
+    title: "Label a Jev decision",
+    description:
+      "Tell the local decision ledger whether an earlier Jev decision was right: pass the `decision_id` from that result and an outcome of correct, false_alarm (it blocked or reviewed something fine) or missed (it approved something it should not have). Appends one line to the local ledger when JEV_MCP_LEDGER=1; otherwise it records nothing. Changes no decision and calls no model.",
+    inputSchema: feedbackInputSchema,
+    outputSchema: feedbackOutputSchema,
+  }, runFeedback, {
+    judgment: false,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  });
 
   server.registerResource(
     "stats",

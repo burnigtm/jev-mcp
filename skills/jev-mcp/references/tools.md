@@ -7,6 +7,7 @@ Every successful tool call returns JSON with at least:
 - `truncated` — `true` if supplied state, candidate text, or candidate metadata was cut or clipped
 - `coverage` — completeness and source character counts; token estimates identify the `chars/4` estimator
 - `action` — `auto` | `review` | `escalate`
+- `decision_id` — a fresh handle for this response (even when the provider answer came from the cache), for `jev_feedback`; added to every judgment result
 
 All tools also publish the successful payload through MCP `structuredContent` with an output schema for client-side validation.
 
@@ -358,6 +359,8 @@ Semantic preflight for **one** host-prepared action. It judges scope and effect 
 
 **Policy:** external/destructive/unknown effects are never `auto`; out-of-scope or effect-mismatched actions escalate; `needs_confirmation` at or above `min(auto_accept, 0.8)` escalates; high risk reviews. `auto` also requires a confident low risk and complete coverage. `action: auto` means no semantic scope concern, **not** that the host may skip authorization.
 
+**Reason codes** (every non-`auto` result carries at least one; `accepted` appears only with `auto`): `out_of_scope` (`in_scope` below `review_at`), `scope_uncertain` (below `auto_accept`), `effect_mismatch` / `effect_uncertain` (`effect_match` below `review_at` / `auto_accept`), `confirmation_required` (`needs_confirmation` at or above `min(auto_accept, 0.8)`), `confirmation_uncertain` (at or above `review_at`), `external_effect`, `destructive_effect`, `unknown_effect` (the effective effect), `effect_upgraded` (the command showed a stricter effect than declared), `risk_review` (risk score 1.5 or more), `risk_uncertain` (risk confidence or distribution too weak), `injection_suspected` (the deterministic injection backstop fired on the description, target or command), `incomplete_context`, and `review_required` as a fallback. `in_scope` is also a member of the code vocabulary but is not currently emitted.
+
 ```json
 {
   "task": "Inspect the parser without changing it",
@@ -390,6 +393,8 @@ Turn a failure into a cause, a progress classification, and a recovery strategy.
 
 **Policy:** escalations are decided first: cause or strategy confidence below `review_at`, a recommended `escalate`, or recoverability below `review_at` escalate. Then moderate cause or strategy confidence reviews; repeating or regressing progress reviews; a retry after two or more failed attempts reviews; `ask_user` reviews; `escalate` escalates.
 
+**Reason codes:** `cause_uncertain` (cause confidence below `review_at`), `cause_unknown` (no supplied cause fits), `progress_repeating`, `progress_regressing`, `progress_inconsistent` (`first_attempt` claimed although attempts or history were supplied), `not_recoverable` (recoverability below `review_at`), `recoverability_uncertain` (below `auto_accept`), `strategy_uncertain` (strategy confidence below `review_at`), `strategy_escalate` (Jev recommends escalating), `human_decision_required` (`ask_user`), `retry_budget_exhausted` (a retry after two or more failed attempts), `loop_detected` (the deterministic detector), `injection_suspected`, `incomplete_context`, `review_required` as a fallback, and `accepted` only with `auto`.
+
 **Deterministic loop detector.** Independently of the model, the server fingerprints each failed attempt (`action` + `result`) and history entry (`action` + `observation`) after masking timestamps, durations, hex IDs, temp paths, and numbers. The same fingerprint twice, or the current `failure` matching the result of two or more failed attempts, sets `loop: { detected: true, repeats, kind: "repeated_attempt" | "same_failure" }`, adds `loop_detected`, and blocks `auto` even when Jev reports `advancing`. The latest attempt producing the current failure alone is not a loop. **Shrinking failure counts are progress:** when every failed attempt and the current failure carry a count next to `failed|failing|failures|errors|problems` and the counts strictly decrease across at least two attempts, the repeat is not a loop and `loop.improving` is `true` (a changing counter such as `retry 3/5` has no such count and is still a loop). The model's `progress` answer is reported unchanged. The `progress` question tells Jev to compare failure counts and error details: fewer failing tests or errors is `advancing`, more is `regressing`. `auto` requires a confident cause and strategy, clean progress, enough recoverability, a legal retry budget, and complete coverage. The host prepares and routes any recovery call with `jev_step`.
 
 ```json
@@ -417,12 +422,38 @@ Security-focused patch triage. It complements `jev_review` (correctness, spec ma
 
 **Policy:** any critical flag (`authorization`, `secret_exposure`, `data_loss`) at/above `min(auto_accept, 0.8)` escalates, checked across all critical flags and severity before any review result, so a moderate concern never masks a confident one; other flags or an uncertainty band review; high severity reviews/escalates. `auto` requires every flag to be confidently absent, a severity score below 1.2 with at least `auto_accept` of its probability mass at levels 0–1, and complete coverage. Residual reviews are named: `severity_uncertain` when that severity region is not confident, `concern_uncertain` when a flag is below `review_at` but not confidently absent. `auto` is evidence, never merge permission.
 
+**Reason codes:** one per flag at or above `review_at`: `authorization_concern`, `validation_concern`, `secret_exposure`, `data_loss`, `concurrency_concern`, `dependency_concern`, `external_effect`; `severity_review` (severity score 1.5 or more), `severity_uncertain` (low severity without enough confidence in levels 0–1), `concern_uncertain` (a flag below `review_at` that is not confidently absent), `injection_suspected`, `incomplete_context`, `review_required` as a fallback, and `accepted` only with `auto`.
+
 ```json
 {
   "request": "Fix parser input handling without changing the public API",
   "diff": "- const [key, value] = line.split('=');\n+ const index = line.indexOf('=');\n+ const key = line.slice(0, index);\n+ const value = line.slice(index + 1);",
   "tests": "PASS parser key=value=extra preserves the suffix.",
   "files": [{ "path": "src/parser.ts", "change": "modified" }]
+}
+```
+
+## `jev_feedback`
+
+Label an earlier decision so the local **decision ledger** can show how often Jev's reviews and escalations were right. It is bookkeeping, not a judgment: it makes no provider request, changes no decision, and has no `model`, `coverage` or `action`.
+
+**Arguments**
+
+| Name | Required | Meaning |
+| --- | --- | --- |
+| `decision_id` | yes | The `decision_id` returned by a Jev tool (`d_` plus 24 hex characters) |
+| `outcome` | yes | `correct`: the decision was right. `false_alarm`: it blocked or asked for review of something that was fine. `missed`: it approved something it should not have |
+| `note` | no | Short free text, at most 500 characters, stored as written. Never include secrets or code |
+
+**Result:** `{ recorded, decision_id, outcome, reason? }`. `recorded` is `false` with `reason: "ledger_disabled"` unless the server runs with `JEV_MCP_LEDGER=1`, `"duplicate"` when the same label was already written by this server process, and `"write_failed"` if the ledger could not be written (a ledger failure never affects a decision). The CLI twin is `jev-mcp feedback <decision_id> <outcome> [--note TEXT]`.
+
+**The ledger** (`JEV_MCP_LEDGER=1`) appends one JSON line per decision to `~/.jev-mcp/ledger-YYYY-MM.jsonl` (override with `JEV_MCP_LEDGER_DIR`; capped by `JEV_MCP_LEDGER_MAX_BYTES`, default 50,000,000 per file, after which writes are dropped and counted in `jev://stats`). A record holds the time, `decision_id`, tool, model, action, reason codes, thresholds, usage, latency, whether the input was truncated, and a keyed HMAC of the input (per-install random key in `ledger.key`, so a short or guessable input cannot be recovered by hashing candidates). **No tool input or output text is stored.** The only free text is a feedback `note`. File mode `0600` has no effect on Windows; rely on the profile directory's ACL. When several labels exist for one decision, the latest wins.
+
+```json
+{
+  "decision_id": "d_0123456789abcdef01234567",
+  "outcome": "false_alarm",
+  "note": "Read-only git log; fine to run"
 }
 ```
 

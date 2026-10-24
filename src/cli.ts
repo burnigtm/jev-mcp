@@ -6,6 +6,7 @@ import { type QuestionInput } from "./questions.js";
 import { VERSION } from "./version.js";
 import { validatePolicyThresholds } from "./policy.js";
 import { evaluateInputSchema, runEvaluate } from "./tools/evaluate.js";
+import { feedbackInputSchema, runFeedback } from "./tools/feedback.js";
 
 export async function runDoctor(options: { json?: boolean } = {}): Promise<void> {
   const report: Record<string, unknown> = { version: VERSION, node: process.version, ready: false };
@@ -132,4 +133,30 @@ function parseEvalArgs(argv: string[]): EvalArgs {
     questions: JSON.parse(questionsRaw) as Record<string, QuestionInput>,
     model: flags.get("model"),
   };
+}
+
+/** `jev-mcp feedback <decision_id> <outcome> [--note TEXT]`: the command-line twin of the jev_feedback tool. */
+export async function runFeedbackCommand(argv: string[]): Promise<void> {
+  const positional: string[] = [];
+  let note: string | undefined;
+  for (let i = 0; i < argv.length; i += 1) {
+    const token = argv[i] ?? "";
+    if (token === "--note" || token.startsWith("--note=")) {
+      if (note !== undefined) throw new JevValidationError("Duplicate --note flag.");
+      note = token === "--note" ? argv[i + 1] : token.slice("--note=".length);
+      if (note === undefined || note.startsWith("--")) throw new JevValidationError("Missing value for --note.");
+      if (token === "--note") i += 1;
+    } else if (token.startsWith("--")) {
+      throw new JevValidationError(`Unknown feedback option: ${token}`);
+    } else {
+      positional.push(token);
+    }
+  }
+  if (positional.length !== 2) throw new JevValidationError("Usage: jev-mcp feedback <decision_id> <correct|false_alarm|missed> [--note TEXT]");
+  const parsed = feedbackInputSchema.safeParse({ decision_id: positional[0], outcome: positional[1], ...(note === undefined ? {} : { note }) });
+  if (!parsed.success) throw new JevValidationError("Feedback needs a decision_id returned by a Jev tool and an outcome of correct, false_alarm, or missed (note at most 500 characters).");
+  const result = await runFeedback(parsed.data);
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  // A label that went nowhere is a failure the caller should see; a duplicate is not.
+  if (!result.recorded && result.reason !== "duplicate") process.exitCode = 1;
 }

@@ -1,5 +1,7 @@
 import { BlockList, isIP } from "node:net";
+import { isAbsolute } from "node:path";
 import { JevConfigError } from "./errors.js";
+import { defaultLedgerDir } from "./ledger.js";
 
 export const DEFAULT_BASE_URL = "https://api.typesafe.ai";
 
@@ -17,6 +19,10 @@ export type JevConfig = {
   cacheMaxEntries: number;
   /** Total provider tokens this process may spend; undefined means unlimited. */
   tokenBudget: number | undefined;
+  /** Opt-in content-free decision ledger; see src/ledger.ts. */
+  ledger: boolean;
+  ledgerDir: string;
+  ledgerMaxBytes: number;
 };
 
 const nonPublic = new BlockList();
@@ -89,6 +95,13 @@ function intEnv(name: string, fallback: number, min: number): number {
     throw new JevConfigError(`${name} must be an integer of at least ${min}.`);
   }
   return value;
+}
+
+function ledgerDirEnv(): string {
+  const raw = process.env.JEV_MCP_LEDGER_DIR?.trim();
+  if (!raw) return defaultLedgerDir();
+  if (!isAbsolute(raw)) throw new JevConfigError("JEV_MCP_LEDGER_DIR must be an absolute path.");
+  return raw;
 }
 
 function tokenBudgetEnv(): number | undefined {
@@ -210,6 +223,9 @@ export function getConfig(): JevConfig {
     cacheTtlMs: intEnv("JEV_MCP_CACHE_TTL_MS", 0, 0),
     cacheMaxEntries: intEnv("JEV_MCP_CACHE_MAX_ENTRIES", 256, 1),
     tokenBudget: tokenBudgetEnv(),
+    ledger: boolEnv("JEV_MCP_LEDGER"),
+    ledgerDir: ledgerDirEnv(),
+    ledgerMaxBytes: intEnv("JEV_MCP_LEDGER_MAX_BYTES", 50_000_000, 1_024),
   };
   if (config.reviewAt > config.autoAccept) {
     throw new JevConfigError("JEV_MCP_REVIEW_AT must not exceed JEV_MCP_AUTO_ACCEPT.");

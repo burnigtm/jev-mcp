@@ -19,6 +19,8 @@ export const coverageSchema = z.object({
 });
 
 export const baseToolOutputShape = {
+  /** Handle for `jev_feedback`; added by the server to every successful result. */
+  decision_id: z.string().optional(),
   model: z.string(),
   usage: usageSchema,
   truncated: z.boolean(),

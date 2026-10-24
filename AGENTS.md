@@ -10,6 +10,7 @@ Use the **jev-mcp** MCP server for cheap typed Jev judgments. Jev does not write
 - `jev_scope` before a nontrivial or externally visible action; `auto` means no semantic scope concern, not permission
 - `jev_triage` after a failed test or command; it selects a recovery strategy but never executes it
 - `jev_risk` on a proposed diff before review/merge; it never grants merge permission
+- `jev_feedback` to label a past decision (`correct`, `false_alarm`, `missed`) by its `decision_id`; bookkeeping only
 - `jev_review` + `jev_verify` before declaring a fix done
 - `jev_evaluate` only when no recipe fits
 
