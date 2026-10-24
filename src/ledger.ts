@@ -10,7 +10,7 @@
  * a feedback `note`, which the user writes. File mode 0600 has no effect on Windows; rely on the profile directory ACL.
  */
 import { createHmac, randomBytes } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, existsSync, linkSync, mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, isAbsolute } from "node:path";
 import { recordLedgerEvent } from "./stats.js";
@@ -51,21 +51,57 @@ function ensureDir(dir: string): void {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
 }
 
+const MIN_KEY_BYTES = 16;
+
+/**
+ * Publish the key so that no reader can see it half-written: write a private temporary file, then link it into
+ * place. `link` fails if the key already exists, so exactly one racing process wins and the rest read its key.
+ */
+function publishKey(dir: string, path: string): void {
+  const secret = randomBytes(32).toString("hex");
+  const temporary = join(dir, `${KEY_FILE}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
+  writeFileSync(temporary, secret, { flag: "wx", mode: 0o600 });
+  try {
+    linkSync(temporary, path);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EEXIST") return;
+    // A file system without hard links: fall back to an exclusive create, which readers retry past (see readKey).
+    try {
+      writeFileSync(path, secret, { flag: "wx", mode: 0o600 });
+    } catch (inner) {
+      if ((inner as NodeJS.ErrnoException).code !== "EEXIST") throw inner;
+    }
+  } finally {
+    try {
+      unlinkSync(temporary);
+    } catch {
+      // The temporary name is unique; leaving it behind only wastes a few bytes.
+    }
+  }
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Read the key, waiting briefly if another process is still writing it (an empty or short file). */
+function readKey(path: string): Buffer {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const key = Buffer.from(readFileSync(path, "utf8").trim(), "hex");
+    if (key.length >= MIN_KEY_BYTES) return key;
+    sleepSync(10);
+  }
+  throw new Error("ledger_key_invalid");
+}
+
 function loadKey(dir: string): Buffer {
   const cached = keys.get(dir);
   if (cached) return cached;
   ensureDir(dir);
   const path = join(dir, KEY_FILE);
-  if (!existsSync(path)) {
-    try {
-      writeFileSync(path, randomBytes(32).toString("hex"), { flag: "wx", mode: 0o600 });
-    } catch (error) {
-      // Another process created it first; read theirs.
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    }
-  }
-  const key = Buffer.from(readFileSync(path, "utf8").trim(), "hex");
-  if (key.length < 16) throw new Error("ledger_key_invalid");
+  if (!existsSync(path)) publishKey(dir, path);
+  const key = readKey(path);
   keys.set(dir, key);
   return key;
 }
