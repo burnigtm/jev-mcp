@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, afterEach, before, mock, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { TypeSafeClient } from "@typesafe-ai/sdk";
 import { clearCache } from "../src/cache.ts";
-import { actionFromTool, checkToolUse, extractClaims, failClosedAction, readTask } from "../src/check.ts";
+import { actionFromTool, checkToolUse, extractClaims, failClosedAction, isHarnessScratch, readTask } from "../src/check.ts";
 import { runGit, withholdSensitive, workingChanges } from "../src/git.ts";
 import { buildSettings, mergeSettings } from "../src/hook-install.ts";
 import { MAX_STOP_BLOCKS, runHook } from "../src/hook.ts";
@@ -184,6 +184,20 @@ test("file edits: routine edits are silent; sensitive, outside and self-configur
   assert.equal(provider.mock.callCount(), 0);
 });
 
+test("file edits: the host's own scratch space and plan files are not 'outside the workspace', and nothing else under the temp directory is", async () => {
+  const provider = responds(() => CLEAN_SCOPE);
+  const scratch = join(tmpdir(), "claude", "project", "session-id", "scratchpad", "notes.py");
+  const plan = join(homedir(), ".claude", "plans", "a-plan.md");
+  assert.equal((await runHook("pre-tool-use", write(scratch), {})).stdout, "");
+  assert.equal((await runHook("pre-tool-use", write(plan), {})).stdout, "");
+  assert.equal(isHarnessScratch(scratch), true);
+  // A path that only looks like the scratch root, a traversal out of it, and a credential inside it all still ask.
+  for (const target of [join(tmpdir(), "claude-evil", "a.txt"), join(tmpdir(), "claude", "..", "other.txt"), join(homedir(), ".claude", "settings.json"), join(homedir(), ".claude", "plans-extra", "a.md"), join(tmpdir(), "claude", "x", ".env")]) {
+    assert.equal(decisionOf(await runHook("pre-tool-use", write(target), {})), "ask", target);
+  }
+  assert.equal(provider.mock.callCount(), 0);
+});
+
 test("reads: a key or credential file asks, an ordinary read (even outside the workspace) is silent", async () => {
   const provider = responds(() => CLEAN_SCOPE);
   const read = (file: string) => event({ tool_name: "Read", tool_input: { file_path: file } });
@@ -208,6 +222,20 @@ test("the model decides the gray zone, with the task read from the transcript", 
   assert.equal(states.length, 1);
   assert.match(JSON.stringify(states[0]), /Fix the pagination bug in src\/pager\.ts/);
   assert.doesNotMatch(JSON.stringify(states[0]), /a subagent prompt|meta text|harness text|older request|rm -rf \/"/);
+});
+
+test("the judge is told the effect the classifier found, not a placeholder that makes every write look mismatched", async () => {
+  const states: Array<Record<string, unknown>> = [];
+  mock.method(TypeSafeClient.prototype, "systemOne", async (request: ApiRequest) => {
+    states.push(request.state);
+    return { model: "jev-fixture", usage: { input_tokens: 10, output_tokens: 1 }, answers: answerAll(request.questions, CLEAN_SCOPE) };
+  });
+  const cases: Array<[string, string]> = [["npm run build", "local_write"], ["git push origin main", "external_write"], ["rm -rf build", "destructive"], [["python - <<'EOF'", "print(1)", "EOF"].join(String.fromCharCode(10)), "unknown"]];
+  for (const [command, effect] of cases) {
+    await checkToolUse({ tool_name: "Bash", tool_input: { command }, cwd: root, task: TASK });
+    const action = (states.at(-1) as { action: { effect: string } }).action;
+    assert.equal(action.effect, effect, command);
+  }
 });
 
 test("the model's judgment asks and never denies, and the reason is one line", async () => {
@@ -632,4 +660,32 @@ test("only an explicit policy deny rule ever denies", async () => {
 test("the example settings file matches what `hook install --stop` prints", () => {
   const example = JSON.parse(readFileSync(join(root, "examples", "claude-code.settings.json"), "utf8"));
   assert.deepEqual(example, buildSettings({ entry: "/path/to/jev-mcp/dist/index.js", stop: true }));
+});
+
+test("the session replay reports counts and shapes only, never a prompt, a command or a path", { skip: !existsSync(join(root, "dist", "hook.js")) }, () => {
+  const dir = tempDir("jev-replay-");
+  const transcript = join(dir, "session.jsonl");
+  const secretPrompt = "please deploy the staging-only-marker service";
+  const entry = (value: Record<string, unknown>) => JSON.stringify({ sessionId: "s1", cwd: root, ...value });
+  const use = (name: string, input: Record<string, unknown>, extra: Record<string, unknown> = {}) => entry({ type: "assistant", ...extra, message: { content: [{ type: "tool_use", name, input }] } });
+  writeFileSync(transcript, [
+    entry({ type: "user", message: { content: secretPrompt } }),
+    entry({ type: "user", isMeta: true, message: { content: "meta text" } }),
+    use("Bash", { command: "git status" }),
+    use("Bash", { command: "rm -rf build-marker-dir" }),
+    use("Write", { file_path: join(root, "src", "marker-file.ts"), content: "x" }),
+    use("Bash", { command: "rm -rf subagent-marker" }, { isSidechain: true }),
+    use("Glob", { pattern: "*.ts" }),
+  ].join("\n"));
+  const report = join(dir, "report.json");
+  const run = spawnSync(process.execPath, [join(root, "scripts", "eval-replay.mjs"), "--mock", "--transcript", transcript, "--report", report], { encoding: "utf8", cwd: root, timeout: 60_000 });
+  assert.equal(run.status, 0, run.stderr);
+  const parsed = JSON.parse(readFileSync(report, "utf8"));
+  assert.equal(parsed.summary.events, 3, "sidechain and unchecked tools are not replayed");
+  assert.equal(parsed.summary.mode, "mock (not a measurement)");
+  assert.equal(parsed.rows[0].decision, "silent", "a read-only command is silent");
+  assert.notEqual(parsed.rows[1].decision, "silent", "a destructive command is held");
+  assert.equal(parsed.rows[1].effect, "destructive");
+  const text = readFileSync(report, "utf8") + run.stdout;
+  for (const leaked of ["staging-only-marker", "build-marker-dir", "marker-file", "subagent-marker"]) assert.ok(!text.includes(leaked), leaked);
 });

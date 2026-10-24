@@ -1,5 +1,6 @@
 import { open, stat } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { effectiveEffect, commandSegments, type Effect } from "./effects.js";
 import { errorDetails } from "./errors.js";
 import { callerContextForDiff } from "./context.js";
@@ -81,6 +82,24 @@ export function actionFromTool(event: ToolUseEvent): MappedAction | null {
 
 /** Files that configure this guard or the agent's own permissions: editing them is never routine. */
 const SELF_PROTECTED = [POLICY_FILE_NAME, ".claude/settings.json", ".claude/settings.local.json", ".claude/hooks/"];
+
+/**
+ * Places the agent host itself writes to while it works: its per-session scratch space under the temp directory and its plan
+ * files. A write there is not a write into the user's files, and asking about each one would make the hook unusable in a normal
+ * session. Anything sensitive under them is still caught by the sensitive-path check.
+ */
+function harnessScratchRoots(): string[] {
+  return [join(tmpdir(), "claude"), join(homedir(), ".claude", "plans")];
+}
+
+export function isHarnessScratch(absolute: string): boolean {
+  const fold = (value: string): string => (process.platform === "win32" ? value.toLowerCase() : value);
+  const target = fold(resolve(absolute));
+  return harnessScratchRoots().some((root) => {
+    const base = fold(resolve(root));
+    return target.startsWith(base.endsWith(sep) ? base : base + sep);
+  });
+}
 
 function relativeToWorkspace(cwd: string, path: string): string | null {
   const absolute = isAbsolute(path) ? path : resolve(cwd, path);
@@ -210,12 +229,15 @@ export async function checkToolUse(event: ToolUseEvent, options: ToolUseOptions 
   try {
     options.onModelCall?.();
     const { runScope } = await import("./tools/scope.js");
+    // The task is the user's own prompt and the description is the agent's: either can contain a pasted credential.
     const scope = await runScope({
-      task,
+      task: redactSecrets(task).text,
       action: {
         name: mapped.name,
-        description: mapped.description,
-        effect: mapped.effect,
+        description: redactSecrets(mapped.description).text,
+        // The hook has no declaration of its own (it presets read_only), so the judge is told what the classifier found;
+        // `effective` is the strictest of the two either way, so nothing is loosened.
+        effect: effects.effective,
         command: redactSecrets(mapped.command!).text,
       },
     }, options.deadline === undefined ? undefined : { deadline: options.deadline });
@@ -250,7 +272,7 @@ function checkFileEdit(mapped: MappedAction, cwd: string, policy: ReturnType<typ
   const reasons: string[] = [];
   if (verdict.decision === "review") reasons.push("policy_review");
   // Reading outside the workspace is routine (docs, other repositories); writing there is not.
-  if (rel === null && !reading) reasons.push("outside_workspace");
+  if (rel === null && !reading && !isHarnessScratch(isAbsolute(target) ? target : resolve(cwd, target))) reasons.push("outside_workspace");
   // A home-directory key or credential file is outside the workspace, so test the absolute path as well.
   if (isSensitivePath(rel ?? target)) reasons.push("sensitive_path");
   if (rel !== null && !reading && SELF_PROTECTED.some(path => rel === path || (path.endsWith("/") && rel.startsWith(path)))) reasons.push("config_change");

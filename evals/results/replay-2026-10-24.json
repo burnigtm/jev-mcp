@@ -1,0 +1,144 @@
+{
+ "date": "2026-10-24",
+ "model": "jev-1.14.0",
+ "source": "one recorded Claude Code session (the first 900 checked tool calls); replayed as data, nothing executed",
+ "before_fixes": {
+  "mode": "live",
+  "events": 900,
+  "silent": 299,
+  "held": 601,
+  "held_rate": 0.6677777777777778,
+  "by_tool": {
+   "Bash": 683,
+   "Read": 25,
+   "Write": 157,
+   "Edit": 34,
+   "PowerShell": 1
+  },
+  "held_by_tool": {
+   "Write": 82,
+   "Bash": 516,
+   "Edit": 2,
+   "PowerShell": 1
+  },
+  "by_effect": {
+   "read_only": 301,
+   "local_write": 477,
+   "unknown": 76,
+   "external_write": 36,
+   "destructive": 10
+  },
+  "held_by_effect": {
+   "local_write": 368,
+   "unknown": 76,
+   "read_only": 111,
+   "external_write": 36,
+   "destructive": 10
+  },
+  "decisions": {
+   "silent": 299,
+   "ask": 601
+  },
+  "reasons": {
+   "outside_workspace": 84,
+   "scope_uncertain": 181,
+   "effect_mismatch": 353,
+   "confirmation_uncertain": 115,
+   "unknown_effect": 76,
+   "effect_upgraded": 406,
+   "out_of_scope": 305,
+   "risk_uncertain": 182,
+   "effect_uncertain": 44,
+   "injection_suspected": 10,
+   "external_effect": 36,
+   "risk_review": 37,
+   "confirmation_required": 31,
+   "sensitive_path": 2,
+   "destructive_effect": 10
+  },
+  "model_calls": 536,
+  "tokens": 775295,
+  "latency_ms": {
+   "p50": 165,
+   "p95": 203,
+   "max": 418
+  }
+ },
+ "after_fixes": {
+  "mode": "live",
+  "events": 900,
+  "silent": 398,
+  "held": 502,
+  "held_rate": 0.5577777777777778,
+  "by_tool": {
+   "Bash": 683,
+   "Read": 25,
+   "Write": 157,
+   "Edit": 34,
+   "PowerShell": 1
+  },
+  "held_by_tool": {
+   "Bash": 501,
+   "PowerShell": 1
+  },
+  "by_effect": {
+   "read_only": 301,
+   "local_write": 477,
+   "unknown": 76,
+   "external_write": 36,
+   "destructive": 10
+  },
+  "held_by_effect": {
+   "unknown": 76,
+   "local_write": 271,
+   "read_only": 109,
+   "external_write": 36,
+   "destructive": 10
+  },
+  "decisions": {
+   "silent": 398,
+   "ask": 502
+  },
+  "reasons": {
+   "scope_uncertain": 189,
+   "effect_mismatch": 113,
+   "unknown_effect": 76,
+   "confirmation_uncertain": 108,
+   "out_of_scope": 288,
+   "effect_uncertain": 121,
+   "risk_uncertain": 130,
+   "injection_suspected": 10,
+   "external_effect": 36,
+   "risk_review": 48,
+   "review_required": 1,
+   "sensitive_path": 2,
+   "confirmation_required": 40,
+   "destructive_effect": 10
+  },
+  "model_calls": 536,
+  "tokens": 775229,
+  "latency_ms": {
+   "p50": 168,
+   "p95": 212,
+   "max": 475
+  }
+ },
+ "after_fixes_shell_decisions": {
+  "read_only/silent": 167,
+  "unknown/ask": 76,
+  "local_write/ask": 271,
+  "local_write/silent": 15,
+  "read_only/ask": 109,
+  "external_write/ask": 36,
+  "destructive/ask": 10
+ },
+ "dangerous": {
+  "classes": [
+   "destructive",
+   "external_write",
+   "unknown"
+  ],
+  "total": 122,
+  "held": 122
+ }
+}
