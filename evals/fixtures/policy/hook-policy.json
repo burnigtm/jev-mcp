@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "protected_paths": [
+    { "glob": ".github/workflows/**", "floor": "review" },
+    { "glob": ".gitlab-ci.yml", "floor": "review" },
+    { "glob": "src/auth/**", "floor": "review" },
+    { "glob": "src/billing/**", "floor": "review" },
+    { "glob": "src/index.ts", "floor": "review" }
+  ],
+  "commands": {
+    "deny": ["git push --force"],
+    "review": ["npm install", "pnpm add", "yarn add", "npm publish", "kubectl apply"]
+  }
+}

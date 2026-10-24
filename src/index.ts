@@ -20,6 +20,16 @@ async function main(): Promise<void> {
     await runFeedbackCommand(argv.slice(1));
     return;
   }
+  if (cmd === "hook") {
+    const { runHookCommand } = await import("./cli.js");
+    await runHookCommand(argv.slice(1));
+    return;
+  }
+  if (cmd === "check") {
+    const { runCheckCommand } = await import("./cli.js");
+    await runCheckCommand();
+    return;
+  }
   if (cmd === "help" || cmd === "--help" || cmd === "-h") {
     printHelp();
     return;
@@ -45,6 +55,11 @@ Usage:
   jev-mcp eval --stdin
   jev-mcp feedback <decision_id> <correct|false_alarm|missed> [--note TEXT]
                           Label an earlier decision in the local ledger (needs JEV_MCP_LEDGER=1)
+  jev-mcp hook pre-tool-use|stop
+                          Claude Code hook: reads the event on stdin, prints a permission decision or nothing
+  jev-mcp hook install [--stop] [--shadow] [--block-on-failure] [--write FILE]
+                          Print (or merge into FILE) the Claude Code settings that wire the hooks in
+  jev-mcp check           JSON on stdin ({"kind":"action"|"changes",...}); exit 0 auto, 10 review, 20 escalate, 2 error
 `);
 }
 
