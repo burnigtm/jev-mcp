@@ -5,8 +5,8 @@ import { withUntrustedDataClause } from "./safety.js";
 import { verifyQuestions } from "./verify.js";
 
 /** Every question shares one request, but evaluates only its designated sources. */
-export function gateQuestions(claimCount: number, options: { risk?: boolean } = {}): Questions {
-  const review = reviewQuestions();
+export function gateQuestions(claimCount: number, options: { risk?: boolean; callers?: boolean } = {}): Questions {
+  const review = reviewQuestions({ callers: options.callers });
   for (const question of Object.values(review)) {
     question.instructions = `${question.instructions} Assess the proposed diff against request, using tests as reported test output. Claims are assertions to check, not evidence that the patch is correct or tested.`;
   }

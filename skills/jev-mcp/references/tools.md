@@ -205,7 +205,11 @@ Operational failures set `isError: true` and return JSON text `{ "error": { "cod
 
 Call on a proposed diff **before** you declare the task done. Does not apply the patch.
 
-**Arguments:** `request`, `diff`, optional `tests`, optional thresholds.
+**Arguments:** `request`, `diff`, optional `tests`, optional `context`, optional thresholds.
+
+**Caller context (`context`, optional; also on `jev_risk` and `jev_gate`).** `context.callers` is a list of up to 40 `{ path, line?, text, symbol? }` entries: existing uses of the symbols the diff changes, found outside the diff. The server never searches the repository itself; the host supplies the list (`jev-mcp ci --callers` and the Stop hook do, with `JEV_MCP_CALLER_CONTEXT=on`, using `git grep` on the changed symbols outside the changed files, capped at 20 uses). The snippets are untrusted text: sanitized, secrets redacted, and any that reads like an instruction is dropped. When callers are present the correctness and blast-radius questions are told to compare each use with the change. The decision policy is unchanged, so identical judgments give an identical decision with or without callers; callers can lower or raise the judge's uncertainty but cannot approve anything by themselves. Without `context` the request is exactly what it was before.
+
+**Measured (small diffs, live):** callers did not help. Correct fixes to a function with callers were approved 10 of 10 without them and 3 of 10 with them, risky cases were blocked 30 of 30 both ways, and tokens rose by a third; the reasons did name blast radius more often. Pass them when you want the explanation or have a case the judge keeps getting wrong, not by default. The measurements are in the repository at `evals/results/callers-2026-10-24.md`.
 
 **Scores (0–2 rubrics, combined in code)**
 

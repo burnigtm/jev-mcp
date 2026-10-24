@@ -4,6 +4,7 @@ import { chunkQuestions } from "../packs/chunked.js";
 import { reviewQuestions } from "../packs/review.js";
 import { acceptableRegionConfidence, confidenceSupportsAuto, minConfidence, requireCompleteContext, reviewAction, reviewComposite, tightenJudgmentThresholds } from "../policy.js";
 import { chunkedCoverage, chunkedIncomplete, chunkSummaries, mergeReviews, omittedFiles, reviewFloors, runChunks, singleOrChunked, type ChunkedPlan } from "./chunked.js";
+import { contextSchema, judgeContext } from "./context-input.js";
 import { reviewOutputSchema, type ReviewReason } from "./output-schemas.js";
 import { asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
@@ -12,6 +13,7 @@ export const reviewInputSchema = z.object({
   request: z.string().describe("What the user asked for"),
   diff: z.string().describe("Proposed patch, file excerpt, or change summary"),
   tests: z.string().optional().describe("Test output if any"),
+  context: contextSchema.optional(),
   auto_accept: z.number().min(0).max(1).optional(),
   review_at: z.number().min(0).max(1).optional(),
   model: z.string().optional(),
@@ -22,8 +24,11 @@ export type ReviewInput = z.infer<typeof reviewInputSchema>;
 export async function runReview(input: ReviewInput, context?: ToolContext) {
   const config = getConfig();
   const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
+  const shown = judgeContext(input.context);
+  const callers = shown !== undefined;
   const state = {
     request: input.request,
+    ...(shown ? { context: shown } : {}),
     diff: input.diff,
     tests: input.tests ?? "",
   };
@@ -31,12 +36,12 @@ export async function runReview(input: ReviewInput, context?: ToolContext) {
     {
       diff: input.diff,
       tests: state.tests,
-      whole: { state, questions: reviewQuestions() },
-      base: { request: input.request },
-      questions: chunkQuestions({ review: true, risk: false }),
+      whole: { state, questions: reviewQuestions({ callers }) },
+      base: { request: input.request, ...(shown ? { context: shown } : {}) },
+      questions: chunkQuestions({ review: true, risk: false, callers }),
     },
     async () => {
-      const result = await systemOne({ state, questions: reviewQuestions(), model: input.model }, context);
+      const result = await systemOne({ state, questions: reviewQuestions({ callers }), model: input.model }, context);
       return reviewOutputSchema.parse({
         model: result.model,
         usage: result.usage,
@@ -45,12 +50,12 @@ export async function runReview(input: ReviewInput, context?: ToolContext) {
         ...projectReview(result, autoAccept, reviewAt),
       });
     },
-    planned => runChunkedReview(planned, input, autoAccept, reviewAt, context),
+    planned => runChunkedReview(planned, input, autoAccept, reviewAt, callers, context),
   );
 }
 
-async function runChunkedReview(first: ChunkedPlan, input: ReviewInput, autoAccept: number, reviewAt: number, context?: ToolContext) {
-  const { planned, results, usage } = await runChunks(first, chunkQuestions({ review: true, risk: false }), input.model, context);
+async function runChunkedReview(first: ChunkedPlan, input: ReviewInput, autoAccept: number, reviewAt: number, callers: boolean, context?: ToolContext) {
+  const { planned, results, usage } = await runChunks(first, chunkQuestions({ review: true, risk: false, callers }), input.model, context);
   const parts = results.map(result => projectReview(result, autoAccept, reviewAt));
   const incomplete = chunkedIncomplete(planned, results);
   const merged = mergeReviews(parts, { floors: reviewFloors(planned.plan.floors), incomplete });

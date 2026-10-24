@@ -275,6 +275,7 @@ export async function runCiCommand(argv: string[]): Promise<void> {
       "fail-on": { type: "string", default: "review" },
       "deterministic-only": { type: "boolean", default: false },
       "require-jev": { type: "boolean", default: false },
+      callers: { type: "boolean", default: false },
         } });
       } catch (err) {
         throw new JevValidationError(err instanceof Error ? err.message : "Invalid options.");
@@ -295,6 +296,7 @@ export async function runCiCommand(argv: string[]): Promise<void> {
       failOn: values["fail-on"],
       deterministicOnly: values["deterministic-only"],
       requireJev: values["require-jev"],
+      callers: values.callers ? true : undefined,
       deadline: Date.now() + (Number(process.env.JEV_MCP_CI_DEADLINE_MS) > 0 ? Number(process.env.JEV_MCP_CI_DEADLINE_MS) : 600_000),
     });
     let stdout: string;

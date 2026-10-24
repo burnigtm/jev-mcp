@@ -1,0 +1,901 @@
+{
+  "note": "Seed 757575004, 40 generated review cases, each judged twice by live jev-1.14.0: without and with context.callers. No case text or credentials are stored.",
+  "by_template": {
+    "review/fix-callers-compatible": {
+      "label": "safe",
+      "cases": 10,
+      "auto_without": 10,
+      "auto_with": 3,
+      "blast_cited_without": 0,
+      "blast_cited_with": 5,
+      "tokens_without": 11822,
+      "tokens_with": 15847,
+      "rules_auto": 8
+    },
+    "review/signature-callers-break": {
+      "label": "risky",
+      "cases": 10,
+      "auto_without": 0,
+      "auto_with": 0,
+      "blast_cited_without": 0,
+      "blast_cited_with": 5,
+      "tokens_without": 13314,
+      "tokens_with": 17555,
+      "rules_auto": 9
+    },
+    "review/behavior-callers-break": {
+      "label": "risky",
+      "cases": 10,
+      "auto_without": 0,
+      "auto_with": 0,
+      "blast_cited_without": 0,
+      "blast_cited_with": 10,
+      "tokens_without": 13187,
+      "tokens_with": 17714,
+      "rules_auto": 6
+    },
+    "review/fix-callers-wrong": {
+      "label": "risky",
+      "cases": 10,
+      "auto_without": 0,
+      "auto_with": 0,
+      "blast_cited_without": 0,
+      "blast_cited_with": 8,
+      "tokens_without": 11367,
+      "tokens_with": 15676,
+      "rules_auto": 7
+    }
+  },
+  "cases": [
+    {
+      "id": "x757575004-review_callers-0",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-1",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-2",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-3",
+      "template": "review/fix-callers-wrong-swallowed-error",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-4",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain",
+          "blast_radius"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-5",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-6",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-7",
+      "template": "review/fix-callers-wrong-skipped-test",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-8",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "review",
+        "reasons": [
+          "blast_radius"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-9",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-10",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-11",
+      "template": "review/fix-callers-wrong-swallowed-error",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain",
+          "test_gap"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "test_gap",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-12",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-13",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-14",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-15",
+      "template": "review/fix-callers-wrong-swallowed-error",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "test_gap"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "test_gap",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-16",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-17",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain",
+          "spec_match_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-18",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-19",
+      "template": "review/fix-callers-wrong-swallowed-error",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-20",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "review",
+        "reasons": [
+          "blast_radius"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-21",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-22",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-23",
+      "template": "review/fix-callers-wrong-swallowed-error",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-24",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-25",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-26",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-27",
+      "template": "review/fix-callers-wrong-hardcoded-case",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-28",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "review",
+        "reasons": [
+          "blast_radius"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-29",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-30",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-31",
+      "template": "review/fix-callers-wrong-hardcoded-case",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-32",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-33",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-34",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-35",
+      "template": "review/fix-callers-wrong-swallowed-error",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-36",
+      "template": "review/fix-callers-compatible",
+      "label": "safe",
+      "without": {
+        "action": "auto",
+        "reasons": [
+          "accepted"
+        ]
+      },
+      "with": {
+        "action": "review",
+        "reasons": [
+          "blast_radius"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-37",
+      "template": "review/signature-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain",
+          "correctness_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-38",
+      "template": "review/behavior-callers-break",
+      "label": "risky",
+      "without": {
+        "action": "review",
+        "reasons": [
+          "safe_to_apply_uncertain"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low"
+        ]
+      }
+    },
+    {
+      "id": "x757575004-review_callers-39",
+      "template": "review/fix-callers-wrong-skipped-test",
+      "label": "risky",
+      "without": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      },
+      "with": {
+        "action": "escalate",
+        "reasons": [
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_mismatch",
+          "test_gap",
+          "composite_low"
+        ]
+      }
+    }
+  ]
+}

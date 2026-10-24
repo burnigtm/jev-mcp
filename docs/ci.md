@@ -16,6 +16,7 @@ jev-mcp ci --base "$BASE_SHA" --head "$HEAD_SHA" \
 | `--format json\|github` | `json` (default) prints a summary with no diff text and no pull-request prose. `github` prints workflow annotations, and appends a markdown summary to `$GITHUB_STEP_SUMMARY` (or stdout when unset) |
 | `--fail-on review\|escalate` | `review` (default): exit 10 on `review`, 20 on `escalate`. `escalate`: exit 20 on `escalate` only; a `review` verdict is still reported, but the exit code is 0 |
 | `--deterministic-only` | Skip every model call (the mode for pull requests from forks) |
+| `--callers` | Look up where changed symbols are used outside the diff and show the uses to the judge (also `JEV_MCP_CALLER_CONTEXT=on`). Off by default, because on the benchmark it made Jev hold more correct fixes and caught nothing extra |
 | `--require-jev` | Treat a missing API key as an error (exit 2) instead of falling back to the deterministic checks |
 
 Exit codes: **0** auto, **10** review, **20** escalate, **2** error. An error is fail-closed: a bad ref, an unreadable repository, or a provider failure never looks like a pass.

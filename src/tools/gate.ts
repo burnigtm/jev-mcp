@@ -8,6 +8,7 @@ import { confidenceSupportsAuto, tightenJudgmentThresholds, worstAction } from "
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { sanitizeUntrustedDocument } from "../untrusted.js";
 import { addUsage, chunkedCoverage, chunkedIncomplete, chunkSummaries, mergeReviews, mergeRisks, omittedFiles, reviewFloors, riskFloors, runChunks, singleOrChunked, type ChunkedPlan } from "./chunked.js";
+import { contextSchema, judgeContext } from "./context-input.js";
 import { chunksOutputShape, reviewReasonSchema, riskOutputSchema } from "./output-schemas.js";
 import { projectReview } from "./review.js";
 import { dependenciesSchema, fileSchema, projectRisk, riskInputSuspicious, sanitizeDependencies, sanitizeFiles } from "./risk.js";
@@ -22,6 +23,7 @@ export const gateInputSchema = z.object({
   risk: z.boolean().optional().describe("Also run the jev_risk security flags in the same Jev request; default false"),
   files: z.array(fileSchema).max(100).optional().describe("Changed files and change kinds for the security check (risk: true)"),
   dependencies: dependenciesSchema.optional().describe("New or changed external dependencies for the security check (risk: true)"),
+  context: contextSchema.optional(),
   auto_accept: z.number().min(0).max(1).optional(),
   review_at: z.number().min(0).max(1).optional(),
   model: z.string().optional(),
@@ -119,24 +121,26 @@ export async function runGate(input: GateInput, context?: ToolContext) {
   const diff = risk ? sanitizeUntrustedDocument(input.diff) : input.diff;
   const tests = input.tests === undefined ? "" : risk ? sanitizeUntrustedDocument(input.tests) : input.tests;
   const security = risk ? { files: sanitizeFiles(input.files), dependencies: sanitizeDependencies(input.dependencies) } : {};
-  const questions = gateQuestions(input.claims.length, { risk });
+  const shown = judgeContext(input.context);
+  const callers = shown !== undefined;
+  const questions = gateQuestions(input.claims.length, { risk, callers });
   // Oversized state is cut from the tail of the serialized JSON. Keep what every verdict depends on and
   // is small (request, claims, evidence, file list) first, and the bulky diff and test log last.
-  const state = { request: input.request, claims: input.claims, evidence: input.evidence, ...security, diff, tests };
+  const state = { request: input.request, claims: input.claims, evidence: input.evidence, ...security, ...(shown ? { context: shown } : {}), diff, tests };
   const suspicious = risk && riskInputSuspicious(input.diff, input.tests);
   return singleOrChunked(
     {
       diff,
       tests,
       whole: { state, questions },
-      base: { request: input.request, ...security },
-      questions: chunkQuestions({ review: true, risk }),
+      base: { request: input.request, ...security, ...(shown ? { context: shown } : {}) },
+      questions: chunkQuestions({ review: true, risk, callers }),
     },
     async () => {
       const result = await systemOne({ state, questions, model: input.model }, context);
       return gateOutputSchema.parse(projectGate(result, input.claims, autoAccept, reviewAt, risk ? { suspicious } : undefined));
     },
-    planned => runChunkedGate(planned, input, { autoAccept, reviewAt, risk, suspicious }, context),
+    planned => runChunkedGate(planned, input, { autoAccept, reviewAt, risk, suspicious, callers }, context),
   );
 }
 
@@ -147,12 +151,12 @@ export async function runGate(input: GateInput, context?: ToolContext) {
 async function runChunkedGate(
   first: ChunkedPlan,
   input: GateInput,
-  options: { autoAccept: number; reviewAt: number; risk: boolean; suspicious: boolean },
+  options: { autoAccept: number; reviewAt: number; risk: boolean; suspicious: boolean; callers: boolean },
   context?: ToolContext,
 ) {
-  const { autoAccept, reviewAt, risk, suspicious } = options;
+  const { autoAccept, reviewAt, risk, suspicious, callers } = options;
   const [chunked, verification] = await Promise.all([
-    runChunks(first, chunkQuestions({ review: true, risk }), input.model, context),
+    runChunks(first, chunkQuestions({ review: true, risk, callers }), input.model, context),
     systemOne({
       state: { request: input.request, claims: input.claims, evidence: input.evidence },
       questions: chunkedGateVerificationQuestions(input.claims.length),

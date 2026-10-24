@@ -34,6 +34,7 @@ const { values } = parseArgs({ allowNegative: true, options: {
   'policy-file': { type: 'string' },
   'triage-recoverable-at': { type: 'string' },
   'max-chunks': { type: 'string' },
+  'with-context': { type: 'boolean', default: false },
   experiments: { type: 'boolean', default: true },
 } });
 const repeat = Math.max(1, Math.min(5, Number(values.repeat) || 1));
@@ -109,7 +110,7 @@ const report = {
   set: values.set,
   seed: values.set === 'fixed' ? null : seed,
   ledger_dir: values['ledger-dir'] ?? null,
-  conditions: { profile: values.profile ?? 'balanced', policy_file: values['policy-file'] ?? null, triage_recoverable_at: values['triage-recoverable-at'] ?? null, max_review_chunks: values['max-chunks'] ?? null },
+  conditions: { profile: values.profile ?? 'balanced', policy_file: values['policy-file'] ?? null, triage_recoverable_at: values['triage-recoverable-at'] ?? null, max_review_chunks: values['max-chunks'] ?? null, with_context: values['with-context'] },
   per_tool: values.set === 'fixed' ? null : perTool,
   extras_per_tool: values.set === 'fixed' || extras === 0 ? null : extras,
   cases: [],
@@ -128,7 +129,9 @@ try {
   for (const testCase of cases) {
     const runs = [];
     for (let i = 0; i < repeat; i += 1) {
-      const outcome = await timed(server, testCase.tool, testCase.args);
+      // Cases that carry `callers` send them as context.callers only when asked, so one case set measures both ways.
+      const sentArgs = values['with-context'] && testCase.callers ? { ...testCase.args, context: { callers: testCase.callers, total: testCase.callers.length } } : testCase.args;
+      const outcome = await timed(server, testCase.tool, sentArgs);
       runs.push(outcome.ok
         ? { decision: jevDecision(testCase.tool, outcome.result), model: outcome.result.model, usage: outcome.result.usage, ms: Math.round(outcome.ms) }
         : { error: outcome.error, ms: Math.round(outcome.ms) });
