@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "protected_paths": [
+    { "glob": ".env*", "floor": "deny" },
+    { "glob": "*.pem", "floor": "deny" },
+    { "glob": "id_rsa*", "floor": "deny" },
+    { "glob": ".github/workflows/**", "floor": "review" },
+    { "glob": "package-lock.json", "floor": "review" },
+    { "glob": "src/auth/**", "floor": "review" }
+  ],
+  "commands": {
+    "deny": ["git push --force", "git reset --hard", "git clean --force", "npm unpublish", "terraform destroy"],
+    "review": ["git push", "npm publish", "docker push", "kubectl apply", "terraform apply", "gh pr merge"],
+    "allow_read_only": ["git status", "git diff", "git log", "git show", "git branch", "rg", "ls", "cat", "pwd"]
+  },
+  "require_gate_on_stop": false
+}

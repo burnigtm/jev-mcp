@@ -30,6 +30,9 @@ const { values } = parseArgs({ allowNegative: true, options: {
   'per-tool': { type: 'string', default: '10' },
   extras: { type: 'string', default: '0' },
   'ledger-dir': { type: 'string' },
+  profile: { type: 'string' },
+  'policy-file': { type: 'string' },
+  'triage-recoverable-at': { type: 'string' },
   experiments: { type: 'boolean', default: true },
 } });
 const repeat = Math.max(1, Math.min(5, Number(values.repeat) || 1));
@@ -59,9 +62,13 @@ async function timed(server, tool, args) {
 
 // With --ledger-dir the main run records every decision to a local ledger and labels it from the case's ground truth,
 // which produces a real labelled ledger (content-free) for exercising `jev_feedback` and later calibration.
-const ledgerEnv = values['ledger-dir']
-  ? { JEV_MCP_LEDGER: '1', JEV_MCP_LEDGER_DIR: resolve(root, values['ledger-dir']) }
-  : {};
+const ledgerEnv = {
+  ...(values['ledger-dir'] ? { JEV_MCP_LEDGER: '1', JEV_MCP_LEDGER_DIR: resolve(root, values['ledger-dir']) } : {}),
+  // Conditions under test: a confidence profile, a repository policy file, a dedicated triage recoverability bar.
+  ...(values.profile ? { JEV_MCP_PROFILE: values.profile } : {}),
+  JEV_POLICY_FILE: values['policy-file'] ? resolve(root, values['policy-file']) : 'none',
+  ...(values['triage-recoverable-at'] ? { JEV_MCP_TRIAGE_RECOVERABLE_AT: values['triage-recoverable-at'] } : {}),
+};
 
 /** correct -> correct; a risky case that was approved -> missed; anything else wrong -> false_alarm. */
 function feedbackFor(testCase, decision) {
@@ -96,6 +103,7 @@ const report = {
   set: values.set,
   seed: values.set === 'fixed' ? null : seed,
   ledger_dir: values['ledger-dir'] ?? null,
+  conditions: { profile: values.profile ?? 'balanced', policy_file: values['policy-file'] ?? null, triage_recoverable_at: values['triage-recoverable-at'] ?? null },
   per_tool: values.set === 'fixed' ? null : perTool,
   extras_per_tool: values.set === 'fixed' || extras === 0 ? null : extras,
   cases: [],

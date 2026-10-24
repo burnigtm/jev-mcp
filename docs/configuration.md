@@ -14,6 +14,9 @@ For local CLI use on Node 20.6+, copy [`.env.example`](../.env.example) to `.env
 | `JEV_MCP_TIMEOUT_MS` | `30000` | Total deadline in milliseconds for one tool call, including retries and every ranking round. Each SDK attempt uses the time remaining and does not retry its own timeout |
 | `JEV_MCP_AUTO_ACCEPT` | `0.8` | Confidence floor for `auto` |
 | `JEV_MCP_REVIEW_AT` | `0.5` | Below this, coding-loop / review / evaluate `escalate` |
+| `JEV_MCP_PROFILE` | `balanced` | `balanced` or `strict`: a named bundle of the bars below. Explicit variables override it; per-call arguments can only tighten. See [profiles](#profiles) |
+| `JEV_MCP_TRIAGE_RECOVERABLE_AT` | the auto-accept bar | Bar for `jev_triage` recoverability (can the host make progress from here). Must not be below `JEV_MCP_REVIEW_AT`. A caller raising `auto_accept` also raises it |
+| `JEV_POLICY_FILE` | search upward from the working directory | Absolute path of the repository policy file, or `none` to disable it. See [repository policy](#repository-policy) |
 | `JEV_MCP_BLOCK_AT` | `0.75` | Screen injection ≥ this → `block` |
 | `JEV_MCP_LEDGER` | off | `1` / `true` / `yes` — append a content-free record of every decision to a local JSONL ledger so `jev_feedback` labels can be collected. See [the ledger](#decision-ledger) |
 | `JEV_MCP_LEDGER_DIR` | `~/.jev-mcp` | Absolute directory for `ledger-YYYY-MM.jsonl` and the per-install `ledger.key` |
@@ -34,6 +37,41 @@ Per-call overrides can only tighten the environment floors:
 Judged *concerns* (scope `needs_confirmation`, critical `jev_risk` flags, confidently contradicted claims) escalate at `min(auto_accept, 0.8)`. Raising `auto_accept` above the default therefore never delays an escalation: tightening a call only makes it stricter.
 
 `jev_evaluate` uses the environment confidence thresholds. Configurable confidence bands must satisfy `0 <= review_at <= auto_accept <= 1`; invalid environment values are configuration errors rather than silent fallbacks. `TYPESAFE_BASE_URL` is normalized to origin plus path. Userinfo, query strings, fragments, obfuscated numeric hosts, and non-public IPv4/IPv6 addresses (private, link-local, loopback on HTTPS, metadata, reserved, NAT64/6to4, and Teredo) are rejected. For custom HTTPS, `localhost`/`.localhost`, `.local`, `.internal`, `.home.arpa`, `.localdomain`, single-label names, trailing-dot forms, and zone identifiers are also rejected; `api.typesafe.ai` must use its default port. HTTP is allowed for IPv4/IPv6 loopback (`127.0.0.0/8`, `::1`, `localhost`). Hostnames are not resolved locally, so a custom endpoint remains operator-trusted and DNS rebinding is a documented residual risk. The screen review threshold cannot exceed its block threshold, and `JEV_MCP_BLOCK_AT` must be at least the default screen review threshold of `0.25`.
+
+## Profiles
+
+`JEV_MCP_PROFILE` selects a bundle of the confidence bars. Precedence, lowest to highest: the profile, explicit environment variables, per-call arguments (which can only tighten).
+
+| | `balanced` (default) | `strict` |
+| --- | --- | --- |
+| `auto_accept` | 0.8 | 0.9 |
+| `review_at` | 0.5 | 0.6 |
+| `block_at` (screen) | 0.75 | 0.6 |
+| triage recoverability bar | the `auto_accept` bar | 0.9 |
+
+`balanced` reproduces the bars the server has always used. `strict` asks for more confidence before anything is `auto` and blocks suspicious text earlier, at the cost of more reviews of ordinary work; the measured trade-off is in [evals/results](../evals/results/profiles-2026-10-24.md). `jev-mcp doctor` prints the active profile and bars.
+
+## Repository policy
+
+A `.jev-policy.json` in the repository (found by searching upward from the working directory to the repository root, or set with `JEV_POLICY_FILE`) holds deterministic rules that run before any Jev request, cost no tokens, and are easy to audit. See [`examples/jev-policy.json`](../examples/jev-policy.json).
+
+```json
+{
+  "version": 1,
+  "protected_paths": [{ "glob": ".github/workflows/**", "floor": "review" }, { "glob": ".env*", "floor": "deny" }],
+  "commands": {
+    "deny": ["git push --force"],
+    "review": ["git push", "npm publish"],
+    "allow_read_only": ["git status", "git log", "rg"]
+  }
+}
+```
+
+- **`protected_paths`**: globs with a floor of `review` or `deny`. `**` crosses directories, `*` and `?` do not, matching is case-insensitive, a pattern without `/` matches at any depth, and a pattern naming a directory covers everything inside it. A rule is tested against the action's `target` and against every path-like argument of the command. Globs may not be absolute or contain `..`.
+- **`commands`**: patterns are a program, optional further words (`*` stands for any one word) and optional flags. Words match as a prefix and flags in any order, after the command is normalized the way a person reads it: `sudo git -C repo push -f origin main` is `git push origin main` with `--force`, so it matches `git push --force`. There are no regular expressions in a policy, so a rule cannot cause catastrophic backtracking.
+- **Precedence:** `deny` beats `review`, and `review` beats `allow_read_only`. The `allow_read_only` list is the one place a policy loosens anything: it lets a command skip the model only when the classifier has confirmed it as read-only, the declared effect is `read_only`, and **every** segment of the command matches an allow pattern.
+- **Trust:** the file is trusted input from whoever owns the checkout. A pull request must not be able to loosen its own policy, so CI (a later change) reads it from the base ref. A file that cannot be read or fails validation (unknown keys are rejected) is an error, not an ignored file.
+- `require_gate_on_stop` is read now and consumed by the Claude Code Stop hook in a later change. A repo-supplied `test_command` is deliberately not supported: a command in a checked-in file would be a code-execution path.
 
 ## Decision ledger
 

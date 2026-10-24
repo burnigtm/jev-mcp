@@ -2,6 +2,7 @@ import { BlockList, isIP } from "node:net";
 import { isAbsolute } from "node:path";
 import { JevConfigError } from "./errors.js";
 import { defaultLedgerDir } from "./ledger.js";
+import { parseProfile, PROFILES, type ProfileName } from "./profiles.js";
 
 export const DEFAULT_BASE_URL = "https://api.typesafe.ai";
 
@@ -19,6 +20,10 @@ export type JevConfig = {
   cacheMaxEntries: number;
   /** Total provider tokens this process may spend; undefined means unlimited. */
   tokenBudget: number | undefined;
+  /** Named bundle of the confidence bars above; explicit environment variables override it. */
+  profile: ProfileName;
+  /** Triage "can progress be made" bar; undefined means the same as autoAccept. */
+  triageRecoverableAt: number | undefined;
   /** Opt-in content-free decision ledger; see src/ledger.ts. */
   ledger: boolean;
   ledgerDir: string;
@@ -210,15 +215,23 @@ function obfuscatedAddress(hostname: string): boolean {
   return labels.some(label => label.length > 1 && label.startsWith("0"));
 }
 
+function optionalBarEnv(name: string): number | undefined {
+  return process.env[name]?.trim() ? numEnv(name, 0) : undefined;
+}
+
 export function getConfig(): JevConfig {
+  const profileName = parseProfile(process.env.JEV_MCP_PROFILE);
+  const profile = PROFILES[profileName];
   const config = {
     apiKey: process.env.TYPESAFE_API_KEY?.trim() ?? "",
     model: process.env.JEV_MCP_MODEL?.trim() || "jev-latest",
     baseURL: baseUrlEnv(),
     mock: boolEnv("JEV_MCP_MOCK"),
-    autoAccept: numEnv("JEV_MCP_AUTO_ACCEPT", 0.8),
-    reviewAt: numEnv("JEV_MCP_REVIEW_AT", 0.5),
-    blockAt: numEnv("JEV_MCP_BLOCK_AT", 0.75),
+    profile: profileName,
+    autoAccept: numEnv("JEV_MCP_AUTO_ACCEPT", profile.autoAccept),
+    reviewAt: numEnv("JEV_MCP_REVIEW_AT", profile.reviewAt),
+    blockAt: numEnv("JEV_MCP_BLOCK_AT", profile.blockAt),
+    triageRecoverableAt: optionalBarEnv("JEV_MCP_TRIAGE_RECOVERABLE_AT") ?? profile.triageRecoverableAt,
     timeoutMs: timeoutEnv(),
     cacheTtlMs: intEnv("JEV_MCP_CACHE_TTL_MS", 0, 0),
     cacheMaxEntries: intEnv("JEV_MCP_CACHE_MAX_ENTRIES", 256, 1),
@@ -229,6 +242,9 @@ export function getConfig(): JevConfig {
   };
   if (config.reviewAt > config.autoAccept) {
     throw new JevConfigError("JEV_MCP_REVIEW_AT must not exceed JEV_MCP_AUTO_ACCEPT.");
+  }
+  if (config.triageRecoverableAt !== undefined && config.triageRecoverableAt < config.reviewAt) {
+    throw new JevConfigError("JEV_MCP_TRIAGE_RECOVERABLE_AT must not be below JEV_MCP_REVIEW_AT.");
   }
   // Screen uses a 0.25 default review cutoff when no per-call override exists.
   if (config.blockAt < 0.25) {

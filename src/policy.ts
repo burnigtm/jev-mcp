@@ -236,6 +236,8 @@ export function triageAction(input: {
   failedAttempts: number;
   autoAccept?: number;
   reviewAt?: number;
+  /** Bar for recoverability; defaults to autoAccept. */
+  recoverableAt?: number;
 }): PolicyAction {
   const autoAccept = input.autoAccept ?? DEFAULT_AUTO_ACCEPT;
   const reviewAt = input.reviewAt ?? DEFAULT_REVIEW_AT;
@@ -250,7 +252,7 @@ export function triageAction(input: {
   if (input.progress === "repeating" || input.progress === "regressing") return "review";
   if (input.progress === "complete" && input.strategy !== "stop") return "review";
   if (input.strategy === "stop" && input.progress !== "complete") return "review";
-  if (input.recoverable < autoAccept) return "review";
+  if (input.recoverable < Math.max(input.recoverableAt ?? autoAccept, reviewAt)) return "review";
   if (input.strategy === "retry" && input.failedAttempts >= 2) return "review";
   if (
     !confidenceSupportsAuto(input.causeConfidence, input.causeProbabilities, autoAccept)

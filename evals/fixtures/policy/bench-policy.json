@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "commands": {
+    "allow_read_only": ["git status", "git diff", "git log", "git show", "rg", "cat", "ls", "get-content", "select-string", "get-childitem"]
+  }
+}
