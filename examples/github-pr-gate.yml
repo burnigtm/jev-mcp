@@ -1,0 +1,59 @@
+# Example only: copy to .github/workflows/ after reading docs/ci.md. It is not enabled in this repository.
+#
+# Why it looks like this:
+#   - `pull_request`, never `pull_request_target`: the job must not run with secrets on code it did not review.
+#   - Pull-request text (title, body) reaches the job only through `env:`, then a file. It is never
+#     interpolated into a script, where a crafted body could become shell.
+#   - The checker is installed from a pinned release into the runner's temp directory (so a `.npmrc` or
+#     `package.json` in the pull request cannot change what is installed), with install scripts off. Nothing
+#     from the pull request is executed.
+#   - The policy is read from the base commit by the tool itself, so a pull request cannot loosen it.
+#   - A pull request from a fork gets no secrets; the job then runs the deterministic checks and says so.
+name: Jev pull request check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  jev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Write the pull request text to files
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_TITLE" > "$RUNNER_TEMP/pr-title.txt"
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.txt"
+
+      - name: Install the checker (pinned, outside the checkout)
+        working-directory: ${{ runner.temp }}
+        run: npm install --no-save --ignore-scripts --no-audit --no-fund jev-mcp@0.0.0-REPLACE-WITH-A-PINNED-VERSION
+
+      - name: Check the pull request
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FROM_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          extra=""
+          if [ "$FROM_FORK" = "true" ]; then extra="--deterministic-only"; fi
+          node "$RUNNER_TEMP/node_modules/jev-mcp/dist/index.js" ci \
+            --base "$BASE_SHA" --head "$HEAD_SHA" \
+            --pr-title-file "$RUNNER_TEMP/pr-title.txt" --pr-body-file "$RUNNER_TEMP/pr-body.txt" \
+            --format github --fail-on review $extra

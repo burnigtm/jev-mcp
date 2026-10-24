@@ -1,0 +1,290 @@
+{
+  "note": "Dry run of jev-mcp ci against three merged pull requests (#12, #13, #14) on live jev-1.14.0. #14 ran deterministic-only (26,696 added lines, mostly benchmark data). The result files hold reason codes and file names only; no diff text or pull-request prose.",
+  "runs": {
+    "pr_12": {
+      "mode": "live",
+      "result": {
+        "action": "escalate",
+        "mode": "jev",
+        "reasons": [
+          "injection_in_pr_text",
+          "secret_in_diff",
+          "pr_text_flagged",
+          "safe_to_apply_uncertain",
+          "correctness_uncertain",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low",
+          "lockfile_changed",
+          "unpaired_source_change",
+          "export_signature_change",
+          "chunked_review",
+          "injection_suspected",
+          "concern_uncertain"
+        ],
+        "files": 33,
+        "commits": true,
+        "policy": {
+          "source": "none",
+          "findings": []
+        },
+        "claims": [],
+        "secrets_redacted": 1,
+        "withheld": [],
+        "held": [
+          {
+            "files": [
+              "AGENTS.md",
+              "README.md",
+              "evals/README.md",
+              "docs/architecture.md",
+              "docs/changelog.md",
+              "docs/configuration.md",
+              "docs/tools.md",
+              "skills/jev-mcp/references/tools.md",
+              "package-lock.json",
+              "package.json",
+              "tests/package.test.ts",
+              "scripts/benchmark.mjs",
+              "scripts/lib/live-cases.mjs",
+              "skills/jev-mcp/SKILL.md",
+              "tests/skill.test.ts",
+              "skills/jev-mcp/references/setup.md",
+              "skills/jev-mcp/references/typesafe.md",
+              "src/packs/index.ts",
+              "src/packs/risk.ts",
+              "src/tools/risk.ts",
+              "src/packs/scope.ts",
+              "src/tools/scope.ts"
+            ],
+            "action": "escalate"
+          },
+          {
+            "files": [
+              "src/packs/triage.ts",
+              "src/tools/triage.ts",
+              "src/policy.ts",
+              "src/server.ts",
+              "src/tools/output-schemas.ts",
+              "src/tools/screen.ts",
+              "src/untrusted.ts",
+              "src/version.ts",
+              "tests/mcp.test.ts",
+              "tests/transport.test.ts",
+              "tests/v02-tools.test.ts"
+            ],
+            "action": "escalate"
+          },
+          {
+            "files": [
+              "AGENTS.md",
+              "README.md",
+              "evals/README.md",
+              "docs/architecture.md",
+              "docs/changelog.md",
+              "docs/configuration.md",
+              "docs/tools.md",
+              "skills/jev-mcp/references/tools.md",
+              "package-lock.json",
+              "package.json",
+              "tests/package.test.ts",
+              "scripts/benchmark.mjs",
+              "scripts/lib/live-cases.mjs",
+              "skills/jev-mcp/SKILL.md",
+              "tests/skill.test.ts",
+              "skills/jev-mcp/references/setup.md",
+              "skills/jev-mcp/references/typesafe.md",
+              "src/packs/index.ts",
+              "src/packs/risk.ts",
+              "src/tools/risk.ts",
+              "src/packs/scope.ts",
+              "src/tools/scope.ts"
+            ],
+            "action": "review"
+          },
+          {
+            "files": [
+              "src/packs/triage.ts",
+              "src/tools/triage.ts",
+              "src/policy.ts",
+              "src/server.ts",
+              "src/tools/output-schemas.ts",
+              "src/tools/screen.ts",
+              "src/untrusted.ts",
+              "src/version.ts",
+              "tests/mcp.test.ts",
+              "tests/transport.test.ts",
+              "tests/v02-tools.test.ts"
+            ],
+            "action": "review"
+          }
+        ],
+        "unsupported_claims": [],
+        "fail_on": "review",
+        "exit_code": 20,
+        "model_calls": 3
+      }
+    },
+    "pr_13": {
+      "mode": "live",
+      "result": {
+        "action": "escalate",
+        "mode": "jev",
+        "reasons": [
+          "injection_in_pr_text",
+          "pr_text_flagged",
+          "unsafe_to_apply",
+          "correctness_concern",
+          "spec_match_uncertain",
+          "blast_radius",
+          "composite_low",
+          "correctness_uncertain",
+          "test_gap_uncertain",
+          "safe_to_apply_uncertain",
+          "unpaired_source_change",
+          "export_signature_change",
+          "chunked_review",
+          "injection_suspected",
+          "concern_uncertain"
+        ],
+        "files": 34,
+        "commits": true,
+        "policy": {
+          "source": "none",
+          "findings": []
+        },
+        "claims": [],
+        "secrets_redacted": 0,
+        "withheld": [],
+        "held": [
+          {
+            "files": [
+              ".env.example",
+              "README.md",
+              "docs/changelog.md",
+              "docs/configuration.md",
+              "skills/jev-mcp/references/tools.md",
+              "src/cache.ts",
+              "src/config.ts",
+              "src/errors.ts",
+              "src/limits.ts",
+              "src/packs/gate.ts",
+              "src/tools/gate.ts",
+              "tests/gate.test.ts",
+              "src/packs/index.ts",
+              "src/policy.ts",
+              "src/server.ts",
+              "src/stats.ts",
+              "src/tools/coding-loop.ts",
+              "src/tools/output-schemas.ts",
+              "src/tools/risk.ts",
+              "src/tools/screen.ts"
+            ],
+            "action": "escalate"
+          },
+          {
+            "files": [
+              "src/tools/tool-route.ts",
+              "src/tools/triage.ts",
+              "src/tools/verify.ts",
+              "src/typesafe.ts",
+              "tests/helpers/fixture.ts",
+              "tests/mcp.test.ts",
+              "tests/notify-event.test.ts",
+              "tests/package.test.ts",
+              "tests/policy-properties.test.ts",
+              "tests/runtime-units.test.ts"
+            ],
+            "action": "escalate"
+          },
+          {
+            "files": [
+              "tests/tool-invariants.test.ts",
+              "tests/transport.test.ts",
+              "tests/v03-enhancements.test.ts",
+              "tests/validation-matrix.test.ts"
+            ],
+            "action": "escalate"
+          },
+          {
+            "files": [
+              ".env.example",
+              "README.md",
+              "docs/changelog.md",
+              "docs/configuration.md",
+              "skills/jev-mcp/references/tools.md",
+              "src/cache.ts",
+              "src/config.ts",
+              "src/errors.ts",
+              "src/limits.ts",
+              "src/packs/gate.ts",
+              "src/tools/gate.ts",
+              "tests/gate.test.ts",
+              "src/packs/index.ts",
+              "src/policy.ts",
+              "src/server.ts",
+              "src/stats.ts",
+              "src/tools/coding-loop.ts",
+              "src/tools/output-schemas.ts",
+              "src/tools/risk.ts",
+              "src/tools/screen.ts"
+            ],
+            "action": "review"
+          },
+          {
+            "files": [
+              "src/tools/tool-route.ts",
+              "src/tools/triage.ts",
+              "src/tools/verify.ts",
+              "src/typesafe.ts",
+              "tests/helpers/fixture.ts",
+              "tests/mcp.test.ts",
+              "tests/notify-event.test.ts",
+              "tests/package.test.ts",
+              "tests/policy-properties.test.ts",
+              "tests/runtime-units.test.ts"
+            ],
+            "action": "review"
+          },
+          {
+            "files": [
+              "tests/tool-invariants.test.ts",
+              "tests/transport.test.ts",
+              "tests/v03-enhancements.test.ts",
+              "tests/validation-matrix.test.ts"
+            ],
+            "action": "review"
+          }
+        ],
+        "unsupported_claims": [],
+        "fail_on": "review",
+        "exit_code": 20,
+        "model_calls": 3
+      }
+    },
+    "pr_14": {
+      "mode": "deterministic-only",
+      "result": {
+        "action": "auto",
+        "mode": "deterministic",
+        "reasons": [
+          "jev_not_run"
+        ],
+        "files": 29,
+        "commits": true,
+        "policy": {
+          "source": "none",
+          "findings": []
+        },
+        "claims": [],
+        "secrets_redacted": 0,
+        "withheld": [],
+        "held": [],
+        "unsupported_claims": [],
+        "fail_on": "review",
+        "exit_code": 0,
+        "model_calls": 0
+      }
+    }
+  }
+}
