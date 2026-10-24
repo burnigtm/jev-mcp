@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
+import { chunkQuestions } from "../packs/chunked.js";
 import { riskQuestions, RISK_FLAGS } from "../packs/risk.js";
 import { acceptableRegionConfidence, probabilitySupportsAbsence, requireCompleteContext, riskAction, tightenJudgmentThresholds, type PolicyAction } from "../policy.js";
 import { asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { containsInjectionInstruction, sanitizeJudgeText, sanitizeUntrustedDocument } from "../untrusted.js";
+import { chunkedCoverage, chunkedIncomplete, chunkSummaries, mergeRisks, omittedFiles, riskFloors, runChunks, singleOrChunked, type ChunkedPlan } from "./chunked.js";
 import { riskOutputSchema, riskReasonSchema } from "./output-schemas.js";
 
 export const fileSchema = z.object({
@@ -37,25 +39,54 @@ export async function runRisk(input: RiskInput, context?: ToolContext) {
   const dependencies = sanitizeDependencies(input.dependencies);
   const suspicious = riskInputSuspicious(input.diff, input.tests);
 
-  const result = await systemOne({
-    state: {
-      request: input.request,
+  const state = {
+    request: input.request,
+    diff,
+    tests,
+    files,
+    dependencies,
+  };
+  return singleOrChunked(
+    {
       diff,
       tests,
-      files,
-      dependencies,
+      whole: { state, questions: riskQuestions() },
+      base: { request: input.request, files, dependencies },
+      questions: chunkQuestions({ review: false, risk: true }),
     },
-    questions: riskQuestions(),
-    model: input.model,
-  }, context);
+    async () => {
+      const result = await systemOne({ state, questions: riskQuestions(), model: input.model }, context);
+      const incomplete = result.truncated || !result.coverage.complete;
+      return riskOutputSchema.parse({
+        model: result.model,
+        usage: result.usage,
+        truncated: result.truncated,
+        coverage: result.coverage,
+        ...projectRisk(result, { autoAccept, reviewAt, suspicious, incomplete }),
+      });
+    },
+    planned => runChunkedRisk(planned, input, { autoAccept, reviewAt, suspicious }, context),
+  );
+}
 
-  const incomplete = result.truncated || !result.coverage.complete;
+async function runChunkedRisk(
+  first: ChunkedPlan,
+  input: RiskInput,
+  options: { autoAccept: number; reviewAt: number; suspicious: boolean },
+  context?: ToolContext,
+) {
+  const { planned, results, usage } = await runChunks(first, chunkQuestions({ review: false, risk: true }), input.model, context);
+  const parts = results.map(result => projectRisk(result, { ...options, incomplete: result.truncated || !result.coverage.complete }));
+  const incomplete = chunkedIncomplete(planned, results);
+  const merged = mergeRisks(parts, { floors: riskFloors(planned.plan.floors), incomplete });
   return riskOutputSchema.parse({
-    model: result.model,
-    usage: result.usage,
-    truncated: result.truncated,
-    coverage: result.coverage,
-    ...projectRisk(result, { autoAccept, reviewAt, suspicious, incomplete }),
+    model: results[0]!.model,
+    usage,
+    truncated: incomplete,
+    coverage: chunkedCoverage(planned, results),
+    ...merged,
+    chunks: chunkSummaries(planned, parts.map(part => part.action)),
+    ...(omittedFiles(planned) ? { omitted_files: omittedFiles(planned) } : {}),
   });
 }
 

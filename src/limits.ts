@@ -73,13 +73,7 @@ export function fitState(
 ): FitResult {
   const questionsTokens = estimateTokens(questions);
   const longest = longestQuestionTokens(questions);
-  const budget = Math.min(
-    MAX_TOTAL_TOKENS - questionsTokens,
-    MAX_STATE_PLUS_LONGEST_QUESTION_TOKENS - longest,
-  );
-  if (budget < 0) {
-    throw new JevBudgetError("Questions exceed the estimated context budget. Shorten question instructions or criteria, or split the request.");
-  }
+  const budget = stateBudget(questions);
   const raw = stringifyState(state);
   const tokens = estimateTokens(raw);
   const truncated = tokens > budget;
@@ -101,7 +95,19 @@ export function fitState(
   };
 }
 
-function truncateToTokenBudget(text: string, budget: number): string {
+/** Estimated tokens the state may occupy next to these questions. */
+export function stateBudget(questions: unknown): number {
+  const budget = Math.min(
+    MAX_TOTAL_TOKENS - estimateTokens(questions),
+    MAX_STATE_PLUS_LONGEST_QUESTION_TOKENS - longestQuestionTokens(questions),
+  );
+  if (budget < 0) {
+    throw new JevBudgetError("Questions exceed the estimated context budget. Shorten question instructions or criteria, or split the request.");
+  }
+  return budget;
+}
+
+export function truncateToTokenBudget(text: string, budget: number): string {
   if (budget <= 0) return "";
   let low = 0;
   let high = Math.min(text.length, Math.max(budget, budget * 4));

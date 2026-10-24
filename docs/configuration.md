@@ -23,6 +23,7 @@ For local CLI use on Node 20.6+, copy [`.env.example`](../.env.example) to `.env
 | `JEV_MCP_LEDGER_MAX_BYTES` | `50000000` | Per-file size cap (at least 1024). Once reached, further records are dropped and counted, never written |
 | `JEV_MCP_CACHE_TTL_MS` | `0` (off) | Cache validated provider results for this many milliseconds. Identical requests (same endpoint, model, evaluated state, and questions) are served with zero usage; tool policy still runs on every call |
 | `JEV_MCP_CACHE_MAX_ENTRIES` | `256` | Least-recently-used entries kept when the cache is on |
+| `JEV_MCP_MAX_REVIEW_CHUNKS` | `12` | Most chunks a single `jev_review`, `jev_risk` or `jev_gate` call sends when a diff is too large for one request. Each chunk is one Jev request of up to the full context, so this also bounds the cost of one review; beyond it the first chunks are reviewed, `omitted_files` names the rest and the result is never `auto` |
 | `JEV_MCP_TOKEN_BUDGET` | unlimited | Provider tokens (input + output) this server process may spend. Each request reserves its estimated tokens (state, questions, and a per-question output allowance) before it is sent, so concurrent calls cannot all pass the same check. Once spent plus reserved tokens reach the budget, calls fail with `BUDGET_EXHAUSTED` before any provider request, and the request that crosses the line may overshoot by its own size. A request that reached the provider but returned no usage (timeout, abort, API error, invalid response) is charged at its reservation. Cache hits are still served |
 
 Per-call overrides can only tighten the environment floors:
@@ -111,6 +112,8 @@ Screen `skip` uses substance/relevance below `0.35`.
 - Rank accepts at most 5,000 candidates per request; verification and the completion gate accept at most 1,000 claims per request
 
 ASCII text is still estimated as `ceil(chars / 4)`. Non-ASCII characters cost at least one token each. The server enforces these estimated budgets. If the provider reports `usage.input_tokens` above the 64,000-token total budget, coverage is incomplete and tools cannot return `auto`.
+
+The estimate is approximate and under-counts dense code (digits and punctuation measured at about 1.4 times the estimate), so a request the estimate says fits can still be refused by the provider. That refusal is reported as `INPUT_TOO_LARGE` (not `API_ERROR`), is not charged against `JEV_MCP_TOKEN_BUDGET`, and for `jev_review`, `jev_risk` and `jev_gate` on a diff with file headers it is retried automatically through the chunked review, which targets a fraction of the estimated budget and splits finer if the provider still refuses.
 
 Oversized question sets are rejected before sending a request. Shortened state, candidate text, or a clipped candidate description is reported as incomplete coverage and `truncated: true`; no tool returns `auto` on incomplete context. Screening preserves a detected `block`; otherwise incomplete screening requires `review`.
 

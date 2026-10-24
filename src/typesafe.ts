@@ -6,7 +6,7 @@ import {
 } from "@typesafe-ai/sdk";
 import { getConfig, type JevConfig } from "./config.js";
 import { cacheGet, cacheKey, cacheSet } from "./cache.js";
-import { JevBudgetExhaustedError, JevCancelledError, JevConfigError, JevResponseError, JevTimeoutError } from "./errors.js";
+import { isContextExceeded, JevBudgetExhaustedError, JevCancelledError, JevConfigError, JevContextExceededError, JevResponseError, JevTimeoutError } from "./errors.js";
 import { estimateTokens, fitState, MAX_TOTAL_TOKENS, type Coverage, type FitResult } from "./limits.js";
 import { mockSystemOne } from "./mock.js";
 import { validateResponse } from "./responses.js";
@@ -64,14 +64,19 @@ export type EvaluateResponse<Q extends Questions = Questions> = SystemOneResult<
   coverage: Coverage;
 };
 
-export type ToolContext = { signal?: AbortSignal; deadline?: number };
+export type ToolContext = {
+  signal?: AbortSignal;
+  deadline?: number;
+  /** Scales the default timeout for a tool that makes several sequential upstream calls; each call keeps its own timeout. */
+  timeoutFactor?: number;
+};
 
 /** Share one deadline across every upstream call made by a tool invocation. */
 export async function withToolContext<T>(
   context: ToolContext | undefined,
   operation: (context: ToolContext) => Promise<T>,
 ): Promise<T> {
-  const deadline = Math.min(context?.deadline ?? Infinity, Date.now() + getConfig().timeoutMs);
+  const deadline = Math.min(context?.deadline ?? Infinity, Date.now() + getConfig().timeoutMs * Math.max(1, context?.timeoutFactor ?? 1));
   const controller = new AbortController();
   const onCancel = () => controller.abort(context?.signal?.reason instanceof JevTimeoutError ? context.signal.reason : new JevCancelledError());
   if (context?.signal?.aborted) onCancel();
@@ -141,7 +146,8 @@ async function evaluate<Q extends Questions>(request: EvaluateRequest<Q>, contex
     validated = await requestProvider(config, payload, request.questions, context, () => { dispatched = true; });
   } catch (err) {
     // Once a request is on the wire the provider may have processed it even if we never saw usage.
-    if (dispatched) recordFailedRequest(reservation);
+    // A request rejected for its size was refused before any work, so it costs nothing.
+    if (dispatched && !(err instanceof JevContextExceededError)) recordFailedRequest(reservation);
     if (err instanceof JevResponseError) recordResponseFailure(err.reason);
     throw err;
   } finally {
@@ -177,6 +183,7 @@ async function requestProvider<Q extends Questions>(
     return validateResponse(result, questions);
   } catch (err) {
     if (err instanceof SyntaxError) throw new JevResponseError("not_json");
+    if (isContextExceeded(err)) throw new JevContextExceededError();
     throw err;
   }
 }

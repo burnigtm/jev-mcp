@@ -33,6 +33,7 @@ const { values } = parseArgs({ allowNegative: true, options: {
   profile: { type: 'string' },
   'policy-file': { type: 'string' },
   'triage-recoverable-at': { type: 'string' },
+  'max-chunks': { type: 'string' },
   experiments: { type: 'boolean', default: true },
 } });
 const repeat = Math.max(1, Math.min(5, Number(values.repeat) || 1));
@@ -47,6 +48,7 @@ function jevDecision(tool, result) {
     ...(tool === 'jev_rank' ? { winner: result.winner } : {}),
     ...(tool === 'jev_verify' ? { verdict: result.results?.[0]?.verdict } : {}),
     reasons: result.reason_codes ?? result.recommendation?.action ?? null,
+    ...(result.chunks ? { chunk_actions: result.chunks.map((chunk) => chunk.action), chunk_files: result.chunks.map((chunk) => chunk.files) } : {}),
   };
 }
 
@@ -68,6 +70,8 @@ const ledgerEnv = {
   ...(values.profile ? { JEV_MCP_PROFILE: values.profile } : {}),
   JEV_POLICY_FILE: values['policy-file'] ? resolve(root, values['policy-file']) : 'none',
   ...(values['triage-recoverable-at'] ? { JEV_MCP_TRIAGE_RECOVERABLE_AT: values['triage-recoverable-at'] } : {}),
+  // 1 reviews only the first part of a large diff, which is what truncation used to show.
+  ...(values['max-chunks'] ? { JEV_MCP_MAX_REVIEW_CHUNKS: values['max-chunks'] } : {}),
 };
 
 /** correct -> correct; a risky case that was approved -> missed; anything else wrong -> false_alarm. */
@@ -94,7 +98,9 @@ const selected = [
   ...(values.set === 'fixed' ? [] : generateCases(seed, perTool)),
   ...(values.set === 'fixed' || extras === 0 ? [] : generateExtraCases(seed, extras)),
 ];
-const cases = values.only ? selected.filter((testCase) => testCase.id.includes(values.only)) : selected;
+// --only takes one or more comma-separated substrings of a case id.
+const onlyParts = values.only?.split(',').filter(Boolean);
+const cases = onlyParts ? selected.filter((testCase) => onlyParts.some((part) => testCase.id.includes(part))) : selected;
 const report = {
   mode: values.mock ? 'mock (harness dry run; not a measurement)' : 'live',
   requested_model: process.env.JEV_MCP_MODEL || 'jev-latest',
@@ -103,7 +109,7 @@ const report = {
   set: values.set,
   seed: values.set === 'fixed' ? null : seed,
   ledger_dir: values['ledger-dir'] ?? null,
-  conditions: { profile: values.profile ?? 'balanced', policy_file: values['policy-file'] ?? null, triage_recoverable_at: values['triage-recoverable-at'] ?? null },
+  conditions: { profile: values.profile ?? 'balanced', policy_file: values['policy-file'] ?? null, triage_recoverable_at: values['triage-recoverable-at'] ?? null, max_review_chunks: values['max-chunks'] ?? null },
   per_tool: values.set === 'fixed' ? null : perTool,
   extras_per_tool: values.set === 'fixed' || extras === 0 ? null : extras,
   cases: [],

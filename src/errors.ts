@@ -21,6 +21,22 @@ export class JevBudgetError extends JevValidationError {
   }
 }
 
+/**
+ * The provider rejected a request as larger than its context window. The local size estimate is
+ * approximate (dense code can tokenize at well over the estimated count), so this can happen below the
+ * estimated limit. It is an `INPUT_TOO_LARGE` error, and the chunked review reacts to it by splitting finer.
+ */
+export class JevContextExceededError extends JevBudgetError {
+  constructor() {
+    super("TypeSafe rejected the request as larger than its context window; the local size estimate is approximate. Split the input into smaller requests.");
+    this.name = "JevContextExceededError";
+  }
+}
+
+export function isContextExceeded(err: unknown): boolean {
+  return err instanceof APIError && err.status === 400 && JSON.stringify(err.body ?? "").includes("max_tokens_exceeded");
+}
+
 export class JevBudgetExhaustedError extends Error {
   constructor(budget: number) {
     super(`The process token budget (JEV_MCP_TOKEN_BUDGET=${budget}) is exhausted. No provider request was made.`);

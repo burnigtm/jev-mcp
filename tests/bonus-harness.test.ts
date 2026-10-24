@@ -9,7 +9,11 @@ import { riskInputSchema } from "../src/tools/risk.ts";
 import { scopeInputSchema } from "../src/tools/scope.ts";
 import { screenInputSchema } from "../src/tools/screen.ts";
 import { detectLoop } from "../src/tools/triage.ts";
+import { parseUnifiedDiff, renderParsedDiff } from "../src/diff.ts";
 import { effectiveEffect, type Effect } from "../src/effects.ts";
+import { fitState } from "../src/limits.ts";
+import { reviewQuestions } from "../src/packs/review.ts";
+import { riskQuestions } from "../src/packs/risk.ts";
 import { triageInputSchema } from "../src/tools/triage.ts";
 import { verifyInputSchema } from "../src/tools/verify.ts";
 import { containsInjectionInstruction } from "../src/untrusted.ts";
@@ -181,7 +185,7 @@ test("generator: the samples behind recorded reports are frozen", () => {
 test("extras: deterministic, schema-valid, labelled, and independent of the base sample", () => {
   assert.deepEqual(generateExtraCases(5, 8), generateExtraCases(5, 8));
   assert.notDeepEqual(generateExtraCases(5, 8), generateExtraCases(6, 8));
-  assert.deepEqual(EXTRA_TOOLS, ["jev_triage", "jev_scope"]);
+  assert.deepEqual(EXTRA_TOOLS, ["jev_triage", "jev_scope", "jev_review", "jev_risk"]);
   for (const seed of SEEDS) {
     const extras = generateExtraCases(seed, 10) as Array<Case & { template: string; extra: boolean; generated: boolean }>;
     assert.equal(new Set(extras.map((c) => c.id)).size, extras.length);
@@ -191,6 +195,43 @@ test("extras: deterministic, schema-valid, labelled, and independent of the base
     }
     assert.equal(JSON.stringify(generateCases(seed, 4)), JSON.stringify(generateCases(seed, 4)), "base unaffected");
   }
+});
+
+test("extras: earlier tools keep their cases when later tools are added", () => {
+  for (const seed of SEEDS) {
+    const earlier = generateExtraCases(seed, 10, ["jev_triage", "jev_scope"]);
+    const all = generateExtraCases(seed, 10).filter((c) => c.tool === "jev_triage" || c.tool === "jev_scope");
+    assert.equal(JSON.stringify(all), JSON.stringify(earlier));
+  }
+});
+
+test("extras: large-diff cases need chunking, mark exactly one planted edit, and label by template", () => {
+  const planted = /retryLimit \+ 1|catch \{ \/\* ignored \*\/ \}|it\.skip\(|fetch\("https:|sk_live_|admin check disabled/;
+  const seen = new Set<string>();
+  for (const seed of SEEDS) {
+    const cases = generateExtraCases(seed, 8, ["jev_review", "jev_risk"]) as Array<Case & { template: string; args: { request: string; diff: string } }>;
+    for (const c of cases) {
+      seen.add(c.template);
+      const parsed = parseUnifiedDiff(c.args.diff);
+      assert.ok(parsed && parsed.files.length >= 16, `${c.id}: multi-file git diff`);
+      assert.equal(renderParsedDiff(parsed), c.args.diff, `${c.id}: lossless`);
+      assert.ok(fitState({ request: c.args.request, diff: c.args.diff, tests: "" }, c.tool === "jev_review" ? reviewQuestions() : riskQuestions()).truncated, `${c.id}: larger than one request`);
+      const plantedLines = c.args.diff.split("\n").filter((line) => planted.test(line)).length;
+      if (c.template.includes("-planted-")) {
+        assert.equal(c.label, "risky");
+        assert.ok(plantedLines >= 1, `${c.id}: a planted edit`);
+      } else if (c.template.endsWith("-clean")) {
+        assert.equal(c.label, "safe");
+        assert.equal(plantedLines, 0, `${c.id}: clean case contains no planted edit`);
+      } else {
+        assert.equal(c.template, "review/large-contract-break");
+        assert.equal(c.label, "risky");
+      }
+    }
+  }
+  for (const template of ["review/large-clean", "review/large-contract-break", "risk/large-clean"]) assert.ok(seen.has(template), template);
+  assert.ok([...seen].some((template) => template.startsWith("review/large-planted-")));
+  assert.ok([...seen].some((template) => template.startsWith("risk/large-planted-")));
 });
 
 test("extras: the deterministic loop detector separates shrinking failures from counter loops", () => {
