@@ -20,6 +20,8 @@ export type JevConfig = {
   cacheMaxEntries: number;
   /** Total provider tokens this process may spend; undefined means unlimited. */
   tokenBudget: number | undefined;
+  /** Most chunks a single review, risk or gate call will send when a diff is too large for one request. */
+  maxReviewChunks: number;
   /** Named bundle of the confidence bars above; explicit environment variables override it. */
   profile: ProfileName;
   /** Triage "can progress be made" bar; undefined means the same as autoAccept. */
@@ -236,6 +238,7 @@ export function getConfig(): JevConfig {
     cacheTtlMs: intEnv("JEV_MCP_CACHE_TTL_MS", 0, 0),
     cacheMaxEntries: intEnv("JEV_MCP_CACHE_MAX_ENTRIES", 256, 1),
     tokenBudget: tokenBudgetEnv(),
+    maxReviewChunks: intEnv("JEV_MCP_MAX_REVIEW_CHUNKS", 12, 1),
     ledger: boolEnv("JEV_MCP_LEDGER"),
     ledgerDir: ledgerDirEnv(),
     ledgerMaxBytes: intEnv("JEV_MCP_LEDGER_MAX_BYTES", 50_000_000, 1_024),

@@ -6,6 +6,8 @@
 // determines the sample, so any run can be replayed exactly, while a new seed
 // gives cases the hand-written set and earlier runs have never seen.
 
+import { largeContractBreak, largeReviewClean, largeReviewPlanted, largeRiskClean, largeRiskPlanted } from './bonus-large.mjs';
+
 export function rng(seed) {
   let state = seed >>> 0;
   const next = () => {
@@ -431,9 +433,12 @@ function scopeHonestCase(r) {
   return { tool: 'jev_scope', label: 'safe', template: 'scope/honest-allowlisted', args: { ...scopeBase(r, d), action: { name: 'run_command', description, effect, command } } };
 }
 
+// Order matters: every tool draws from one stream, so new tools go last to leave earlier extras unchanged.
 const EXTRA_BUILDERS = {
   jev_triage: [shrinkingFailuresCase, counterLoopCase],
   jev_scope: [scopeLieDestructiveCase, scopeLieExternalCase, scopeLieOpaqueCase, scopeHonestCase, scopeHonestCase],
+  jev_review: [largeReviewClean, largeReviewPlanted, largeContractBreak, largeReviewPlanted],
+  jev_risk: [largeRiskClean, largeRiskPlanted],
 };
 export const EXTRA_TOOLS = Object.keys(EXTRA_BUILDERS);
 
@@ -444,7 +449,7 @@ export function generateExtraCases(seed, perTool = 10, tools = EXTRA_TOOLS) {
   for (const tool of tools) {
     const builders = EXTRA_BUILDERS[tool] ?? [];
     for (let i = 0; i < perTool && builders.length; i += 1) {
-      cases.push({ ...builders[i % builders.length](r), id: `x${seed}-${tool.replace('jev_', '')}-${i}`, generated: true, extra: true });
+      cases.push({ ...builders[i % builders.length](r, { testsGreen: () => testsGreen(r) }), id: `x${seed}-${tool.replace('jev_', '')}-${i}`, generated: true, extra: true });
     }
   }
   return cases;

@@ -18,6 +18,12 @@ export const coverageSchema = z.object({
   estimator: z.literal("chars/4"),
 });
 
+/** Present when a diff too large for one request was reviewed in parts. */
+export const chunksOutputShape = {
+  chunks: z.array(z.object({ files: z.array(z.string()), action: actionSchema, partial: z.boolean() })).optional(),
+  omitted_files: z.array(z.string()).optional(),
+};
+
 export const baseToolOutputShape = {
   /** Handle for `jev_feedback`; added by the server to every successful result. */
   decision_id: z.string().optional(),
@@ -76,11 +82,19 @@ export const reviewReasonSchema = z.enum([
   "blast_radius_uncertain",
   "composite_low",
   "review_required",
+  "chunked_review",
+  "unpaired_source_change",
+  "export_signature_change",
+  "lockfile_changed",
+  "binary_file_changed",
+  "partial_file_review",
+  "diff_too_large",
 ]);
 export type ReviewReason = z.infer<typeof reviewReasonSchema>;
 
 export const reviewOutputSchema = z.object({
   ...baseToolOutputShape,
+  ...chunksOutputShape,
   reason_codes: z.array(reviewReasonSchema).min(1),
   composite: probabilitySchema,
   safe_to_apply: probabilitySchema,
@@ -267,10 +281,16 @@ export const riskReasonSchema = z.enum([
   "injection_suspected",
   "incomplete_context",
   "review_required",
+  "chunked_review",
+  "lockfile_changed",
+  "binary_file_changed",
+  "partial_file_review",
+  "diff_too_large",
 ]);
 
 export const riskOutputSchema = z.object({
   ...baseToolOutputShape,
+  ...chunksOutputShape,
   flags: z.record(z.string(), probabilitySchema),
   severity: scoreOutputSchema,
   reason_codes: z.array(riskReasonSchema).min(1),

@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { getConfig } from "../config.js";
 import { JevBudgetError } from "../errors.js";
+import { chunkedGateVerificationQuestions, chunkQuestions } from "../packs/chunked.js";
 import { gateQuestions } from "../packs/gate.js";
 import { MAX_CLAIMS } from "../limits.js";
 import { confidenceSupportsAuto, tightenJudgmentThresholds, worstAction } from "../policy.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 import { sanitizeUntrustedDocument } from "../untrusted.js";
-import { reviewReasonSchema, riskOutputSchema } from "./output-schemas.js";
+import { addUsage, chunkedCoverage, chunkedIncomplete, chunkSummaries, mergeReviews, mergeRisks, omittedFiles, reviewFloors, riskFloors, runChunks, singleOrChunked, type ChunkedPlan } from "./chunked.js";
+import { chunksOutputShape, reviewReasonSchema, riskOutputSchema } from "./output-schemas.js";
 import { projectReview } from "./review.js";
 import { dependenciesSchema, fileSchema, projectRisk, riskInputSuspicious, sanitizeDependencies, sanitizeFiles } from "./risk.js";
 import { evidenceSchema, projectClaims, summarizeClaims } from "./verify.js";
@@ -50,6 +52,7 @@ const securitySchema = riskOutputSchema.pick({ action: true, flags: true, severi
 
 export const gateOutputSchema = z.object({
   decision_id: z.string().optional(),
+  ...chunksOutputShape,
   model: z.string(),
   usage: z.object({ input_tokens: z.number().nonnegative(), output_tokens: z.number().nonnegative() }),
   truncated: z.boolean(),
@@ -112,24 +115,76 @@ export async function runGate(input: GateInput, context?: ToolContext) {
   const config = getConfig();
   const { autoAccept, reviewAt } = tightenJudgmentThresholds(input.auto_accept, input.review_at, config.autoAccept, config.reviewAt);
   const risk = input.risk === true;
-  const result = await systemOne({
-    // Oversized state is cut from the tail of the serialized JSON. Keep what every verdict depends on and
-    // is small (request, claims, evidence, file list) first, and the bulky diff and test log last.
-    state: {
-      request: input.request,
-      claims: input.claims,
-      evidence: input.evidence,
-      ...(risk ? { files: sanitizeFiles(input.files), dependencies: sanitizeDependencies(input.dependencies) } : {}),
-      // Security mode strips hidden characters, matching the standalone jev_risk projection.
-      diff: risk ? sanitizeUntrustedDocument(input.diff) : input.diff,
-      tests: input.tests === undefined ? "" : risk ? sanitizeUntrustedDocument(input.tests) : input.tests,
+  // Security mode strips hidden characters, matching the standalone jev_risk projection.
+  const diff = risk ? sanitizeUntrustedDocument(input.diff) : input.diff;
+  const tests = input.tests === undefined ? "" : risk ? sanitizeUntrustedDocument(input.tests) : input.tests;
+  const security = risk ? { files: sanitizeFiles(input.files), dependencies: sanitizeDependencies(input.dependencies) } : {};
+  const questions = gateQuestions(input.claims.length, { risk });
+  // Oversized state is cut from the tail of the serialized JSON. Keep what every verdict depends on and
+  // is small (request, claims, evidence, file list) first, and the bulky diff and test log last.
+  const state = { request: input.request, claims: input.claims, evidence: input.evidence, ...security, diff, tests };
+  const suspicious = risk && riskInputSuspicious(input.diff, input.tests);
+  return singleOrChunked(
+    {
+      diff,
+      tests,
+      whole: { state, questions },
+      base: { request: input.request, ...security },
+      questions: chunkQuestions({ review: true, risk }),
     },
-    questions: gateQuestions(input.claims.length, { risk }),
-    model: input.model,
-  }, context);
-  return gateOutputSchema.parse(
-    projectGate(result, input.claims, autoAccept, reviewAt, risk ? { suspicious: riskInputSuspicious(input.diff, input.tests) } : undefined),
+    async () => {
+      const result = await systemOne({ state, questions, model: input.model }, context);
+      return gateOutputSchema.parse(projectGate(result, input.claims, autoAccept, reviewAt, risk ? { suspicious } : undefined));
+    },
+    planned => runChunkedGate(planned, input, { autoAccept, reviewAt, risk, suspicious }, context),
   );
+}
+
+/**
+ * A diff too large for one request: the patch is reviewed (and, with `risk`, security-checked) in
+ * chunks, and the claims are verified once against the evidence alone, as `jev_verify` would.
+ */
+async function runChunkedGate(
+  first: ChunkedPlan,
+  input: GateInput,
+  options: { autoAccept: number; reviewAt: number; risk: boolean; suspicious: boolean },
+  context?: ToolContext,
+) {
+  const { autoAccept, reviewAt, risk, suspicious } = options;
+  const [chunked, verification] = await Promise.all([
+    runChunks(first, chunkQuestions({ review: true, risk }), input.model, context),
+    systemOne({
+      state: { request: input.request, claims: input.claims, evidence: input.evidence },
+      questions: chunkedGateVerificationQuestions(input.claims.length),
+      model: input.model,
+    }, context),
+  ]);
+  const { planned, results: chunkResults } = chunked;
+  const chunkIncomplete = chunkedIncomplete(planned, chunkResults);
+  const verificationIncomplete = verification.truncated || !verification.coverage.complete;
+  const reviews = chunkResults.map(result => projectReview(result, autoAccept, reviewAt));
+  const risks = risk
+    ? chunkResults.map(result => projectRisk(result, { autoAccept, reviewAt, suspicious, incomplete: result.truncated || !result.coverage.complete }))
+    : [];
+  const coverage = chunkedCoverage(planned, chunkResults);
+  const composed = composeGate({
+    model: chunkResults[0]!.model,
+    usage: addUsage(chunked.usage, verification.usage),
+    truncated: chunkIncomplete || verificationIncomplete,
+    coverage: { ...coverage, complete: coverage.complete && !verificationIncomplete },
+    incomplete: chunkIncomplete || verificationIncomplete,
+    review: mergeReviews(reviews, { floors: reviewFloors(planned.plan.floors), incomplete: chunkIncomplete }),
+    results: projectClaims(verification, input.claims, autoAccept, reviewAt),
+    ...(risk ? { security: mergeRisks(risks, { floors: riskFloors(planned.plan.floors), incomplete: chunkIncomplete }) } : {}),
+    autoAccept,
+    reviewAt,
+  });
+  const actions = reviews.map((part, i) => worstAction([part.action, ...(risks[i] ? [risks[i]!.action] : [])]));
+  return gateOutputSchema.parse({
+    ...composed,
+    chunks: chunkSummaries(planned, actions),
+    ...(omittedFiles(planned) ? { omitted_files: omittedFiles(planned) } : {}),
+  });
 }
 
 /** Deterministic policy after the single shared evaluation has completed. */
@@ -141,15 +196,40 @@ export function projectGate(
   risk?: { suspicious: boolean },
 ) {
   const incomplete = result.truncated || !result.coverage.complete;
-  const review = projectReview(result, autoAccept, reviewAt);
-  const results = projectClaims(result, claims, autoAccept, reviewAt);
+  return composeGate({
+    model: result.model,
+    usage: result.usage,
+    truncated: result.truncated,
+    coverage: result.coverage,
+    incomplete,
+    review: projectReview(result, autoAccept, reviewAt),
+    results: projectClaims(result, claims, autoAccept, reviewAt),
+    ...(risk ? { security: projectRisk(result, { autoAccept, reviewAt, suspicious: risk.suspicious, incomplete }) } : {}),
+    autoAccept,
+    reviewAt,
+  });
+}
+
+/** The overall gate verdict from a patch review, the claim results and an optional security check. */
+function composeGate(parts: {
+  model: string;
+  usage: EvaluateResponse["usage"];
+  truncated: boolean;
+  coverage: EvaluateResponse["coverage"];
+  incomplete: boolean;
+  review: ReturnType<typeof projectReview>;
+  results: ReturnType<typeof projectClaims>;
+  security?: ReturnType<typeof projectRisk>;
+  autoAccept: number;
+  reviewAt: number;
+}) {
+  const { incomplete, review, results, security, autoAccept, reviewAt } = parts;
   const verification = {
     action: worstAction(results.map((item) => item.action)),
     summary: summarizeClaims(results),
     results,
     thresholds: { auto_accept: autoAccept, review_at: reviewAt },
   };
-  const security = risk ? projectRisk(result, { autoAccept, reviewAt, suspicious: risk.suspicious, incomplete }) : undefined;
   const action = worstAction([review.action, verification.action, ...(security ? [security.action] : [])]);
   const reasonCodes: Array<z.infer<typeof gateReasonCodeSchema>> = [];
   if (incomplete) reasonCodes.push("incomplete_context");
@@ -168,10 +248,10 @@ export function projectGate(
   if (security?.action === "review") reasonCodes.push("security_review");
   if (action === "auto") reasonCodes.push("accepted");
   return {
-    model: result.model,
-    usage: result.usage,
-    truncated: result.truncated,
-    coverage: result.coverage,
+    model: parts.model,
+    usage: parts.usage,
+    truncated: parts.truncated,
+    coverage: parts.coverage,
     action,
     reason_codes: reasonCodes,
     review,

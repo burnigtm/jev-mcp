@@ -34,6 +34,7 @@ import { errorDetails } from "./errors.js";
 import { newDecisionId, recordDecision, recordToolError, type LedgerSettings } from "./ledger.js";
 import { recordToolCall, statsSnapshot } from "./stats.js";
 import { feedbackInputSchema, feedbackOutputSchema, runFeedback } from "./tools/feedback.js";
+import { chunkedTimeoutFactor } from "./tools/chunked.js";
 import { withToolContext, type ToolContext } from "./typesafe.js";
 
 export const STATS_URI = "jev://stats";
@@ -50,7 +51,7 @@ function registerJevTool<I extends z.ZodType, O extends z.ZodType>(
   name: string,
   meta: { title: string; description: string; inputSchema: I; outputSchema: O },
   run: (args: z.output<I>, context: ToolContext) => Promise<object>,
-  options: { judgment?: boolean; annotations?: ToolAnnotations } = {},
+  options: { judgment?: boolean; annotations?: ToolAnnotations; timeoutFactor?: () => number } = {},
 ): void {
   // A judgment gets a decision_id and a ledger record; bookkeeping tools such as jev_feedback do not.
   const judgment = options.judgment ?? true;
@@ -58,7 +59,7 @@ function registerJevTool<I extends z.ZodType, O extends z.ZodType>(
     const started = performance.now();
     const settings = ledgerSettings();
     try {
-      const result = await withToolContext({ signal: extra.signal }, context => run(args, context));
+      const result = await withToolContext({ signal: extra.signal, timeoutFactor: options.timeoutFactor?.() }, context => run(args, context));
       const durationMs = performance.now() - started;
       const record = result as { action?: unknown; usage?: unknown };
       recordToolCall(name, { durationMs, action: record.action, usage: record.usage });
@@ -130,7 +131,7 @@ export function createJevServer(): McpServer {
       "Score a proposed diff against the request: correctness, spec-match, test-gap, blast-radius, plus noul safe_to_apply. Composite weights live in code. Call before declaring a fix done. Does not apply the patch.",
     inputSchema: reviewInputSchema,
     outputSchema: reviewOutputSchema,
-  }, runReview);
+  }, runReview, { timeoutFactor: chunkedTimeoutFactor });
 
   registerJevTool(server, "jev_verify", {
     title: "Jev claim verifier",
@@ -162,7 +163,7 @@ export function createJevServer(): McpServer {
       "Review a proposed patch and verify completion claims against supplied evidence in one Jev request. Returns review and verification reports, coverage, deterministic reason codes, and one overall auto|review|escalate action. Does not apply changes or execute tests.",
     inputSchema: gateInputSchema,
     outputSchema: gateOutputSchema,
-  }, runGate);
+  }, runGate, { timeoutFactor: chunkedTimeoutFactor });
 
   registerJevTool(server, "jev_scope", {
     title: "Jev action scope guard",
@@ -186,7 +187,7 @@ export function createJevServer(): McpServer {
       "Assess a proposed diff for authorization, validation, secret-exposure, data-loss, concurrency, dependency, and external-effect concerns, plus severity. Complements correctness review and never grants merge or deployment permission.",
     inputSchema: riskInputSchema,
     outputSchema: riskOutputSchema,
-  }, runRisk);
+  }, runRisk, { timeoutFactor: chunkedTimeoutFactor });
 
   registerJevTool(server, "jev_feedback", {
     title: "Label a Jev decision",
