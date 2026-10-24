@@ -40,7 +40,7 @@
   <p class="kicker">burnigtm/jev-mcp · GitHub API</p>
   <h1>GitHub watch</h1>
   <p class="lede" id="latest-line">Latest is #23 feat: calibrate, jev://ledger resource and SARIF output (open, 2026-10-24T09:30:33Z · 1m ago).</p>
-  <p class="meta">Refreshed 2026-10-24T09:32:13Z. Open 1 · Merged 14 · Closed 0. The newest pull request stays visible while you filter.</p>
+  <p class="meta">Refreshed 2026-10-24T09:32:22Z. Open 1 · Merged 14 · Closed 0. The newest pull request stays visible while you filter.</p>
 </header>
 <div class="toolbar">
   <input id="q" type="search" placeholder="Filter by number, title, author, or branch" aria-label="Filter pull requests">
@@ -74,7 +74,7 @@
   <div class="row"><span>burnigtm</span><span>+1288 −12 · 14 files</span><span>no checks reported</span></div>
   <details >
     <summary>Details</summary>
-    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/ci-gate</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:30:22Z · 1m ago</td></tr><tr><td>Merged</td><td>2026-10-24T09:30:22Z · 1m ago</td></tr><tr><td>Diff</td><td>+1288 −12 · 14 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/a1d34026cf3b73d0c4e007b12814a99cbcc7233c">a1d3402</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/423206d8069ca994451fa54afe949003fb751efa">423206d</a></td></tr></table>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/ci-gate</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:30:22Z · 2m ago</td></tr><tr><td>Merged</td><td>2026-10-24T09:30:22Z · 2m ago</td></tr><tr><td>Diff</td><td>+1288 −12 · 14 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/a1d34026cf3b73d0c4e007b12814a99cbcc7233c">a1d3402</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/423206d8069ca994451fa54afe949003fb751efa">423206d</a></td></tr></table>
     <h3>Description</h3><p>## Summary PR 7 of the roadmap, **stacked on #20**. `jev-mcp ci` is the pull-request gate: it answers `auto`, `review` or `escalate` (exit 0, 10, 20; 2 on any error, fail-closed) and never runs the pull request&#x27;s code. - **Policy from the base ref.** `.jev-policy.json` is read with `git show BASE:...`, so a pull request cannot loosen its own rules; changing the file holds, a broken one holds. Every changed path (and a rename&#x27;s old path) is matched against `protected_paths`. - **Deterministic fl…</p>
   </details>
 </article>
@@ -83,7 +83,7 @@
   <div class="row"><span>burnigtm</span><span>+7181 −0 · 19 files</span><span>no checks reported</span></div>
   <details >
     <summary>Details</summary>
-    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/check-and-hooks</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:30:15Z · 1m ago</td></tr><tr><td>Merged</td><td>2026-10-24T09:30:15Z · 1m ago</td></tr><tr><td>Diff</td><td>+7181 −0 · 19 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/3c3f87e72bb317867ff8d592432efc8fad068b10">3c3f87e</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/2fee7e83c2122ba37f87df6571011b095db3ae62">2fee7e8</a></td></tr></table>
+    <table><tr><td>Author</td><td>burnigtm</td></tr><tr><td>Branches</td><td><code>feat/check-and-hooks</code> → <code>main</code></td></tr><tr><td>Updated</td><td>2026-10-24T09:32:22Z · just now</td></tr><tr><td>Merged</td><td>2026-10-24T09:32:22Z · just now</td></tr><tr><td>Diff</td><td>+7181 −0 · 19 files</td></tr><tr><td>Commits</td><td>1</td></tr><tr><td>Checks</td><td>no checks reported</td></tr><tr><td>Reviews</td><td>no reviews</td></tr><tr><td>Head</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/3c3f87e72bb317867ff8d592432efc8fad068b10">3c3f87e</a></td></tr><tr><td>Merge</td><td><a href="https://github.com/burnigtm/jev-mcp/commit/2fee7e83c2122ba37f87df6571011b095db3ae62">2fee7e8</a></td></tr></table>
     <h3>Description</h3><p>## Summary PR 6 of the roadmap, **stacked on #19**. Makes the guard run on every tool call in Claude Code instead of being advisory. - **`jev-mcp hook pre-tool-use`**: classifier and repository policy first; a confirmed read-only command is silent with no model call; reads of key/credential files and edits to the guard&#x27;s own config ask without a model; only the gray zone calls `jev_scope`. A hook only restricts: silent, `ask`, or `deny` for an explicit policy `deny` rule. A model judgment is an…</p>
   </details>
 </article>
@@ -187,7 +187,7 @@
   </details>
 </article>
 </main>
-<script id="watch-data" type="application/json">{"source": "github-api", "refreshedAt": "2026-10-24T09:32:13Z"}</script>
+<script id="watch-data" type="application/json">{"source": "github-api", "refreshedAt": "2026-10-24T09:32:22Z"}</script>
 <script>
 const q = document.getElementById("q");
 let filter = "all";
