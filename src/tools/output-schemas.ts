@@ -214,6 +214,7 @@ export const triageOutputSchema = z.object({
     detected: z.boolean(),
     repeats: z.number().int().nonnegative(),
     kind: z.enum(["none", "repeated_attempt", "same_failure"]),
+    improving: z.boolean().optional(),
   }),
   reason_codes: z.array(triageReasonSchema).min(1),
   thresholds: z.object({ auto_accept: probabilitySchema, review_at: probabilitySchema }),

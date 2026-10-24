@@ -156,7 +156,33 @@ export async function runTriage(input: TriageInput, context?: ToolContext) {
   });
 }
 
-export type LoopVerdict = { detected: boolean; repeats: number; kind: "none" | "repeated_attempt" | "same_failure" };
+export type LoopVerdict = {
+  detected: boolean;
+  repeats: number;
+  kind: "none" | "repeated_attempt" | "same_failure";
+  /** Failure counts strictly shrank across the attempts: repeated wording, but real progress. */
+  improving?: boolean;
+};
+
+const COUNT_BEFORE_WORD = /(\d+)\s+(?:tests?\s+|checks?\s+|specs?\s+|files?\s+)?(?:failed|failing|failures?|errors?|problems?)\b/gi;
+const COUNT_AFTER_WORD = /\b(?:failed|failing|failures?|errors?|problems?)\s*[:=]\s*(\d+)/gi;
+
+/**
+ * How many things failed, when the text says so ("9 failed", "failures: 3").
+ * The maximum of all matches is used so overlapping phrases such as
+ * "4 problems (1 error)" are not double counted.
+ */
+export function failureCount(text: string): number | undefined {
+  const canonical = normalizedJudgeText(text);
+  let best: number | undefined;
+  for (const pattern of [COUNT_BEFORE_WORD, COUNT_AFTER_WORD]) {
+    for (const match of canonical.matchAll(pattern)) {
+      const value = Number(match[1]);
+      if (Number.isSafeInteger(value) && (best === undefined || value > best)) best = value;
+    }
+  }
+  return best;
+}
 
 /**
  * Mask values that change between otherwise identical runs so a rerun with a
@@ -188,6 +214,13 @@ export function detectLoop(
   for (const attempt of failed) bump(JSON.stringify(["attempt", loopFingerprint(attempt.action), loopFingerprint(attempt.result ?? "")]));
   for (const entry of history) bump(JSON.stringify(["history", loopFingerprint(entry.action), loopFingerprint(entry.observation)]));
   const repeats = Math.max(0, ...counts.values());
+  // Digits are masked above so a changing counter ("retry 3/5") still repeats. The exception is a
+  // failure count that strictly shrinks over at least two attempts plus the current failure:
+  // "9 failed" -> "5 failed" -> "2 failed" is progress, not a loop. Every count must be known.
+  const trend = [...failed.map((attempt) => (attempt.result === undefined ? undefined : failureCount(attempt.result))), failureCount(failure)];
+  const improving = trend.length >= 3 && trend.every((value) => value !== undefined)
+    && trend.every((value, index) => index === 0 || value! < trend[index - 1]!);
+  if (improving) return { detected: false, repeats, kind: "none", improving: true };
   if (repeats >= 2) return { detected: true, repeats, kind: "repeated_attempt" };
   // The latest attempt usually produced the current failure; only an identical
   // failure across two or more failed attempts shows that nothing is changing.

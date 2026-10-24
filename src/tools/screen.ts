@@ -5,6 +5,7 @@ import { screenAction, screenRecommendation, tightenBlockAt, tightenScreenReview
 import { asNoul } from "../result.js";
 import { systemOne, type ToolContext } from "../typesafe.js";
 import { containsInjectionInstruction } from "../untrusted.js";
+import { screenOutputSchema } from "./output-schemas.js";
 
 export const screenInputSchema = z.object({
   text: z.string().describe("Fetched or pasted text before the agent reads it"),
@@ -58,7 +59,7 @@ export async function runScreen(input: ScreenInput, context?: ToolContext) {
             ? `relevance ${relevance.toFixed(2)} is too low`
             : `substance ${substance.toFixed(2)} is too low`
           : "content looks safe to read";
-  return {
+  return screenOutputSchema.parse({
     model: result.model,
     usage: result.usage,
     truncated: result.truncated,
@@ -71,5 +72,5 @@ export async function runScreen(input: ScreenInput, context?: ToolContext) {
     },
     recommendation: { action: recommendation, reason },
     thresholds: { block_at: blockAt, review_at: reviewAt },
-  };
+  });
 }

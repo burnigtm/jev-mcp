@@ -2,7 +2,7 @@ import { z } from "zod";
 import { getConfig } from "../config.js";
 import { reviewQuestions } from "../packs/review.js";
 import { acceptableRegionConfidence, confidenceSupportsAuto, minConfidence, requireCompleteContext, reviewAction, reviewComposite, tightenJudgmentThresholds } from "../policy.js";
-import type { ReviewReason } from "./output-schemas.js";
+import { reviewOutputSchema, type ReviewReason } from "./output-schemas.js";
 import { asNoul, asScore } from "../result.js";
 import { systemOne, type EvaluateResponse, type ToolContext } from "../typesafe.js";
 
@@ -29,13 +29,13 @@ export async function runReview(input: ReviewInput, context?: ToolContext) {
     questions: reviewQuestions(),
     model: input.model,
   }, context);
-  return {
+  return reviewOutputSchema.parse({
     model: result.model,
     usage: result.usage,
     truncated: result.truncated,
     coverage: result.coverage,
     ...projectReview(result, autoAccept, reviewAt),
-  };
+  });
 }
 
 /** Shared scoring policy for the standalone review and combined gate. */

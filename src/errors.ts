@@ -28,10 +28,21 @@ export class JevBudgetExhaustedError extends Error {
   }
 }
 
+/**
+ * Which rule rejected a provider response. A fixed vocabulary, never provider content, so it is safe to
+ * log and to count in jev://stats; the tool result still carries only the generic message.
+ */
+export type ResponseFailureReason =
+  | "not_json" | "shape" | "answer_count" | "answer_type" | "option_keys" | "probability_mass"
+  | "choice_not_argmax" | "choice_unknown" | "score_range" | "score_legend" | "score_mismatch" | "models_list";
+
 export class JevResponseError extends Error {
-  constructor() {
+  readonly reason: ResponseFailureReason;
+
+  constructor(reason: ResponseFailureReason = "shape") {
     super("TypeSafe returned an invalid response. No decision was accepted.");
     this.name = "JevResponseError";
+    this.reason = reason;
   }
 }
 

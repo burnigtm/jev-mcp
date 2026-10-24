@@ -15,7 +15,16 @@ type ToolStats = {
 const LATENCY_SAMPLES = 200;
 const startedAt = new Date().toISOString();
 const tools = new Map<string, ToolStats>();
-const provider = { requests: 0, cache_hits: 0, cache_misses: 0, input_tokens: 0, output_tokens: 0, budget_rejections: 0 };
+const provider = {
+  requests: 0, cache_hits: 0, cache_misses: 0, input_tokens: 0, output_tokens: 0, budget_rejections: 0,
+  // Requests that reached the provider but produced no usable usage figures (timeout, abort, API
+  // error, invalid response). Their cost is unknown, so the budget charges the reservation.
+  failed_requests: 0, failed_estimated_tokens: 0,
+};
+/** Why provider responses were rejected, by fixed reason name (never provider content). */
+const responseFailures: Record<string, number> = {};
+/** Estimated tokens of requests currently in flight; released when each request settles. */
+let reserved = 0;
 
 function toolStats(name: string): ToolStats {
   let stats = tools.get(name);
@@ -62,7 +71,36 @@ export function recordBudgetRejection(): void {
 
 /** Provider tokens spent by this process, the quantity JEV_MCP_TOKEN_BUDGET bounds. */
 export function tokensSpent(): number {
-  return provider.input_tokens + provider.output_tokens;
+  return provider.input_tokens + provider.output_tokens + provider.failed_estimated_tokens;
+}
+
+/** Per-question output allowance used when reserving budget for a request. */
+export const OUTPUT_TOKENS_PER_QUESTION = 16;
+
+/**
+ * Check the budget and reserve `estimate` tokens in one synchronous step, so concurrent calls cannot
+ * all pass the same check. A request is refused once spent plus in-flight reservations already reach
+ * the budget; like before, the request that crosses the line may overshoot it by its own size.
+ * Returns the reservation to hand back to `releaseTokens`, or undefined when refused.
+ */
+export function tryReserveTokens(estimate: number, budget: number | undefined): number | undefined {
+  if (budget !== undefined && tokensSpent() + reserved >= budget) return undefined;
+  reserved += estimate;
+  return estimate;
+}
+
+export function releaseTokens(reservation: number): void {
+  reserved = Math.max(0, reserved - reservation);
+}
+
+export function recordResponseFailure(reason: string): void {
+  responseFailures[reason] = (responseFailures[reason] ?? 0) + 1;
+}
+
+/** A dispatched request failed without usage figures: charge its reservation to the budget. */
+export function recordFailedRequest(estimate: number): void {
+  provider.failed_requests += 1;
+  provider.failed_estimated_tokens += estimate;
 }
 
 function median(values: number[]): number {
@@ -76,11 +114,12 @@ export function statsSnapshot(tokenBudget: number | undefined, cacheEntries: num
   const spent = tokensSpent();
   return {
     started_at: startedAt,
-    provider: { ...provider, cache_entries: cacheEntries },
+    provider: { ...provider, response_failures: { ...responseFailures }, cache_entries: cacheEntries },
     budget: {
       limit: tokenBudget ?? null,
       spent,
-      remaining: tokenBudget === undefined ? null : Math.max(0, tokenBudget - spent),
+      reserved,
+      remaining: tokenBudget === undefined ? null : Math.max(0, tokenBudget - spent - reserved),
     },
     tools: Object.fromEntries([...tools.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, stats]) => [name, {
       calls: stats.calls,
@@ -95,5 +134,7 @@ export function statsSnapshot(tokenBudget: number | undefined, cacheEntries: num
 
 export function resetStats(): void {
   tools.clear();
+  reserved = 0;
+  for (const key of Object.keys(responseFailures)) delete responseFailures[key];
   for (const key of Object.keys(provider) as Array<keyof typeof provider>) provider[key] = 0;
 }

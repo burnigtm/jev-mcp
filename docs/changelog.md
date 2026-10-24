@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Hardening
+
+- **Loop detector no longer flags progress.** Failure counts that strictly shrink across attempts (9 → 5 → 2 failed) used to be reported as `same_failure` because every digit was masked. They are now recognized as progress (`loop.improving: true`, additive); changing counters with no failure count (`retry 3/5`) and stuck or growing counts are still loops. Offline, the previous detector flagged 240 of 240 generated shrinking trajectories and the new one flags 0, while still catching 240 of 240 counter loops.
+- **`jev_triage` progress question** now tells Jev how to read counts and details: fewer failing tests or errors is `advancing`, more is `regressing`. Live (`jev-1.14.0`), shrinking-failure trajectories were explained as `progress_regressing` in 32 of 35 cases before and 0 of 60 after (36 on tuning seeds, 24 on never-tuned seeds); counter loops stay 60 of 60 not-`auto`.
+- **Token budget reserves before it spends.** Each request reserves its estimated tokens, so concurrent calls can no longer all pass one check, and requests that reached the provider but returned no usage are charged at their reservation instead of being missed. `jev://stats` gains `budget.reserved`, `provider.failed_requests`, `provider.failed_estimated_tokens`. The request that crosses the budget may still overshoot by its own size.
+- **Diagnosable response rejections.** `JevResponseError` carries a fixed `reason` (`not_json`, `probability_mass`, `choice_not_argmax`, …) counted in `jev://stats` as `provider.response_failures`. Tool results are unchanged and still carry only the generic message.
+- **Gate state order** is now request, claims, evidence, then diff and tests (with `files`/`dependencies` before the diff in risk mode), so an oversized diff is truncated rather than the claims and evidence. This changes the response-cache key, so cached entries from before the upgrade are not reused. `jev_review`, `jev_gate` and `jev_screen` results are now validated against their output schemas like the other tools.
+- **Benchmark:** `--extras N` adds opt-in templates with their own random stream (the recorded seeds are frozen and pinned by a hash test): shrinking-failure trajectories, scored as *diagnostic* cases on the explanation rather than the action, and counter loops. Reports include the server's final `provider` counters.
+
 ### Fixes
 
 - `jev_verify` no longer softens a per-claim `escalate` to an overall `review`: the overall action is now the strictest per-claim action. Per-claim actions use the same verdict policy as `jev_gate`, so a confident contradiction escalates and is counted in `needs_review` instead of reporting `auto`. **Behavior change:** a confident `unsupported` verdict is now `review` per claim, not `auto`.

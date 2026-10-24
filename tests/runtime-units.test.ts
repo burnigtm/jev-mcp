@@ -178,7 +178,7 @@ test("provider counters drive the budget snapshot", () => {
   recordBudgetRejection();
   assert.equal(tokensSpent(), 75);
   const limited = statsSnapshot(100, 4);
-  assert.deepEqual(limited.budget, { limit: 100, spent: 75, remaining: 25 });
+  assert.deepEqual(limited.budget, { limit: 100, spent: 75, reserved: 0, remaining: 25 });
   assert.deepEqual(
     { r: limited.provider.requests, h: limited.provider.cache_hits, m: limited.provider.cache_misses, b: limited.provider.budget_rejections, e: limited.provider.cache_entries },
     { r: 1, h: 1, m: 1, b: 1, e: 4 },

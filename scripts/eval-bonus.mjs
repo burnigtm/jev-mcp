@@ -16,7 +16,7 @@ import { dirname, resolve } from 'node:path';
 import { connectServer, liveEnv, processEnv } from './lib/mcp.mjs';
 import { bonusCases } from './lib/bonus-cases.mjs';
 import { correct, createRules, renderMarkdown, summarize } from './lib/bonus.mjs';
-import { generateCases } from './lib/bonus-generator.mjs';
+import { generateCases, generateExtraCases } from './lib/bonus-generator.mjs';
 import { root } from './lib/skill.mjs';
 
 const { values } = parseArgs({ allowNegative: true, options: {
@@ -28,6 +28,7 @@ const { values } = parseArgs({ allowNegative: true, options: {
   set: { type: 'string', default: 'all' },
   seed: { type: 'string' },
   'per-tool': { type: 'string', default: '10' },
+  extras: { type: 'string', default: '0' },
   experiments: { type: 'boolean', default: true },
 } });
 const repeat = Math.max(1, Math.min(5, Number(values.repeat) || 1));
@@ -65,10 +66,12 @@ function serverEnv(extra = {}) {
 const seed = values.seed === undefined ? Math.floor(Math.random() * 2 ** 31) : Number(values.seed);
 if (!Number.isSafeInteger(seed) || seed < 0) throw new Error('--seed must be a non-negative integer');
 const perTool = Math.max(1, Math.min(50, Number(values['per-tool']) || 10));
+const extras = Math.max(0, Math.min(50, Number(values.extras) || 0));
 if (!['fixed', 'generated', 'all'].includes(values.set)) throw new Error('--set must be fixed, generated, or all');
 const selected = [
   ...(values.set === 'generated' ? [] : bonusCases.map((testCase) => ({ ...testCase, template: `fixed/${testCase.id}` }))),
   ...(values.set === 'fixed' ? [] : generateCases(seed, perTool)),
+  ...(values.set === 'fixed' || extras === 0 ? [] : generateExtraCases(seed, extras)),
 ];
 const cases = values.only ? selected.filter((testCase) => testCase.id.includes(values.only)) : selected;
 const report = {
@@ -79,6 +82,7 @@ const report = {
   set: values.set,
   seed: values.set === 'fixed' ? null : seed,
   per_tool: values.set === 'fixed' ? null : perTool,
+  extras_per_tool: values.set === 'fixed' || extras === 0 ? null : extras,
   cases: [],
   experiments: {},
 };
@@ -110,6 +114,11 @@ try {
     process.stderr.write('.');
   }
   process.stderr.write('\n');
+  // Final server counters: response-rejection reasons, failed requests, budget. Counts only; no content.
+  try {
+    const stats = await server.client.readResource({ uri: 'jev://stats' });
+    report.server_stats = JSON.parse(stats.contents[0].text).provider;
+  } catch { report.server_stats = null; }
 } finally {
   await server.close();
 }
